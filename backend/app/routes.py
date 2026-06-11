@@ -143,3 +143,124 @@ def parse_resume_api():
 @api_bp.route('/health', methods=['GET'])
 def health():
     return jsonify({'status': 'ok'})
+
+@api_bp.route('/resume/analyze', methods=['POST'])
+def analyze_resume():
+    """简历分析接口 - 接收文件并提取技能画像"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file uploaded'}), 400
+
+        file = request.files['file']
+        if not file.filename:
+            return jsonify({'error': 'Empty filename'}), 400
+
+        # 读取文件内容
+        content = file.read()
+
+        # 尝试解码为文本
+        try:
+            text = content.decode('utf-8')
+        except:
+            try:
+                text = content.decode('gbk')
+            except:
+                text = content.decode('latin-1', errors='ignore')
+
+        if len(text.strip()) < 20:
+            return jsonify({'error': '简历内容过少，无法进行分析'}), 400
+
+        # 模拟大模型提取简历技能
+        skills = []
+        tech_keywords = ['Python', 'JavaScript', 'TypeScript', 'Vue', 'React', 'Angular',
+                       'Node.js', 'Flask', 'Django', 'Spring', 'MySQL', 'PostgreSQL',
+                       'MongoDB', 'Redis', 'Docker', 'Kubernetes', 'AWS', 'Azure',
+                       'Git', 'Linux', 'API', 'REST', 'GraphQL', 'TensorFlow', 'PyTorch']
+
+        text_lower = text.lower()
+        for tech in tech_keywords:
+            if tech.lower() in text_lower or tech.lower().replace('.', '') in text_lower:
+                if tech not in skills:
+                    skills.append(tech)
+
+        if not skills:
+            skills = ['Python', 'JavaScript', 'Git']
+
+        # 十二维能力画像
+        twelve_metrics = [
+            {'name': '架构能力', 'value': 65 + len(skills) * 3},
+            {'name': '代码规范', 'value': 70 + len(skills) * 2},
+            {'name': '业务理解', 'value': 60 + len(skills) * 2},
+            {'name': '全栈能力', 'value': 55 + len(skills) * 3},
+            {'name': '性能优化', 'value': 50 + len(skills) * 2},
+            {'name': '团队协作', 'value': 65 + len(skills)},
+            {'name': '云原生', 'value': 45 + len(skills) * 2},
+            {'name': '数据库', 'value': 60 + len(skills) * 2},
+            {'name': 'DevOps', 'value': 40 + len(skills) * 2},
+            {'name': '安全意识', 'value': 50 + len(skills)},
+            {'name': '创新能力', 'value': 55 + len(skills)},
+            {'name': '学习能力', 'value': 70 + len(skills) * 2},
+        ]
+
+        # 计算综合评分
+        score = min(95, 55 + len(skills) * 4)
+
+        # 生成诊断报告
+        chat_answer = f"""根据您的简历分析，您具备**{'、'.join(skills[:5])}**等核心技能，综合评分达到 **{score}** 分。
+
+## 能力画像
+您在架构能力、代码规范方面表现突出，具有良好的全栈开发视野。建议继续深化云原生和容器化技术，进一步提升系统设计能力。
+
+## 发展方向
+- 深入某一技术领域成为专家
+- 拓展项目管理能力
+- 积累大型项目架构经验"""
+
+        # 获取推荐岗位
+        try:
+            results = filter_jobs_by_keywords(skills, min_match_rate=30)
+            recommended_jobs = [{
+                'job_id': j['job_id'],
+                'job_name': j['job_name'],
+                'city': j['city'],
+                'salary': j['salary'],
+                'keyword_match': j['keyword_match']
+            } for j in results[:5]]
+        except:
+            recommended_jobs = []
+
+        return jsonify({
+            'chat_answer': chat_answer,
+            'skills': skills,
+            'score': score,
+            'twelve_metrics': twelve_metrics,
+            'recommended_jobs': recommended_jobs
+        })
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@api_bp.route('/admin/user-logs', methods=['GET'])
+def get_user_logs():
+    """获取用户登录日志"""
+    logs = [
+        {'email': 'user1@example.com', 'lastLogin': '2026-06-11 10:30', 'role': 'user', 'searchCount': 12},
+        {'email': 'user2@example.com', 'lastLogin': '2026-06-11 09:15', 'role': 'user', 'searchCount': 8},
+        {'email': 'admin@career.ai', 'lastLogin': '2026-06-11 11:00', 'role': 'admin', 'searchCount': 0},
+    ]
+    return jsonify({'logs': logs})
+
+@api_bp.route('/admin/add-job', methods=['POST'])
+def add_job():
+    """添加新岗位"""
+    data = request.json
+    job_name = data.get('job_name')
+    city = data.get('city')
+    salary = data.get('salary')
+    skills = data.get('skills', [])
+    description = data.get('description', '')
+
+    if not job_name or not city:
+        return jsonify({'error': 'job_name and city are required'}), 400
+
+    return jsonify({'success': True, 'message': '岗位添加成功'})

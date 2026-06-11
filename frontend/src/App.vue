@@ -33,6 +33,13 @@ const jobForm = ref({
 })
 const skillInput = ref('')
 
+// Resume analysis state
+const isAnalyzing = ref(false)
+const analysisResult = ref(null)
+const twelveMetrics = ref([])
+const uploadedFile = ref(null)
+const dragOver = ref(false)
+
 const apiBase = 'http://localhost:5000/api'
 
 // Mock beat rate based on match rate
@@ -331,6 +338,81 @@ const switchTab = (tab) => {
     fetchUserLogs()
   }
 }
+
+// Resume analysis handlers
+const handleFileSelect = (event) => {
+  const file = event.target.files[0]
+  if (file) {
+    analyzeFile(file)
+  }
+}
+
+const handleFileDrop = (event) => {
+  event.preventDefault()
+  dragOver.value = false
+  const file = event.dataTransfer.files[0]
+  if (file) {
+    analyzeFile(file)
+  }
+}
+
+const analyzeFile = async (file) => {
+  if (!isLoggedIn.value) {
+    ElMessage.warning('请先登录后再使用简历分析功能')
+    showAuthModal.value = true
+    return
+  }
+
+  const validTypes = ['application/pdf', 'text/plain', 'text/markdown', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+  if (!validTypes.includes(file.type) && !file.name.match(/\.(pdf|txt|md|docx)$/i)) {
+    ElMessage.error('请上传 PDF、TXT、MD 或 DOCX 格式的文件')
+    return
+  }
+
+  uploadedFile.value = file
+  isAnalyzing.value = true
+  analysisResult.value = null
+
+  try {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    const res = await fetch(`${apiBase}/resume/analyze`, {
+      method: 'POST',
+      body: formData
+    })
+    const data = await res.json()
+
+    if (data.error) {
+      ElMessage.error(data.error)
+      isAnalyzing.value = false
+      return
+    }
+
+    analysisResult.value = data
+    twelveMetrics.value = data.twelve_metrics || []
+
+    // Update job matches if recommended_jobs exists
+    if (data.recommended_jobs && data.recommended_jobs.length > 0) {
+      jobMatches.value = data.recommended_jobs
+    }
+
+    ElMessage.success('简历分析完成！')
+  } catch (e) {
+    ElMessage.error('分析失败，请重试')
+  } finally {
+    isAnalyzing.value = false
+  }
+}
+
+const resetResumeAnalysis = () => {
+  uploadedFile.value = null
+  analysisResult.value = null
+  twelveMetrics.value = []
+  jobMatches.value = []
+  chatHistory.value = []
+  hasResult.value = false
+}
 </script>
 
 <template>
@@ -347,9 +429,15 @@ const switchTab = (tab) => {
             职业地图
           </button>
           <button
+            :class="{ active: currentPage === 'resume-analysis' }"
+            @click="currentPage = 'resume-analysis'"
+          >
+            简历分析
+          </button>
+          <button
             v-if="currentUser.role === 'admin'"
-            :class="{ active: currentPage === 'admin' }"
-            @click="currentPage = 'admin'"
+            :class="{ active: currentPage === 'data-manage' }"
+            @click="currentPage = 'data-manage'"
           >
             数据管理
           </button>
@@ -375,8 +463,90 @@ const switchTab = (tab) => {
       <div class="grid-overlay"></div>
     </div>
 
+    <!-- Resume Analysis Page -->
+    <div v-if="currentPage === 'resume-analysis'" class="resume-page">
+      <div class="resume-container glass-card">
+        <div class="resume-header">
+          <h2>简历分析</h2>
+          <p>上传您的简历，AI 将为您进行十二维深度画像提取</p>
+        </div>
+
+        <!-- Upload Zone -->
+        <div
+          v-if="!isAnalyzing && !analysisResult"
+          class="upload-zone"
+          :class="{ 'drag-over': dragOver }"
+          @dragover.prevent="dragOver = true"
+          @dragleave.prevent="dragOver = false"
+          @drop.prevent="handleFileDrop"
+        >
+          <input type="file" accept=".pdf,.docx,.md,.txt" @change="handleFileSelect" class="file-input" />
+          <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/>
+            <line x1="9" y1="15" x2="12" y2="12"/>
+            <line x1="15" y1="15" x2="12" y2="12"/>
+          </svg>
+          <p class="upload-text">将简历拖拽到此处，或<span class="upload-link">点击选择文件</span></p>
+          <p class="upload-hint">支持 PDF / DOCX / MD / TXT 格式</p>
+        </div>
+
+        <!-- Analyzing State -->
+        <div v-if="isAnalyzing" class="analyzing-state">
+          <div class="scanner-container">
+            <div class="scanner-line"></div>
+          </div>
+          <p class="analyzing-text">AI 正在为您进行十二维深度画像提取，请稍候...</p>
+        </div>
+
+        <!-- Analysis Result -->
+        <div v-if="analysisResult && !isAnalyzing" class="analysis-result">
+          <div class="result-header">
+            <h3>分析完成</h3>
+            <button class="reset-btn" @click="resetResumeAnalysis">重新上传</button>
+          </div>
+
+          <div class="result-content">
+            <!-- Left: Chat Answer & Metrics -->
+            <div class="result-main">
+              <div class="chat-answer-section">
+                <h4>AI 核心诊断</h4>
+                <div class="chat-answer-content" v-html="renderMarkdown(analysisResult.chat_answer || '')"></div>
+              </div>
+
+              <!-- Twelve Metrics Radar Chart Container -->
+              <div v-if="twelveMetrics.length > 0" class="metrics-section">
+                <h4>十二维能力画像</h4>
+                <div class="radar-container" id="radarChart"></div>
+              </div>
+            </div>
+
+            <!-- Right: Recommended Jobs -->
+            <div class="result-jobs">
+              <h4>匹配岗位</h4>
+              <div class="job-list">
+                <div v-for="job in jobMatches" :key="job.job_id" class="job-card">
+                  <div class="job-header">
+                    <h5>{{ job.job_name }}</h5>
+                    <div class="job-tags">
+                      <span>{{ job.city }}</span>
+                      <span>{{ job.salary }}</span>
+                    </div>
+                  </div>
+                  <div class="energy-bar-container">
+                    <div class="energy-bar" :style="{ width: (job.keyword_match?.match_rate || 0) + '%' }"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Admin Page -->
-    <div v-if="currentPage === 'admin'" class="admin-page">
+    <div v-if="currentPage === 'data-manage'" class="admin-page">
       <div class="admin-container glass-card">
         <!-- Tabs Header -->
         <div class="admin-tabs">
@@ -2087,5 +2257,285 @@ html, body {
 .submit-job-btn:hover {
   transform: translateY(-2px);
   box-shadow: 0 4px 20px rgba(201, 162, 39, 0.4);
+}
+
+/* Resume Analysis Page */
+.resume-page {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 100px 20px 40px;
+}
+
+.resume-container {
+  width: 100%;
+  max-width: 1100px;
+  padding: 40px;
+}
+
+.resume-header {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.resume-header h2 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 12px;
+}
+
+.resume-header p {
+  font-size: 15px;
+  color: var(--text-secondary);
+}
+
+/* Upload Zone */
+.upload-zone {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 60px;
+  border: 2px dashed rgba(201, 162, 39, 0.4);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.upload-zone:hover,
+.upload-zone.drag-over {
+  border-style: solid;
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 30px rgba(201, 162, 39, 0.2);
+  animation: breathe 2s ease-in-out infinite;
+}
+
+@keyframes breathe {
+  0%, 100% { box-shadow: 0 0 20px rgba(201, 162, 39, 0.15); }
+  50% { box-shadow: 0 0 40px rgba(201, 162, 39, 0.3); }
+}
+
+.upload-zone .file-input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.upload-icon {
+  width: 72px;
+  height: 72px;
+  color: var(--accent-gold);
+  margin-bottom: 24px;
+}
+
+.upload-text {
+  font-size: 17px;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.upload-link {
+  color: var(--accent-gold);
+  font-weight: 500;
+}
+
+.upload-hint {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Analyzing State */
+.analyzing-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 100px 60px;
+}
+
+.scanner-container {
+  width: 120px;
+  height: 120px;
+  border: 3px solid rgba(201, 162, 39, 0.2);
+  border-radius: 50%;
+  position: relative;
+  margin-bottom: 32px;
+  overflow: hidden;
+}
+
+.scanner-line {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 3px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--accent-gold), transparent);
+  animation: scan 1.5s ease-in-out infinite;
+}
+
+@keyframes scan {
+  0% { transform: translateX(-50%) translateY(-100%); }
+  100% { transform: translateX(-50%) translateY(100%); }
+}
+
+.analyzing-text {
+  font-size: 16px;
+  color: var(--text-secondary);
+  animation: breathe 2s ease-in-out infinite;
+}
+
+/* Analysis Result */
+.analysis-result {
+  animation: slideUp 0.5s ease-out;
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(30px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 32px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-glass);
+}
+
+.result-header h3 {
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--accent-gold);
+}
+
+.result-header .reset-btn {
+  padding: 10px 20px;
+  font-size: 14px;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.result-header .reset-btn:hover {
+  border-color: var(--accent-gold);
+  color: var(--accent-gold);
+}
+
+.result-content {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: 32px;
+}
+
+.result-main {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.chat-answer-section {
+  padding: 24px;
+  background: rgba(201, 162, 39, 0.03);
+  border-radius: var(--radius-md);
+}
+
+.chat-answer-section h4,
+.metrics-section h4,
+.result-jobs h4 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+}
+
+.chat-answer-content {
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--text-primary);
+}
+
+.chat-answer-content :deep(.tech-highlight) {
+  color: var(--accent-gold);
+  font-weight: 500;
+}
+
+.metrics-section {
+  padding: 24px;
+  background: rgba(201, 162, 39, 0.03);
+  border-radius: var(--radius-md);
+}
+
+.radar-container {
+  width: 100%;
+  height: 300px;
+}
+
+.result-jobs h4 {
+  margin-bottom: 16px;
+}
+
+.job-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.job-card {
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  transition: all 0.2s;
+}
+
+.job-card:hover {
+  border-color: var(--accent-gold);
+  box-shadow: 0 4px 15px rgba(201, 162, 39, 0.1);
+}
+
+.job-header h5 {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.job-tags {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.job-tags span {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.energy-bar-container {
+  height: 4px;
+  background: rgba(201, 162, 39, 0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.energy-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent-gold), var(--accent-gold-light));
+  border-radius: 2px;
+  box-shadow: 0 0 8px rgba(201, 162, 39, 0.5);
+  transition: width 1s ease-out;
 }
 </style>
