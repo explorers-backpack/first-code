@@ -2,6 +2,7 @@
 import { ref, nextTick, computed, watch, onMounted } from 'vue'
 import { ElMessage, ElCollapse, ElCollapseItem } from 'element-plus'
 import MarkdownIt from 'markdown-it'
+import AuthModal from './components/AuthModal.vue'
 
 const md = new MarkdownIt()
 
@@ -13,6 +14,12 @@ const chatContainerRef = ref(null)
 const hasResult = ref(false)
 const userBadges = ref([])
 const expandedTasks = ref([])
+
+// Auth state
+const isLoggedIn = ref(false)
+const currentUser = ref({ email: '', role: 'user' })
+const showAuthModal = ref(false)
+const currentPage = ref('home')
 
 const apiBase = 'http://localhost:5000/api'
 
@@ -76,7 +83,18 @@ const highlightTechTerms = (text) => {
 }
 
 const handleAsk = async () => {
-  if (!inputText.value.trim() || isLoading.value) return
+  if (!inputText.value.trim()) {
+    ElMessage.warning('请输入您掌握的技能')
+    return
+  }
+
+  if (!isLoggedIn.value) {
+    ElMessage.warning('请先登录后再使用分析功能')
+    showAuthModal.value = true
+    return
+  }
+
+  if (isLoading.value) return
 
   const userMsg = inputText.value.trim()
   chatHistory.value = []
@@ -138,6 +156,12 @@ const handleAsk = async () => {
 
 const sendMessage = async () => {
   if (!inputText.value.trim() || isLoading.value) return
+
+  if (!isLoggedIn.value) {
+    ElMessage.warning('请先登录后再使用分析功能')
+    showAuthModal.value = true
+    return
+  }
 
   const userMsg = inputText.value.trim()
   chatHistory.value.push({ role: 'user', content: userMsg })
@@ -219,10 +243,65 @@ const getPriorityColor = (priority) => {
     default: return '#747D8C'
   }
 }
+
+// Auth handlers
+const handleLoginSuccess = (user) => {
+  currentUser.value = user
+  isLoggedIn.value = true
+  showAuthModal.value = false
+}
+
+const handleLogout = () => {
+  currentUser.value = { email: '', role: 'user' }
+  isLoggedIn.value = false
+  currentPage.value = 'home'
+  hasResult.value = false
+  jobMatches.value = []
+  chatHistory.value = []
+  userBadges.value = []
+  ElMessage.success('已安全退出')
+}
+
+const openAuthModal = (mode = 'login') => {
+  showAuthModal.value = true
+}
 </script>
 
 <template>
   <div class="app-container">
+    <!-- Top Navigation Header -->
+    <header class="top-header glass-card">
+      <div class="header-left">
+        <h1 class="logo">Career.ai</h1>
+        <nav class="nav-links">
+          <button
+            :class="{ active: currentPage === 'home' }"
+            @click="currentPage = 'home'"
+          >
+            职业地图
+          </button>
+          <button
+            v-if="currentUser.role === 'admin'"
+            :class="{ active: currentPage === 'admin' }"
+            @click="currentPage = 'admin'"
+          >
+            数据管理
+          </button>
+        </nav>
+      </div>
+      <div class="header-right">
+        <!-- 未登录 -->
+        <button v-if="!isLoggedIn" class="auth-btn" @click="openAuthModal('login')">
+          登录/注册
+        </button>
+        <!-- 已登录 -->
+        <div v-else class="user-menu">
+          <span class="user-email">{{ currentUser.email.split('@')[0] }}</span>
+          <button class="logout-btn" @click="handleLogout">退出</button>
+        </div>
+      </div>
+    </header>
+
     <!-- Cosmic Background -->
     <div class="cosmic-bg">
       <div class="orb orb-1"></div>
@@ -230,8 +309,19 @@ const getPriorityColor = (priority) => {
       <div class="grid-overlay"></div>
     </div>
 
+    <!-- Admin Page -->
+    <div v-if="currentPage === 'admin'" class="admin-page">
+      <div class="glass-card admin-panel">
+        <svg class="admin-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M12 15V3m0 12l-4-4m4 4l4-4M2 17l.621 2.485A2 2 0 0 0 4.561 21h14.878a2 2 0 0 0 1.94-1.515L22 17"/>
+        </svg>
+        <h2>数据管理页面</h2>
+        <p>暂无内容，开发中...</p>
+      </div>
+    </div>
+
     <!-- Search Center (Initial State) -->
-    <div v-if="!hasResult" class="search-center">
+    <div v-else-if="!hasResult" class="search-center">
       <div class="search-card glass-card">
         <div class="brand-mark">
           <svg viewBox="0 0 60 60" class="logo-icon">
@@ -268,9 +358,9 @@ const getPriorityColor = (priority) => {
         </div>
 
         <div class="quick-suggestions">
-          <button class="suggestion-pill" @click="inputText = 'Python, 机器学习, 数据分析'">Python + ML</button>
-          <button class="suggestion-pill" @click="inputText = 'React, TypeScript, 前端'">React 前端</button>
-          <button class="suggestion-pill" @click="inputText = 'Java, Spring, 分布式'">Java 后端</button>
+          <button class="suggestion-pill" @click="isLoggedIn ? inputText = 'Python, 机器学习, 数据分析' : (ElMessage.warning('请先登录'), showAuthModal = true)">Python + ML</button>
+          <button class="suggestion-pill" @click="isLoggedIn ? inputText = 'React, TypeScript, 前端' : (ElMessage.warning('请先登录'), showAuthModal = true)">React 前端</button>
+          <button class="suggestion-pill" @click="isLoggedIn ? inputText = 'Java, Spring, 分布式' : (ElMessage.warning('请先登录'), showAuthModal = true)">Java 后端</button>
         </div>
 
         <div v-if="isLoading" class="loading-indicator">
@@ -483,6 +573,13 @@ const getPriorityColor = (priority) => {
         </aside>
       </div>
     </div>
+
+    <!-- Auth Modal -->
+    <AuthModal
+      v-if="showAuthModal"
+      @close="showAuthModal = false"
+      @loginSuccess="handleLoginSuccess"
+    />
   </div>
 </template>
 
@@ -1434,5 +1531,158 @@ html, body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--accent-gold);
+}
+
+/* Top Navigation Header */
+.top-header {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 32px;
+  z-index: 100;
+  border-radius: 0;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  flex: 1;
+}
+
+.logo {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  color: var(--accent-gold);
+}
+
+.nav-links {
+  display: flex;
+  gap: 8px;
+}
+
+.nav-links button {
+  padding: 10px 20px;
+  font-size: 14px;
+  font-family: var(--font-body);
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.nav-links button:hover {
+  color: var(--text-primary);
+  background: rgba(201, 162, 39, 0.1);
+}
+
+.nav-links button.active {
+  color: var(--accent-gold);
+  background: rgba(201, 162, 39, 0.15);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+}
+
+.auth-btn {
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: var(--font-body);
+  color: var(--accent-gold);
+  background: transparent;
+  border: 1px solid rgba(201, 162, 39, 0.4);
+  border-radius: 24px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.auth-btn:hover {
+  background: rgba(201, 162, 39, 0.1);
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 15px rgba(201, 162, 39, 0.2);
+}
+
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.user-email {
+  font-size: 14px;
+  color: var(--text-secondary);
+  padding: 8px 16px;
+  background: rgba(201, 162, 39, 0.08);
+  border-radius: 20px;
+}
+
+.logout-btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-family: var(--font-body);
+  color: var(--text-muted);
+  background: transparent;
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.logout-btn:hover {
+  color: var(--warning);
+  border-color: var(--warning);
+}
+
+/* Admin Page */
+.admin-page {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 100px 20px 20px;
+}
+
+.admin-panel {
+  padding: 80px 120px;
+  text-align: center;
+}
+
+.admin-icon {
+  width: 64px;
+  height: 64px;
+  color: var(--accent-gold);
+  margin-bottom: 24px;
+}
+
+.admin-panel h2 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--accent-gold);
+  margin-bottom: 12px;
+}
+
+.admin-panel p {
+  font-size: 16px;
+  color: var(--text-muted);
 }
 </style>
