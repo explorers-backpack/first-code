@@ -43,9 +43,9 @@ const handleAsk = async () => {
       body: JSON.stringify({ skills: userMsg.split(',').map(s => s.trim()) })
     })
     const matchData = await matchRes.json()
-    
+
     const jobsData = matchData.results ? matchData.results.slice(0, 5) : []
-    
+
     if (jobsData.length > 0) {
       jobMatches.value = jobsData
       showResult.value = true
@@ -57,7 +57,7 @@ const handleAsk = async () => {
     const chatRes = await fetch(`${apiBase}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         message: userMsg,
         jobs: jobsData
       })
@@ -103,9 +103,9 @@ const sendMessage = async () => {
       body: JSON.stringify({ skills: userMsg.split(',').map(s => s.trim()) })
     })
     const matchData = await matchRes.json()
-    
+
     const jobsData = matchData.results ? matchData.results.slice(0, 5) : []
-    
+
     if (jobsData.length > 0) {
       jobMatches.value = jobsData
       showResult.value = true
@@ -114,7 +114,7 @@ const sendMessage = async () => {
     const chatRes = await fetch(`${apiBase}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         message: userMsg,
         jobs: jobsData
       })
@@ -158,111 +158,218 @@ const renderMarkdown = (text) => {
 
 <template>
   <div class="app-container">
-    <div v-if="!isChatMode" class="home-mode">
-      <div class="home-content">
-        <h1 class="home-title">AI 职业规划助手</h1>
-        <p class="home-subtitle">输入您的技能，让我们为您匹配最适合的职业方向</p>
-        <div class="home-input-wrapper">
-          <el-input
-            v-model="inputText"
-            placeholder="请输入您的技能，多个技能用逗号分隔..."
-            :disabled="isLoading"
-            @keyup.enter="handleAsk"
-          />
-          <el-button type="primary" :disabled="isLoading" @click="handleAsk">
-            {{ isLoading ? '处理中...' : '开始规划' }}
-          </el-button>
-        </div>
-      </div>
+    <!-- Ambient Background -->
+    <div class="ambient-bg">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="grain"></div>
     </div>
 
+    <!-- Home Mode -->
+    <div v-if="!isChatMode" class="home-mode">
+      <div class="home-content">
+        <div class="brand-mark">
+          <svg viewBox="0 0 60 60" class="logo-icon">
+            <circle cx="30" cy="30" r="28" fill="none" stroke="currentColor" stroke-width="1.5"/>
+            <path d="M30 10 L30 50 M15 25 L45 25 M15 35 L45 35" stroke="currentColor" stroke-width="1.5" fill="none"/>
+          </svg>
+          <span class="brand-text">Career.ai</span>
+        </div>
+
+        <h1 class="home-title">
+          <span class="title-line">职业规划</span>
+          <span class="title-line accent">智能助手</span>
+        </h1>
+
+        <p class="home-subtitle">
+          输入您的技能与背景，AI 将为您分析最适合的职业方向
+        </p>
+
+        <div class="input-group">
+          <div class="input-wrapper">
+            <input
+              v-model="inputText"
+              type="text"
+              class="skill-input"
+              placeholder="例如：Python, Flask, MySQL, Vue.js"
+              :disabled="isLoading"
+              @keyup.enter="handleAsk"
+            />
+            <div class="input-line"></div>
+          </div>
+          <button
+            class="submit-btn"
+            :class="{ loading: isLoading }"
+            :disabled="isLoading"
+            @click="handleAsk"
+          >
+            <span class="btn-text">{{ isLoading ? '分析中' : '开始规划' }}</span>
+            <span class="btn-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </span>
+          </button>
+        </div>
+
+        <div class="suggestions">
+          <span class="suggestion-label">试试：</span>
+          <button class="suggestion-chip" @click="inputText = 'Python, 机器学习, 数据分析'">Python + 机器学习</button>
+          <button class="suggestion-chip" @click="inputText = 'React, TypeScript, 前端开发'">React + 前端</button>
+          <button class="suggestion-chip" @click="inputText = 'Java, Spring, 分布式系统'">Java 后端</button>
+        </div>
+      </div>
+
+      <footer class="home-footer">
+        <span class="footer-text">由 讯飞Spark 大模型驱动</span>
+      </footer>
+    </div>
+
+    <!-- Chat Mode -->
     <div v-else class="chat-mode">
-      <div class="left-panel">
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <button class="back-btn" @click="isChatMode = false; showResult = false;">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M19 12H5M12 19l-7-7 7-7"/>
+            </svg>
+            <span>返回</span>
+          </button>
+        </div>
+
+        <div class="sidebar-content">
+          <h2 class="sidebar-title">职业匹配</h2>
+
+          <div v-if="jobMatches.length > 0" class="job-list">
+            <div
+              v-for="(job, idx) in jobMatches"
+              :key="job.job_id"
+              class="job-item"
+              :style="{ animationDelay: idx * 0.1 + 's' }"
+            >
+              <div class="job-item-header">
+                <span class="job-item-name">{{ job.job_name }}</span>
+                <span class="job-item-rate">{{ job.keyword_match?.match_rate || 0 }}%</span>
+              </div>
+              <div class="job-item-meta">
+                <span class="job-item-city">{{ job.city }}</span>
+                <span class="job-item-salary">{{ job.salary }}</span>
+              </div>
+              <div class="job-item-skills">
+                <span
+                  v-for="skill in (job.keyword_match?.matched || []).slice(0, 3)"
+                  :key="skill"
+                  class="skill-pill matched"
+                >{{ skill }}</span>
+                <span
+                  v-for="skill in (job.keyword_match?.missing || []).slice(0, 2)"
+                  :key="skill"
+                  class="skill-pill missing"
+                >{{ skill }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div v-else class="no-jobs">
+            <span>暂无匹配的岗位</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="chat-main">
+        <div class="chat-header">
+          <div class="chat-header-brand">
+            <svg viewBox="0 0 60 60" class="logo-icon small">
+              <circle cx="30" cy="30" r="28" fill="none" stroke="currentColor" stroke-width="1.5"/>
+              <path d="M30 10 L30 50 M15 25 L45 25 M15 35 L45 35" stroke="currentColor" stroke-width="1.5" fill="none"/>
+            </svg>
+            <span>Career.ai</span>
+          </div>
+        </div>
+
         <div class="chat-dialog" ref="chatContainerRef">
           <div
             v-for="(msg, index) in chatHistory"
             :key="index"
-            :class="['bubble', msg.role]"
+            :class="['message', msg.role]"
           >
-            <template v-if="msg.role === 'assistant'">
-              <div class="bubble-wrapper">
-                <div class="ai-avatar">
-                  <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
-                </div>
-                <div class="bubble-content" v-html="renderMarkdown(msg.content)"></div>
-              </div>
-              <div v-if="isLoading && index === chatHistory.length - 1" class="ai-typing"></div>
-            </template>
-            <template v-else>
-              <div class="bubble-content" v-html="renderMarkdown(msg.content)"></div>
-            </template>
+            <div v-if="msg.role === 'assistant'" class="avatar assistant">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                <line x1="9" y1="9" x2="9.01" y2="9"/>
+                <line x1="15" y1="9" x2="15.01" y2="9"/>
+              </svg>
+            </div>
+            <div v-else class="avatar user">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="8" r="5"/>
+                <path d="M20 21a8 8 0 1 0-16 0"/>
+              </svg>
+            </div>
+
+            <div class="message-content" v-html="renderMarkdown(msg.content)"></div>
+
+            <div v-if="isLoading && index === chatHistory.length - 1" class="typing-indicator">
+              <span></span><span></span><span></span>
+            </div>
           </div>
         </div>
 
-        <div class="input-area">
-          <el-input
-            v-model="inputText"
-            type="textarea"
-            :autosize="{ minRows: 1, maxRows: 8 }"
+        <div class="chat-input-area">
+          <div class="input-wrapper compact">
+            <input
+              v-model="inputText"
+              type="text"
+              class="skill-input"
+              placeholder="继续提问..."
+              :disabled="isLoading"
+              @keyup.enter="sendMessage"
+            />
+            <div class="input-line"></div>
+          </div>
+          <button
+            class="send-btn"
+            :class="{ loading: isLoading }"
             :disabled="isLoading"
-            placeholder="继续提问..."
-            @keyup.enter="sendMessage"
-          />
-          <el-button type="primary" :disabled="isLoading" @click="sendMessage">
-            {{ isLoading ? '发送中...' : '发送' }}
-          </el-button>
+            @click="sendMessage"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/>
+            </svg>
+          </button>
         </div>
-      </div>
-
-      <div v-if="showResult" class="right-panel">
-        <div class="job-cards-container">
-          <el-card v-for="job in jobMatches" :key="job.job_id" class="job-card">
-            <template #header>
-              <div class="job-title">{{ job.job_name }}</div>
-            </template>
-            <div class="job-detail">
-              <div class="job-info">
-                <el-tag type="info">{{ job.city }}</el-tag>
-                <el-tag type="info">{{ job.salary }}</el-tag>
-              </div>
-              <div class="job-skills">
-                <span
-                  v-for="(skill, idx) in job.keyword_match?.matched || []"
-                  :key="'m-' + skill"
-                  class="skill-tag matched"
-                  :style="{ animationDelay: idx * 0.05 + 's' }"
-                >
-                  {{ skill }}
-                </span>
-                <span
-                  v-for="(skill, idx) in job.keyword_match?.missing || []"
-                  :key="'mi-' + skill"
-                  class="skill-tag missing"
-                  :style="{ animationDelay: ((job.keyword_match?.matched?.length || 0) + idx) * 0.05 + 's' }"
-                >
-                  {{ skill }}
-                </span>
-              </div>
-              <div class="progress-wrapper">
-                <el-progress
-                  :percentage="job.keyword_match?.match_rate || 0"
-                  :stroke-width="10"
-                  :color="'#7B61FF'"
-                />
-                <span class="progress-text">
-                  {{ job.keyword_match?.match_rate || 0 }}%
-                </span>
-              </div>
-            </div>
-          </el-card>
-        </div>
-      </div>
+      </main>
     </div>
   </div>
 </template>
 
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Noto+Sans+SC:wght@300;400;500&display=swap');
+
+:root {
+  --bg: #faf8f5;
+  --bg-warm: #f5f0e8;
+  --surface: #ffffff;
+  --surface-hover: #faf8f5;
+  --text: #2d2a26;
+  --text-secondary: #7a756d;
+  --text-muted: #a39e94;
+  --accent: #c9a227;
+  --accent-hover: #b8922a;
+  --accent-soft: rgba(201, 162, 39, 0.12);
+  --border: #e8e4dd;
+  --border-strong: #d4cfc5;
+  --shadow: 0 2px 8px rgba(45, 42, 38, 0.06);
+  --shadow-lg: 0 8px 32px rgba(45, 42, 38, 0.1);
+
+  --font-display: 'Cormorant Garamond', 'Noto Serif SC', Georgia, serif;
+  --font-body: 'Noto Sans SC', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  --radius-sm: 8px;
+  --radius-md: 16px;
+  --radius-lg: 24px;
+}
 
 * {
   margin: 0;
@@ -270,384 +377,688 @@ const renderMarkdown = (text) => {
   box-sizing: border-box;
 }
 
-html, body, #app {
+html, body {
   width: 100%;
   height: 100%;
-  font-family: 'Inter', 'PingFang SC', -apple-system, sans-serif;
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#app {
+  width: 100%;
+  height: 100%;
 }
 
 .app-container {
   width: 100%;
   height: 100vh;
-  background: 
-    linear-gradient(135deg, rgba(74, 144, 226, 0.03) 0%, rgba(123, 97, 255, 0.03) 100%),
-    repeating-linear-gradient(0deg, transparent, transparent 19px, #e8e8e8 19px, #e8e8e8 20px),
-    repeating-linear-gradient(90deg, transparent, transparent 19px, #e8e8e8 19px, #e8e8e8 20px),
-    #FFFFFF;
+  position: relative;
   overflow: hidden;
 }
 
+/* Ambient Background */
+.ambient-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.4;
+}
+
+.orb-1 {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(201, 162, 39, 0.15), transparent 70%);
+  top: -200px;
+  right: -100px;
+  animation: float 20s ease-in-out infinite;
+}
+
+.orb-2 {
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(201, 162, 39, 0.1), transparent 70%);
+  bottom: -100px;
+  left: -50px;
+  animation: float 15s ease-in-out infinite reverse;
+}
+
+.grain {
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+}
+
+@keyframes float {
+  0%, 100% { transform: translate(0, 0); }
+  33% { transform: translate(30px, -20px); }
+  66% { transform: translate(-20px, 20px); }
+}
+
+/* Home Mode */
 .home-mode {
   width: 100%;
   height: 100%;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
-  flex-direction: column;
-  gap: 40px;
+  position: relative;
+  z-index: 1;
+  padding: 40px;
+}
+
+.home-content {
+  max-width: 640px;
+  width: 100%;
+  text-align: center;
+  animation: fadeUp 0.8s ease-out;
+}
+
+@keyframes fadeUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 48px;
+}
+
+.logo-icon {
+  width: 40px;
+  height: 40px;
+  color: var(--accent);
+}
+
+.logo-icon.small {
+  width: 28px;
+  height: 28px;
+}
+
+.brand-text {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: 0.5px;
 }
 
 .home-title {
-  font-size: 42px;
-  font-weight: 700;
-  background: linear-gradient(135deg, #4A90E2 0%, #7B61FF 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  letter-spacing: -1px;
+  font-family: var(--font-display);
+  font-size: 64px;
+  font-weight: 500;
+  line-height: 1.1;
+  margin-bottom: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.title-line {
+  display: block;
+}
+
+.title-line.accent {
+  color: var(--accent);
 }
 
 .home-subtitle {
   font-size: 16px;
-  color: #8c8c8c;
-  margin-top: 8px;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin-bottom: 48px;
 }
 
-.home-input-wrapper {
+.input-group {
   display: flex;
   gap: 12px;
-  transition: all 0.3s ease;
+  margin-bottom: 32px;
+}
+
+.input-wrapper {
+  flex: 1;
+  position: relative;
+}
+
+.skill-input {
   width: 100%;
-  max-width: 600px;
-}
-
-.home-input-wrapper .el-input__wrapper {
-  border-radius: 24px;
-  box-shadow: 0 4px 20px rgba(74, 144, 226, 0.15);
-  border: none;
-  padding: 8px 20px;
-}
-
-.home-input-wrapper .el-input__inner {
+  padding: 16px 0;
   font-size: 16px;
-}
-
-.home-input-wrapper .el-button {
-  border-radius: 24px;
-  background: linear-gradient(135deg, #4A90E2 0%, #7B61FF 100%);
+  font-family: var(--font-body);
+  color: var(--text);
+  background: transparent;
   border: none;
-  padding: 0 28px;
+  outline: none;
+}
+
+.skill-input::placeholder {
+  color: var(--text-muted);
+}
+
+.skill-input:disabled {
+  opacity: 0.6;
+}
+
+.input-line {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--border-strong);
+  transition: background 0.3s;
+}
+
+.input-wrapper:focus-within .input-line {
+  background: var(--accent);
+}
+
+.input-wrapper.compact .skill-input {
+  padding: 12px 0;
+  font-size: 15px;
+}
+
+.submit-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 28px;
+  font-size: 15px;
+  font-family: var(--font-body);
   font-weight: 500;
-  box-shadow: 0 4px 15px rgba(74, 144, 226, 0.3);
-  transition: all 0.3s ease;
+  color: var(--surface);
+  background: var(--text);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.home-input-wrapper .el-button:hover {
+.submit-btn:hover:not(:disabled) {
+  background: var(--accent);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+  box-shadow: var(--shadow-lg);
 }
 
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-icon {
+  width: 18px;
+  height: 18px;
+  transition: transform 0.3s;
+}
+
+.submit-btn:hover .btn-icon {
+  transform: translateX(4px);
+}
+
+.suggestions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.suggestion-label {
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.suggestion-chip {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-family: var(--font-body);
+  color: var(--text-secondary);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.suggestion-chip:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.home-footer {
+  position: absolute;
+  bottom: 40px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.footer-text {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+/* Chat Mode */
 .chat-mode {
   width: 100%;
   height: 100%;
   display: flex;
-  gap: 16px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 320px;
+  height: 100%;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-header {
+  padding: 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.back-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-family: var(--font-body);
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.back-btn:hover {
+  color: var(--text);
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+.back-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
   padding: 20px;
 }
 
-.left-panel {
+.sidebar-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 20px;
+}
+
+.job-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.job-item {
+  padding: 16px;
+  background: var(--bg);
+  border-radius: var(--radius-md);
+  animation: slideIn 0.4s ease-out both;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(-20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.job-item-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 8px;
+}
+
+.job-item-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  flex: 1;
+}
+
+.job-item-rate {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.job-item-meta {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.job-item-city,
+.job-item-salary {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.job-item-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.skill-pill {
+  padding: 4px 10px;
+  font-size: 11px;
+  border-radius: 12px;
+}
+
+.skill-pill.matched {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.skill-pill.missing {
+  color: var(--text-muted);
+  background: var(--bg-warm);
+}
+
+.no-jobs {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--text-muted);
+  font-size: 14px;
+}
+
+/* Chat Main */
+.chat-main {
   flex: 1;
   display: flex;
   flex-direction: column;
   min-width: 0;
-  max-height: 100%;
+}
+
+.chat-header {
+  padding: 20px 28px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.chat-header-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 500;
+  color: var(--text);
 }
 
 .chat-dialog {
   flex: 1;
   overflow-y: auto;
-  padding: 24px;
-  border-radius: 20px;
-  margin-bottom: 16px;
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(74, 144, 226, 0.1);
-  min-height: 200px;
-}
-
-.bubble {
-  margin-bottom: 20px;
+  padding: 28px;
   display: flex;
-  align-items: flex-start;
-}
-
-.bubble.user {
-  justify-content: flex-end;
-}
-
-.bubble.assistant {
-  justify-content: flex-start;
   flex-direction: column;
+  gap: 24px;
 }
 
-.ai-avatar {
+.message {
+  display: flex;
+  gap: 16px;
+  max-width: 720px;
+  animation: messageIn 0.4s ease-out;
+}
+
+@keyframes messageIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message.user {
+  margin-left: auto;
+  flex-direction: row-reverse;
+}
+
+.avatar {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  background: linear-gradient(135deg, #4A90E2 0%, #7B61FF 100%);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-right: 12px;
   flex-shrink: 0;
-  box-shadow: 0 0 20px rgba(74, 144, 226, 0.5);
-  animation: avatarGlow 2s ease-in-out infinite;
 }
 
-@keyframes avatarGlow {
-  0%, 100% { box-shadow: 0 0 15px rgba(74, 144, 226, 0.4); }
-  50% { box-shadow: 0 0 25px rgba(123, 97, 255, 0.6); }
-}
-
-.ai-avatar svg {
+.avatar svg {
   width: 20px;
   height: 20px;
-  fill: white;
 }
 
-.bubble-content {
-  max-width: 70%;
-  padding: 14px 20px;
-  border-radius: 18px;
-  word-wrap: break-word;
-  line-height: 1.6;
+.avatar.assistant {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
 
-.bubble.user .bubble-content {
-  background: linear-gradient(135deg, #7B61FF 0%, #4A90E2 100%);
-  color: #FFFFFF;
-  border-bottom-right-radius: 4px;
+.avatar.user {
+  background: var(--bg-warm);
+  color: var(--text-secondary);
 }
 
-.bubble.assistant .bubble-content {
-  background: #FFFFFF;
-  color: #1a1a1a;
-  border: 1px solid rgba(74, 144, 226, 0.2);
-  border-bottom-left-radius: 4px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
-}
-
-.bubble.assistant .bubble-wrapper {
-  display: flex;
-  align-items: flex-start;
-}
-
-.ai-typing {
-  height: 3px;
-  width: 60px;
-  background: linear-gradient(90deg, #4A90E2, #7B61FF, #4A90E2);
-  background-size: 200% 100%;
-  border-radius: 2px;
-  margin-top: 8px;
-  margin-left: 48px;
-  animation: typingGlow 1.5s ease-in-out infinite;
-}
-
-@keyframes typingGlow {
-  0% { background-position: 200% 0; opacity: 0.5; }
-  50% { opacity: 1; }
-  100% { background-position: -200% 0; opacity: 0.5; }
-}
-
-.input-area {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  transition: all 0.3s ease;
+.message-content {
   padding: 16px 20px;
-  background: rgba(255, 255, 255, 0.8);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid rgba(74, 144, 226, 0.1);
-  border-radius: 20px;
-  position: sticky;
-  bottom: 0;
-  z-index: 10;
-}
-
-.input-area .el-textarea {
-  flex: 1;
-}
-
-.input-area .el-textarea .el-textarea__inner {
-  border-radius: 16px;
-  border: 1px solid rgba(74, 144, 226, 0.2);
-  box-shadow: 0 2px 10px rgba(74, 144, 226, 0.1);
-  padding: 12px 16px;
+  border-radius: var(--radius-md);
   font-size: 15px;
-  transition: all 0.3s ease;
+  line-height: 1.7;
+  color: var(--text);
 }
 
-.input-area .el-textarea .el-textarea__inner:focus {
-  border-color: #7B61FF;
-  box-shadow: 0 4px 15px rgba(123, 97, 255, 0.2);
+.message.assistant .message-content {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top-left-radius: 4px;
 }
 
-.input-area .el-textarea textarea {
-  max-height: 200px;
-  overflow-y: auto;
+.message.user .message-content {
+  background: var(--text);
+  color: var(--surface);
+  border-top-right-radius: 4px;
 }
 
-.input-area .el-button {
-  border-radius: 16px;
-  background: linear-gradient(135deg, #4A90E2 0%, #7B61FF 100%);
-  border: none;
-  padding: 0 24px;
-  font-weight: 500;
-  box-shadow: 0 4px 15px rgba(74, 144, 226, 0.3);
-  transition: all 0.3s ease;
-  height: 42px;
+/* Markdown Styles in Messages */
+.message-content h1,
+.message-content h2,
+.message-content h3 {
+  font-family: var(--font-display);
+  margin: 16px 0 8px;
+  color: var(--text);
 }
 
-.input-area .el-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(74, 144, 226, 0.4);
+.message-content h1 { font-size: 22px; }
+.message-content h2 { font-size: 18px; }
+.message-content h3 { font-size: 16px; }
+
+.message-content p {
+  margin: 8px 0;
 }
 
-.right-panel {
-  width: 400px;
-  min-width: 400px;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
+.message-content ul,
+.message-content ol {
+  margin: 8px 0;
+  padding-left: 20px;
 }
 
-.job-cards-container {
-  flex: 1;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding-right: 4px;
+.message-content li {
+  margin: 4px 0;
 }
 
-.job-card {
-  flex-shrink: 0;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.6);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(74, 144, 226, 0.15);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-  transition: all 0.3s ease;
-}
-
-.job-card:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 8px 30px rgba(74, 144, 226, 0.15);
-}
-
-.job-card .el-card__header {
-  border-bottom: 1px solid rgba(74, 144, 226, 0.1);
-  padding: 16px 20px;
-}
-
-.job-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1a1a1a;
-  letter-spacing: -0.5px;
-}
-
-.job-detail {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  padding: 16px 20px;
-}
-
-.job-info {
-  display: flex;
-  gap: 8px;
-}
-
-.job-info .el-tag {
-  border-radius: 20px;
-  padding: 0 12px;
-  height: 26px;
-  border: none;
-  background: rgba(74, 144, 226, 0.1);
-  color: #4A90E2;
-}
-
-.job-skills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.skill-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 12px;
-  border-radius: 20px;
+.message-content code {
+  padding: 2px 6px;
+  background: var(--bg-warm);
+  border-radius: 4px;
+  font-family: 'SF Mono', Monaco, monospace;
   font-size: 13px;
-  animation: fadeIn 0.3s ease forwards;
-  opacity: 0;
-  transform: translateY(5px);
 }
 
-@keyframes fadeIn {
-  to { opacity: 1; transform: translateY(0); }
+.message.user .message-content code {
+  background: rgba(255, 255, 255, 0.1);
 }
 
-.skill-tag.matched {
-  background: rgba(87, 190, 106, 0.15);
-  color: #57BE6A;
+.message-content strong {
+  font-weight: 600;
+  color: var(--accent);
 }
 
-.skill-tag.matched::before {
-  content: '✓';
-  font-size: 11px;
+.typing-indicator {
+  display: flex;
+  gap: 4px;
+  padding: 8px 0;
 }
 
-.skill-tag.missing {
-  background: rgba(255, 165, 0, 0.15);
-  color: #ff9500;
+.typing-indicator span {
+  width: 6px;
+  height: 6px;
+  background: var(--text-muted);
+  border-radius: 50%;
+  animation: typing 1.4s ease-in-out infinite;
 }
 
-.skill-tag.missing::before {
-  content: '!';
-  font-size: 11px;
-  margin-right: 2px;
+.typing-indicator span:nth-child(2) {
+  animation-delay: 0.2s;
 }
 
-.progress-wrapper {
+.typing-indicator span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typing {
+  0%, 60%, 100% {
+    transform: translateY(0);
+    opacity: 0.4;
+  }
+  30% {
+    transform: translateY(-6px);
+    opacity: 1;
+  }
+}
+
+/* Chat Input */
+.chat-input-area {
+  display: flex;
+  gap: 12px;
+  padding: 20px 28px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+.chat-input-area .input-wrapper {
+  flex: 1;
+  padding: 12px 16px;
+  background: var(--bg);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  transition: border-color 0.2s;
+}
+
+.chat-input-area .input-wrapper:focus-within {
+  border-color: var(--accent);
+}
+
+.chat-input-area .input-line {
+  display: none;
+}
+
+.send-btn {
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 8px;
+  justify-content: center;
+  background: var(--text);
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.3s;
 }
 
-.progress-wrapper .el-progress {
-  flex: 1;
+.send-btn svg {
+  width: 20px;
+  height: 20px;
+  color: var(--surface);
+  transition: transform 0.3s;
 }
 
-.progress-wrapper .el-progress-bar__outer {
-  border-radius: 10px;
-  background: rgba(74, 144, 226, 0.1);
+.send-btn:hover:not(:disabled) {
+  background: var(--accent);
 }
 
-.progress-wrapper .el-progress-bar__inner {
-  border-radius: 10px;
-  background: linear-gradient(90deg, #4A90E2 0%, #7B61FF 100%);
+.send-btn:hover .send-icon {
+  transform: translateX(2px) translateY(-2px);
 }
 
-.progress-text {
-  font-weight: 600;
-  background: linear-gradient(135deg, #4A90E2 0%, #7B61FF 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-  min-width: 45px;
+.send-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-strong);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-muted);
 }
 </style>
