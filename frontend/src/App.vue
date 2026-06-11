@@ -21,6 +21,18 @@ const currentUser = ref({ email: '', role: 'user' })
 const showAuthModal = ref(false)
 const currentPage = ref('home')
 
+// Admin page state
+const activeTab = ref('logs')
+const userLogs = ref([])
+const jobForm = ref({
+  job_name: '',
+  city: '',
+  salary: '',
+  skills: [],
+  description: ''
+})
+const skillInput = ref('')
+
 const apiBase = 'http://localhost:5000/api'
 
 // Mock beat rate based on match rate
@@ -265,6 +277,60 @@ const handleLogout = () => {
 const openAuthModal = (mode = 'login') => {
   showAuthModal.value = true
 }
+
+// Admin page handlers
+const fetchUserLogs = async () => {
+  try {
+    const res = await fetch(`${apiBase}/admin/user-logs`)
+    const data = await res.json()
+    userLogs.value = data.logs || []
+  } catch (e) {
+    // Mock data for demo
+    userLogs.value = [
+      { email: 'user1@example.com', lastLogin: '2026-06-11 10:30', role: 'user', searchCount: 12 },
+      { email: 'user2@example.com', lastLogin: '2026-06-11 09:15', role: 'user', searchCount: 8 },
+      { email: 'admin@career.ai', lastLogin: '2026-06-11 11:00', role: 'admin', searchCount: 0 },
+    ]
+  }
+}
+
+const addSkillTag = () => {
+  const skill = skillInput.value.trim()
+  if (skill && !jobForm.value.skills.includes(skill)) {
+    jobForm.value.skills.push(skill)
+  }
+  skillInput.value = ''
+}
+
+const removeSkillTag = (index) => {
+  jobForm.value.skills.splice(index, 1)
+}
+
+const submitJob = async () => {
+  if (!jobForm.value.job_name || !jobForm.value.city) {
+    ElMessage.warning('请填写职务名称和城市')
+    return
+  }
+
+  try {
+    await fetch(`${apiBase}/admin/add-job`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(jobForm.value)
+    })
+    ElMessage.success('岗位添加成功')
+    jobForm.value = { job_name: '', city: '', salary: '', skills: [], description: '' }
+  } catch (e) {
+    ElMessage.error('添加失败，请重试')
+  }
+}
+
+const switchTab = (tab) => {
+  activeTab.value = tab
+  if (tab === 'logs') {
+    fetchUserLogs()
+  }
+}
 </script>
 
 <template>
@@ -311,12 +377,104 @@ const openAuthModal = (mode = 'login') => {
 
     <!-- Admin Page -->
     <div v-if="currentPage === 'admin'" class="admin-page">
-      <div class="glass-card admin-panel">
-        <svg class="admin-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M12 15V3m0 12l-4-4m4 4l4-4M2 17l.621 2.485A2 2 0 0 0 4.561 21h14.878a2 2 0 0 0 1.94-1.515L22 17"/>
-        </svg>
-        <h2>数据管理页面</h2>
-        <p>暂无内容，开发中...</p>
+      <div class="admin-container glass-card">
+        <!-- Tabs Header -->
+        <div class="admin-tabs">
+          <button
+            :class="['tab-btn', { active: activeTab === 'logs' }]"
+            @click="switchTab('logs')"
+          >
+            <span class="tab-icon">👤</span>
+            <span>用户登录日志</span>
+          </button>
+          <button
+            :class="['tab-btn', { active: activeTab === 'add-job' }]"
+            @click="switchTab('add-job')"
+          >
+            <span class="tab-icon">💼</span>
+            <span>岗位数据录入</span>
+          </button>
+          <div class="tab-indicator" :class="activeTab"></div>
+        </div>
+
+        <!-- Tab Content -->
+        <div class="tab-content">
+          <!-- User Logs View -->
+          <div v-if="activeTab === 'logs'" class="logs-view">
+            <table class="logs-table">
+              <thead>
+                <tr>
+                  <th>用户名/邮箱</th>
+                  <th>最后登录时间</th>
+                  <th>账号角色</th>
+                  <th>检索频次</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="(log, idx) in userLogs" :key="idx">
+                  <td>{{ log.email }}</td>
+                  <td>{{ log.lastLogin }}</td>
+                  <td>
+                    <span :class="['role-tag', log.role]">{{ log.role === 'admin' ? '管理员' : '普通用户' }}</span>
+                  </td>
+                  <td>{{ log.searchCount }} 次</td>
+                </tr>
+                <tr v-if="userLogs.length === 0">
+                  <td colspan="4" class="empty-cell">暂无数据</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Add Job View -->
+          <div v-if="activeTab === 'add-job'" class="add-job-view">
+            <div class="form-row">
+              <div class="form-group">
+                <label>职务名称</label>
+                <input v-model="jobForm.job_name" type="text" placeholder="例如：高级Python开发工程师" />
+              </div>
+              <div class="form-group">
+                <label>城市</label>
+                <input v-model="jobForm.city" type="text" placeholder="例如：北京" />
+              </div>
+              <div class="form-group">
+                <label>薪资范围</label>
+                <input v-model="jobForm.salary" type="text" placeholder="例如：25K-50K" />
+              </div>
+            </div>
+
+            <div class="form-group full-width">
+              <label>技术要求（按回车添加标签）</label>
+              <div class="skills-input-wrapper">
+                <div class="skills-tags">
+                  <span v-for="(skill, idx) in jobForm.skills" :key="idx" class="skill-tag">
+                    {{ skill }}
+                    <button @click="removeSkillTag(idx)">×</button>
+                  </span>
+                </div>
+                <input
+                  v-model="skillInput"
+                  type="text"
+                  placeholder="输入技术名称后按回车"
+                  @keyup.enter="addSkillTag"
+                />
+              </div>
+            </div>
+
+            <div class="form-group full-width">
+              <label>岗位职责</label>
+              <textarea
+                v-model="jobForm.description"
+                rows="5"
+                placeholder="请输入详细的岗位职责描述..."
+              ></textarea>
+            </div>
+
+            <div class="form-actions">
+              <button class="submit-job-btn" @click="submitJob">提交岗位</button>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -1655,34 +1813,279 @@ html, body {
   position: relative;
   z-index: 1;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   min-height: 100vh;
-  padding: 100px 20px 20px;
+  padding: 100px 20px 40px;
 }
 
-.admin-panel {
-  padding: 80px 120px;
-  text-align: center;
+.admin-container {
+  width: 100%;
+  max-width: 1000px;
+  padding: 0;
+  overflow: hidden;
 }
 
-.admin-icon {
-  width: 64px;
-  height: 64px;
+/* Tabs Header */
+.admin-tabs {
+  display: flex;
+  position: relative;
+  padding: 0 32px;
+  border-bottom: 1px solid var(--border-glass);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 20px 24px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.tab-btn.active {
   color: var(--accent-gold);
-  margin-bottom: 24px;
-}
-
-.admin-panel h2 {
-  font-family: var(--font-display);
-  font-size: 28px;
   font-weight: 600;
-  color: var(--accent-gold);
-  margin-bottom: 12px;
 }
 
-.admin-panel p {
-  font-size: 16px;
+.tab-icon {
+  font-size: 18px;
+}
+
+.tab-indicator {
+  position: absolute;
+  bottom: 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--accent-gold), var(--accent-gold-light));
+  border-radius: 3px 3px 0 0;
+  transition: left 0.3s ease, width 0.3s ease;
+  box-shadow: 0 0 10px rgba(201, 162, 39, 0.5);
+}
+
+.tab-indicator.logs {
+  left: 32px;
+  width: 120px;
+}
+
+.tab-indicator.add-job {
+  left: 152px;
+  width: 120px;
+}
+
+/* Tab Content */
+.tab-content {
+  padding: 32px;
+  animation: fadeIn 0.3s ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* Logs Table */
+.logs-view {
+  width: 100%;
+}
+
+.logs-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.logs-table th {
+  text-align: left;
+  padding: 16px 20px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(201, 162, 39, 0.05);
+  border-bottom: 1px solid var(--border-glass);
+}
+
+.logs-table td {
+  padding: 18px 20px;
+  font-size: 14px;
+  color: var(--text-primary);
+  border-bottom: 1px solid var(--border-glass);
+  transition: background 0.2s;
+}
+
+.logs-table tr:hover td {
+  background: linear-gradient(90deg, rgba(201, 162, 39, 0.03), rgba(201, 162, 39, 0.08));
+}
+
+.role-tag {
+  display: inline-block;
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 12px;
+}
+
+.role-tag.admin {
+  background: rgba(201, 162, 39, 0.15);
+  color: var(--accent-gold);
+}
+
+.role-tag.user {
+  background: rgba(0, 168, 150, 0.1);
+  color: var(--accent-cyan);
+}
+
+.empty-cell {
+  text-align: center;
   color: var(--text-muted);
+  padding: 40px !important;
+}
+
+/* Add Job Form */
+.add-job-view {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.form-row {
+  display: flex;
+  gap: 20px;
+}
+
+.form-group {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-group.full-width {
+  width: 100%;
+}
+
+.form-group label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.form-group input,
+.form-group textarea {
+  padding: 14px 16px;
+  font-size: 14px;
+  font-family: var(--font-body);
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus,
+.form-group textarea:focus {
+  border-color: var(--accent-gold);
+}
+
+.form-group input::placeholder,
+.form-group textarea::placeholder {
+  color: var(--text-muted);
+}
+
+.form-group textarea {
+  resize: vertical;
+  min-height: 120px;
+}
+
+/* Skills Input */
+.skills-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+}
+
+.skills-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.skill-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-family: 'SF Mono', monospace;
+  background: rgba(201, 162, 39, 0.1);
+  border: 1px solid rgba(201, 162, 39, 0.3);
+  border-radius: 6px;
+  color: var(--accent-gold);
+}
+
+.skill-tag button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  font-size: 14px;
+  color: var(--accent-gold);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: background 0.2s;
+}
+
+.skill-tag button:hover {
+  background: rgba(201, 162, 39, 0.2);
+}
+
+.skills-input-wrapper input {
+  border: none;
+  padding: 8px 0;
+  background: transparent;
+}
+
+.skills-input-wrapper input:focus {
+  border: none;
+}
+
+/* Form Actions */
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 16px;
+}
+
+.submit-job-btn {
+  padding: 14px 32px;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: var(--font-body);
+  color: #faf8f5;
+  background: linear-gradient(135deg, var(--accent-gold), var(--accent-gold-light));
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.submit-job-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(201, 162, 39, 0.4);
 }
 </style>
