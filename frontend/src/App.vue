@@ -52,6 +52,14 @@ const beatRate = computed(() => {
   return Math.round(avgMatch + 15)
 })
 
+// 监听十二维数据变化，渲染雷达图
+watch(twelveMetrics, async (newVal) => {
+  if (newVal && newVal.length > 0) {
+    await nextTick()
+    initRadarChart()
+  }
+})
+
 // Parse AI response for badges and tasks
 const parseAIResponse = (content) => {
   const badges = []
@@ -360,14 +368,18 @@ const handleFileDrop = (event) => {
 }
 
 const analyzeFile = async (file) => {
+  console.log('analyzeFile called:', file.name, file.type, file.size)
+
   if (!isLoggedIn.value) {
     ElMessage.warning('请先登录后再使用简历分析功能')
     showAuthModal.value = true
     return
   }
 
-  const validTypes = ['application/pdf', 'text/plain', 'text/markdown', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
-  if (!validTypes.includes(file.type) && !file.name.match(/\.(pdf|txt|md|docx)$/i)) {
+  // 修复：扩展名验证优先，因为浏览器对 MIME type 识别不一致
+  const validExtensions = ['pdf', 'txt', 'md', 'docx']
+  const fileExt = file.name.split('.').pop().toLowerCase()
+  if (!validExtensions.includes(fileExt)) {
     ElMessage.error('请上传 PDF、TXT、MD 或 DOCX 格式的文件')
     return
   }
@@ -380,11 +392,14 @@ const analyzeFile = async (file) => {
     const formData = new FormData()
     formData.append('file', file)
 
+    console.log('Sending request to', `${apiBase}/resume/analyze`)
     const res = await fetch(`${apiBase}/resume/analyze`, {
       method: 'POST',
       body: formData
     })
+    console.log('Response status:', res.status)
     const data = await res.json()
+    console.log('Response data:', data)
 
     if (data.error) {
       ElMessage.error(data.error)
@@ -401,10 +416,6 @@ const analyzeFile = async (file) => {
     }
 
     ElMessage.success('简历分析完成！')
-
-    // 初始化雷达图
-    await nextTick()
-    initRadarChart()
   } catch (e) {
     ElMessage.error('分析失败，请重试')
   } finally {
@@ -427,7 +438,15 @@ const resetResumeAnalysis = () => {
 }
 
 const initRadarChart = () => {
-  if (!radarChartRef.value || !twelveMetrics.value.length) return
+  console.log('initRadarChart called', {
+    radarChartRef: radarChartRef.value,
+    twelveMetricsLength: twelveMetrics.value.length,
+    twelveMetricsData: twelveMetrics.value
+  })
+  if (!radarChartRef.value || !twelveMetrics.value.length) {
+    console.log('initRadarChart early return')
+    return
+  }
 
   if (radarChartInstance) {
     radarChartInstance.dispose()
@@ -601,6 +620,10 @@ const handleResize = () => {
             <!-- Left: Chat Answer & Metrics -->
             <div class="result-main">
               <div class="chat-answer-section">
+                <div class="score-badge">
+                  <span class="score-label">综合评分</span>
+                  <span class="score-value">{{ analysisResult.score }}</span>
+                </div>
                 <h4>AI 核心诊断</h4>
                 <div class="chat-answer-content" v-html="renderMarkdown(analysisResult.chat_answer || '')"></div>
               </div>
@@ -2364,6 +2387,8 @@ html, body {
   width: 100%;
   max-width: 1100px;
   padding: 40px;
+  overflow-y: auto;
+  max-height: calc(100vh - 120px);
 }
 
 .resume-header {
@@ -2540,6 +2565,31 @@ html, body {
   padding: 24px;
   background: rgba(201, 162, 39, 0.03);
   border-radius: var(--radius-md);
+}
+
+.score-badge {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(201, 162, 39, 0.15), rgba(201, 162, 39, 0.08));
+  border: 1px solid rgba(201, 162, 39, 0.3);
+  border-radius: var(--radius-md);
+}
+
+.score-label {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.score-value {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 700;
+  background: linear-gradient(135deg, var(--accent-gold), var(--accent-gold-light));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
 .chat-answer-section h4,

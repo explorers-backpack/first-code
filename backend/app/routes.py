@@ -205,16 +205,31 @@ def analyze_resume():
         # 计算综合评分
         score = min(95, 55 + len(skills) * 4)
 
-        # 生成诊断报告
-        chat_answer = f"""根据您的简历分析，您具备**{'、'.join(skills[:5])}**等核心技能，综合评分达到 **{score}** 分。
+        # 调用讯飞星火 AI 生成精简诊断报告
+        RESUME_ANALYSIS_PROMPT = """你是简历分析助手。请根据以下简历信息，生成一段精简的职业诊断报告（不超过100字），直接输出，不要其他内容。
 
-## 能力画像
-您在架构能力、代码规范方面表现突出，具有良好的全栈开发视野。建议继续深化云原生和容器化技术，进一步提升系统设计能力。
+简历技能：{skills}
+综合评分：{score}分
 
-## 发展方向
-- 深入某一技术领域成为专家
-- 拓展项目管理能力
-- 积累大型项目架构经验"""
+要求：
+1. 直接指出核心竞争力
+2. 最多2条提升建议
+3. 风格简洁专业，不要废话
+
+输出格式：
+【核心优势】：xxx
+【提升建议】：xxx"""
+
+        try:
+            prompt = RESUME_ANALYSIS_PROMPT.format(
+                skills='、'.join(skills[:8]) if skills else '未识别到特定技能',
+                score=score
+            )
+            chat_answer = spark_api.chat(prompt)
+            if chat_answer.startswith('Error') or len(chat_answer) < 10:
+                chat_answer = f"您的技能涵盖 {', '.join(skills[:5])} 等，综合评分 {score} 分。建议深化核心技术栈，积累大型项目经验。"
+        except Exception as e:
+            chat_answer = f"您的技能涵盖 {', '.join(skills[:5])} 等，综合评分 {score} 分。建议深化核心技术栈，积累大型项目经验。"
 
         # 获取推荐岗位
         try:
