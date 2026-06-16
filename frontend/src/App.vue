@@ -2,6 +2,7 @@
 import { ref, nextTick, computed, watch, onMounted } from 'vue'
 import { ElMessage, ElCollapse, ElCollapseItem } from 'element-plus'
 import MarkdownIt from 'markdown-it'
+import * as echarts from 'echarts'
 import AuthModal from './components/AuthModal.vue'
 
 const md = new MarkdownIt()
@@ -39,6 +40,8 @@ const analysisResult = ref(null)
 const twelveMetrics = ref([])
 const uploadedFile = ref(null)
 const dragOver = ref(false)
+const radarChartRef = ref(null)
+let radarChartInstance = null
 
 const apiBase = 'http://localhost:5000/api'
 
@@ -398,6 +401,10 @@ const analyzeFile = async (file) => {
     }
 
     ElMessage.success('简历分析完成！')
+
+    // 初始化雷达图
+    await nextTick()
+    initRadarChart()
   } catch (e) {
     ElMessage.error('分析失败，请重试')
   } finally {
@@ -412,6 +419,89 @@ const resetResumeAnalysis = () => {
   jobMatches.value = []
   chatHistory.value = []
   hasResult.value = false
+  if (radarChartInstance) {
+    radarChartInstance.dispose()
+    radarChartInstance = null
+  }
+  window.removeEventListener('resize', handleResize)
+}
+
+const initRadarChart = () => {
+  if (!radarChartRef.value || !twelveMetrics.value.length) return
+
+  if (radarChartInstance) {
+    radarChartInstance.dispose()
+  }
+
+  radarChartInstance = echarts.init(radarChartRef.value)
+
+  const indicator = twelveMetrics.value.map(item => ({
+    name: item.name,
+    max: 100
+  }))
+
+  const option = {
+    backgroundColor: 'transparent',
+    radar: {
+      indicator,
+      shape: 'polygon',
+      splitNumber: 4,
+      axisName: {
+        color: '#7a756d',
+        fontSize: 12
+      },
+      splitLine: {
+        lineStyle: {
+          color: 'rgba(201, 162, 39, 0.15)'
+        }
+      },
+      splitArea: {
+        show: true,
+        areaStyle: {
+          color: ['rgba(201, 162, 39, 0.02)', 'rgba(201, 162, 39, 0.05)', 'rgba(201, 162, 39, 0.08)', 'rgba(201, 162, 39, 0.12)']
+        }
+      },
+      axisLine: {
+        lineStyle: {
+          color: 'rgba(201, 162, 39, 0.2)'
+        }
+      },
+      radius: '65%'
+    },
+    series: [{
+      type: 'radar',
+      data: [{
+        value: twelveMetrics.value.map(item => item.value),
+        name: '能力画像',
+        areaStyle: {
+          color: new echarts.graphic.RadialGradient(0.5, 0.5, 1, [
+            { offset: 0, color: 'rgba(212, 175, 55, 0.6)' },
+            { offset: 1, color: 'rgba(212, 175, 55, 0.1)' }
+          ])
+        },
+        lineStyle: {
+          color: '#D4AF37',
+          width: 2
+        },
+        itemStyle: {
+          color: '#D4AF37'
+        },
+        symbol: 'circle',
+        symbolSize: 6
+      }]
+    }]
+  }
+
+  radarChartInstance.setOption(option)
+
+  // 窗口 resize 时自适应
+  window.addEventListener('resize', handleResize)
+}
+
+const handleResize = () => {
+  if (radarChartInstance) {
+    radarChartInstance.resize()
+  }
 }
 </script>
 
@@ -518,7 +608,7 @@ const resetResumeAnalysis = () => {
               <!-- Twelve Metrics Radar Chart Container -->
               <div v-if="twelveMetrics.length > 0" class="metrics-section">
                 <h4>十二维能力画像</h4>
-                <div class="radar-container" id="radarChart"></div>
+                <div class="radar-container" ref="radarChartRef"></div>
               </div>
             </div>
 
