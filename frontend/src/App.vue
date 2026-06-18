@@ -16,6 +16,27 @@ const hasResult = ref(false)
 const userBadges = ref([])
 const expandedTasks = ref([])
 
+// 新增：学习路径与结构化任务数据
+const learningPath = ref([])           // 从 [学习路径] 解析的阶段数组
+const taskChecklist = ref({            // 从 [任务-XX] 解析的复选框任务
+  P0: [],
+  P1: [],
+  P2: []
+})
+
+// 清洗后的中央看板内容（移除结构化标签）
+const cleanedChatContent = computed(() => {
+  const assistantMsg = chatHistory.value.find(m => m.role === 'assistant')
+  if (!assistantMsg) return ''
+  let content = assistantMsg.content
+  // 移除所有系统标签行及其后续内容
+  content = content.replace(/\[学习路径\][^\n]*/g, '')
+  content = content.replace(/\[任务-P0\][^\n]*/g, '')
+  content = content.replace(/\[任务-P1\][^\n]*/g, '')
+  content = content.replace(/\[任务-P2\][^\n]*/g, '')
+  return content.trim()
+})
+
 // Auth state
 const isLoggedIn = ref(false)
 const currentUser = ref({ email: '', role: 'user' })
@@ -43,7 +64,7 @@ const dragOver = ref(false)
 const radarChartRef = ref(null)
 let radarChartInstance = null
 
-const apiBase = 'http://localhost:5000/api'
+const apiBase = '/api'
 
 // Mock beat rate based on match rate
 const beatRate = computed(() => {
@@ -60,44 +81,75 @@ watch(twelveMetrics, async (newVal) => {
   }
 })
 
-// Parse AI response for badges and tasks
-const parseAIResponse = (content) => {
+// 结构化解析 AI 回应：提取学习路径 + 分级任务 + 勋章
+const parseStructuredResponse = (content) => {
   const badges = []
-  const tasks = []
+  const parsedTasks = { P0: [], P1: [], P2: [] }
+  let parsedPath = []
 
-  // Extract potential badges from content
+  // ----- 1. 提取 [学习路径] -----
+  const pathMatch = content.match(/\[学习路径\]\s*(.+)/)
+  if (pathMatch) {
+    parsedPath = pathMatch[1]
+      .split('->')
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+  }
+
+  // ----- 2. 提取 [任务-P0] -----
+  const p0Match = content.match(/\[任务-P0\]\s*(.+)/)
+  if (p0Match) {
+    parsedTasks.P0 = p0Match[1]
+      .split(/[；;]/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+      .map((label, i) => ({
+        id: `p0-${i}`,
+        label: label.replace(/^\d+\.\s*/, ''),
+        done: false
+      }))
+  }
+
+  // ----- 3. 提取 [任务-P1] -----
+  const p1Match = content.match(/\[任务-P1\]\s*(.+)/)
+  if (p1Match) {
+    parsedTasks.P1 = p1Match[1]
+      .split(/[；;]/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+      .map((label, i) => ({
+        id: `p1-${i}`,
+        label: label.replace(/^\d+\.\s*/, ''),
+        done: false
+      }))
+  }
+
+  // ----- 4. 提取 [任务-P2] -----
+  const p2Match = content.match(/\[任务-P2\]\s*(.+)/)
+  if (p2Match) {
+    parsedTasks.P2 = p2Match[1]
+      .split(/[；;]/)
+      .map(s => s.trim())
+      .filter(s => s.length > 0)
+      .map((label, i) => ({
+        id: `p2-${i}`,
+        label: label.replace(/^\d+\.\s*/, ''),
+        done: false
+      }))
+  }
+
+  // ----- 5. 勋章降级提取（从内容中识别技术标签）-----
   const badgeKeywords = ['潜力', '规范', '极客', '全栈', '专家', '精英', '领袖', '创新']
   badgeKeywords.forEach(keyword => {
     if (content.includes(keyword)) {
       badges.push({ label: keyword, type: 'gold' })
     }
   })
-
   if (badges.length === 0) {
     badges.push({ label: '技术人才', type: 'gold' }, { label: '工程规范', type: 'silver' })
   }
 
-  // Parse P0/P1/P2 tasks
-  const p0Match = content.match(/P0[:：]\s*([^P\n]+)/i)
-  const p1Match = content.match(/P1[:：]\s*([^P\n]+)/i)
-  const p2Match = content.match(/P2[:：]\s*([^。\n]+)/gi)
-
-  if (p0Match) tasks.push({ priority: 'P0', label: p0Match[1].trim(), done: false })
-  if (p1Match) tasks.push({ priority: 'P1', label: p1Match[1].trim(), done: false })
-  if (p2Match) {
-    p2Match.forEach(m => {
-      const label = m.replace(/P2[:：]\s*/i, '').trim()
-      if (label) tasks.push({ priority: 'P2', label, done: false })
-    })
-  }
-
-  if (tasks.length === 0) {
-    tasks.push({ priority: 'P0', label: '夯实核心技能基础', done: false })
-    tasks.push({ priority: 'P1', label: '拓展项目实战经验', done: false })
-    tasks.push({ priority: 'P2', label: '持续关注行业动态', done: false })
-  }
-
-  return { badges, tasks }
+  return { badges, parsedTasks, parsedPath }
 }
 
 // Extract highlighted tech terms
@@ -132,6 +184,8 @@ const handleAsk = async () => {
   hasResult.value = false
   userBadges.value = []
   expandedTasks.value = []
+  learningPath.value = []
+  taskChecklist.value = { P0: [], P1: [], P2: [] }
 
   chatHistory.value.push({ role: 'user', content: userMsg })
   inputText.value = ''
@@ -155,8 +209,10 @@ const handleAsk = async () => {
     })
     const chatData = await chatRes.json()
 
-    const { badges, tasks } = parseAIResponse(chatData.chat_answer || '')
+    const { badges, parsedTasks, parsedPath } = parseStructuredResponse(chatData.chat_answer || '')
     userBadges.value = badges
+    learningPath.value = parsedPath
+    taskChecklist.value = parsedTasks
 
     chatHistory.value.push({
       role: 'assistant',
@@ -255,6 +311,8 @@ const resetAnalysis = () => {
   chatHistory.value = []
   userBadges.value = []
   expandedTasks.value = []
+  learningPath.value = []
+  taskChecklist.value = { P0: [], P1: [], P2: [] }
 }
 
 const toggleTask = (idx) => {
@@ -262,6 +320,14 @@ const toggleTask = (idx) => {
     expandedTasks.value = expandedTasks.value.filter(i => i !== idx)
   } else {
     expandedTasks.value.push(idx)
+  }
+}
+
+// 切换任务勾选状态（打卡）
+const toggleTaskCheck = (priority, taskId) => {
+  const task = taskChecklist.value[priority].find(t => t.id === taskId)
+  if (task) {
+    task.done = !task.done
   }
 }
 
@@ -289,6 +355,8 @@ const handleLogout = () => {
   jobMatches.value = []
   chatHistory.value = []
   userBadges.value = []
+  learningPath.value = []
+  taskChecklist.value = { P0: [], P1: [], P2: [] }
   ElMessage.success('已安全退出')
 }
 
@@ -855,9 +923,29 @@ const handleResize = () => {
             </div>
           </div>
 
+          <!-- 学习路径（取代原勋章墙） -->
           <div class="panel-section">
-            <h3 class="section-title">AI 勋章墙</h3>
-            <div class="badges-wall">
+            <h3 class="section-title">🗺️ 学习路径</h3>
+            <div v-if="learningPath.length > 0" class="learning-path-steps">
+              <div
+                v-for="(step, idx) in learningPath"
+                :key="idx"
+                class="path-step"
+                :class="{ active: idx === 0, last: idx === learningPath.length - 1 }"
+              >
+                <div class="step-node">
+                  <div class="node-dot"></div>
+                  <span class="node-label">{{ step }}</span>
+                </div>
+                <div v-if="idx < learningPath.length - 1" class="step-connector">
+                  <svg viewBox="0 0 2 40" class="connector-line">
+                    <line x1="1" y1="0" x2="1" y2="40" stroke="currentColor" stroke-width="1.5" stroke-dasharray="4 3"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+            <!-- 无学习路径时的兜底勋章展示 -->
+            <div v-else class="badges-wall">
               <div
                 v-for="(badge, idx) in userBadges"
                 :key="idx"
@@ -902,7 +990,7 @@ const handleResize = () => {
                   </svg>
                 </div>
                 <div class="message-body">
-                  <div class="message-content" v-html="renderMarkdown(msg.content)"></div>
+                  <div class="message-content" v-html="renderMarkdown(msg.role === 'assistant' ? cleanedChatContent : msg.content)"></div>
                 </div>
               </div>
 
@@ -911,34 +999,57 @@ const handleResize = () => {
               </div>
             </div>
 
-            <!-- Task Priorities -->
+            <!-- 学习优先级 → 任务目标（动态复选框打卡） -->
             <div class="tasks-section">
-              <h4>学习优先级</h4>
+              <h4>📋 任务目标</h4>
               <div class="tasks-list">
                 <div
-                  v-for="(task, idx) in [
-                    { priority: 'P0', label: '夯实核心技能基础', done: false },
-                    { priority: 'P1', label: '拓展项目实战经验', done: false },
-                    { priority: 'P2', label: '持续关注行业动态', done: false }
+                  v-for="(group, idx) in [
+                    { key: 'P0', label: '夯实核心技能基础' },
+                    { key: 'P1', label: '拓展项目实战经验' },
+                    { key: 'P2', label: '持续关注行业动态' }
                   ]"
-                  :key="idx"
+                  :key="group.key"
                   class="task-item"
                   :class="{ expanded: expandedTasks.includes(idx) }"
-                  @click="toggleTask(idx)"
                 >
-                  <div class="task-header">
-                    <span class="task-priority" :style="{ color: getPriorityColor(task.priority) }">
-                      {{ task.priority }}
+                  <div class="task-header" @click="toggleTask(idx)">
+                    <span class="task-priority" :style="{ color: getPriorityColor(group.key) }">
+                      {{ group.key }}
                     </span>
-                    <span class="task-label">{{ task.label }}</span>
+                    <span class="task-label">{{ group.label }}</span>
+                    <span class="task-count-tag">{{ taskChecklist[group.key].length }}项</span>
                     <svg class="task-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                       <path d="M6 9l6 6 6-6"/>
                     </svg>
                   </div>
+                  <!-- 展开后的复选框任务列表 -->
                   <div v-if="expandedTasks.includes(idx)" class="task-detail">
-                    <p>制定 30 天学习计划，每天投入 2 小时系统学习</p>
-                    <div class="task-progress">
-                      <div class="progress-bar" :style="{ width: task.done ? '100%' : '0%' }"></div>
+                    <div v-if="taskChecklist[group.key].length > 0" class="checklist-items">
+                      <label
+                        v-for="item in taskChecklist[group.key]"
+                        :key="item.id"
+                        class="checklist-item"
+                        :class="{ done: item.done }"
+                      >
+                        <input
+                          type="checkbox"
+                          :checked="item.done"
+                          @change="toggleTaskCheck(group.key, item.id)"
+                        />
+                        <span class="checkmark"></span>
+                        <span class="checklist-label">{{ item.label }}</span>
+                      </label>
+                    </div>
+                    <p v-else class="task-empty-hint">AI 正在为你生成具体任务项...</p>
+                    <!-- 完成进度条 -->
+                    <div v-if="taskChecklist[group.key].length > 0" class="task-progress">
+                      <div
+                        class="progress-bar"
+                        :style="{
+                          width: (taskChecklist[group.key].filter(t => t.done).length / taskChecklist[group.key].length * 100) + '%'
+                        }"
+                      ></div>
                     </div>
                   </div>
                 </div>
@@ -1483,7 +1594,87 @@ html, body {
   margin-top: 4px;
 }
 
-/* Badges Wall */
+/* ===== Learning Path Steps (替代原勋章墙) ===== */
+.learning-path-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  padding-left: 4px;
+}
+
+.path-step {
+  display: flex;
+  flex-direction: column;
+}
+
+.step-node {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  position: relative;
+}
+
+.node-dot {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent-gold), var(--accent-gold-light));
+  box-shadow: 0 0 10px rgba(201, 162, 39, 0.5), 0 0 24px rgba(212, 175, 55, 0.25);
+  animation: dotPulse 2.5s ease-in-out infinite;
+  position: relative;
+  z-index: 1;
+}
+
+.path-step.active .node-dot {
+  box-shadow: 0 0 16px rgba(201, 162, 39, 0.7), 0 0 32px rgba(212, 175, 55, 0.4);
+}
+
+.path-step.last .node-dot::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid rgba(212, 175, 55, 0.3);
+  animation: dotRing 2.5s ease-in-out infinite;
+}
+
+@keyframes dotPulse {
+  0%, 100% { box-shadow: 0 0 10px rgba(201, 162, 39, 0.5), 0 0 24px rgba(212, 175, 55, 0.25); }
+  50% { box-shadow: 0 0 20px rgba(212, 175, 55, 0.8), 0 0 40px rgba(212, 175, 55, 0.45); }
+}
+
+@keyframes dotRing {
+  0%, 100% { transform: scale(1); opacity: 0.6; }
+  50% { transform: scale(1.3); opacity: 0; }
+}
+
+.node-label {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  font-weight: 500;
+}
+
+.path-step.active .node-label {
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
+.step-connector {
+  padding-left: 6px;
+  height: 32px;
+  display: flex;
+  align-items: stretch;
+}
+
+.connector-line {
+  width: 4px;
+  color: rgba(212, 175, 55, 0.35);
+}
+
+/* Badges Wall (降级展示) */
 .badges-wall {
   display: flex;
   flex-wrap: wrap;
@@ -1763,15 +1954,108 @@ html, body {
   to { opacity: 1; transform: translateY(0); }
 }
 
+.task-count-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  background: rgba(201, 162, 39, 0.1);
+  color: var(--accent-gold);
+  border-radius: 10px;
+  font-family: var(--font-display);
+  letter-spacing: 0.5px;
+}
+
 .task-detail p {
   font-size: 13px;
   color: var(--text-secondary);
   margin-bottom: 8px;
 }
 
+.task-empty-hint {
+  font-size: 12px !important;
+  color: var(--text-muted) !important;
+  font-style: italic;
+  padding: 8px 0;
+}
+
+/* ===== Checklist Items (任务复选框列表) ===== */
+.checklist-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.checklist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: rgba(255, 255, 255, 0.4);
+  border: 1px solid transparent;
+}
+
+.checklist-item:hover {
+  background: rgba(201, 162, 39, 0.06);
+  border-color: rgba(201, 162, 39, 0.15);
+}
+
+.checklist-item.done {
+  opacity: 0.6;
+  background: rgba(0, 168, 150, 0.04);
+}
+
+.checklist-item input[type="checkbox"] {
+  display: none;
+}
+
+.checkmark {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+  border-radius: 4px;
+  border: 1.5px solid rgba(201, 162, 39, 0.5);
+  position: relative;
+  transition: all 0.25s ease;
+}
+
+.checklist-item.done .checkmark {
+  background: linear-gradient(135deg, var(--accent-gold), var(--accent-gold-light));
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 8px rgba(201, 162, 39, 0.3);
+}
+
+.checklist-item.done .checkmark::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 6px;
+  height: 10px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.checklist-label {
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.5;
+  transition: all 0.2s ease;
+}
+
+.checklist-item.done .checklist-label {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: rgba(201, 162, 39, 0.3);
+}
+
 .task-progress {
   height: 4px;
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(201, 162, 39, 0.1);
   border-radius: 2px;
   overflow: hidden;
 }

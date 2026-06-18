@@ -16,7 +16,8 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 from contextlib import asynccontextmanager
 from typing import Optional, List
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Header
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Header, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -420,13 +421,39 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# ============================================================
+# CORS 中间件 —— 必须在 app 创建后第一位注册（否则 500 报错时 CORS 头丢失）
+# ============================================================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",   # Vite 默认端口
+        "http://127.0.0.1:5173",   # 本地 IP 访问
+    ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["*"],           # GET / POST / PUT / DELETE / OPTIONS
+    allow_headers=["*"],           # Content-Type / Authorization 等
 )
+
+# 兜底 CORS 异常处理器 —— 保证 500 错误也能带上 CORS 头
+@app.exception_handler(Exception)
+async def cors_exception_handler(request: Request, exc: Exception):
+    """全局异常捕获，防止 500 丢 CORS 头"""
+    origin = request.headers.get("origin", "")
+    allowed = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    headers = {}
+    if origin in allowed:
+        headers.update({
+            "Access-Control-Allow-Origin": origin,
+            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type, Authorization",
+        })
+    return JSONResponse(
+        status_code=500,
+        content={"detail": f"服务器内部错误: {str(exc)}"},
+        headers=headers,
+    )
 
 
 # ============================================================
@@ -577,7 +604,23 @@ RAG_PROMPT = """你是一个资深职业规划顾问。请直接基于以下真�
 3. 禁止生成任何虚假岗位名
 4. 每个岗位格式：先说明适配度，再分析差距，最后给具体学习建议
 5. 如果用户的技能描述与数据库中的岗位完全不相关，请礼貌地提示用户提供更具体的职业信息，不要强行匹配或虚构建议。
-6. 【重要】技能点必须保留原始技术名词，不得翻译或本地化。例如：Python 不能写成"派森"，Flask 不能写成"烧瓶"，MySQL 必须保持大写形式。"""
+6. 【重要】技能点必须保留原始技术名词，不得翻译或本地化。例如：Python 不能写成"派森"，Flask 不能写成"烧瓶"，MySQL 必须保持大写形式。
+
+【系统标签输出规范 —— 必须严格遵守】
+在你的分析报告结尾，必须紧跟以下精确格式的标签块（用于前端结构化提取，前后不要加任何解释性文字）：
+注意：学习路径按阶段用 "->" 分隔；任务列表每条用中文分号"；"分隔。
+
+[学习路径] 阶段一：xxx -> 阶段二：xxx -> 阶段三：xxx
+[任务-P0] 1. xxx；2. xxx；3. xxx
+[任务-P1] 1. xxx；2. xxx
+[任务-P2] 1. xxx；2. xxx
+
+其中：
+- P0 为紧急核心任务（必须立刻着手的高优先级技能点）
+- P1 为进阶拓展任务（中期需要掌握的进阶内容）
+- P2 为长期成长任务（持续关注的前沿动态与软技能）
+- 每条任务务必具体可执行，例如"完成TypeScript官方文档泛型章节的学习"而非"学习TS"
+- 学习路径的阶段名称应简洁有力，体现技能成长阶梯"""
 
 EMPTY_PROMPT = """你是一个职业规划顾问。用户技能：{user_skills}，未找到精准匹配岗位。
 
@@ -585,7 +628,23 @@ EMPTY_PROMPT = """你是一个职业规划顾问。用户技能：{user_skills}�
 
 【重要限制】
 1. 如果用户的技能描述与数据库中的岗位完全不相关，请礼貌地提示用户提供更具体的职业信息，不要强行匹配或虚构建议。
-2. 【重要】技能点必须保留原始技术名词，不得翻译或本地化。例如：Python 不能写成"派森"，Flask 不能写成"烧瓶"，MySQL 必须保持大写形式。"""
+2. 【重要】技能点必须保留原始技术名词，不得翻译或本地化。例如：Python 不能写成"派森"，Flask 不能写成"烧瓶"，MySQL 必须保持大写形式。
+
+【系统标签输出规范 —— 必须严格遵守】
+在你的分析报告结尾，必须紧跟以下精确格式的标签块（用于前端结构化提取，前后不要加任何解释性文字）：
+注意：学习路径按阶段用 "->" 分隔；任务列表每条用中文分号"；"分隔。
+
+[学习路径] 阶段一：xxx -> 阶段二：xxx -> 阶段三：xxx
+[任务-P0] 1. xxx；2. xxx；3. xxx
+[任务-P1] 1. xxx；2. xxx
+[任务-P2] 1. xxx；2. xxx
+
+其中：
+- P0 为紧急核心任务（必须立刻着手的高优先级技能点）
+- P1 为进阶拓展任务（中期需要掌握的进阶内容）
+- P2 为长期成长任务（持续关注的前沿动态与软技能）
+- 每条任务务必具体可执行，例如"完成TypeScript官方文档泛型章节的学习"而非"学习TS"
+- 学习路径的阶段名称应简洁有力，体现技能成长阶梯"""
 
 
 @app.post("/api/chat", tags=["AI 看板"])
