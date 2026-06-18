@@ -9,7 +9,7 @@ import json
 import asyncio
 import hashlib
 import time
-import sqlite3
+import asyncio
 from datetime import datetime
 from contextlib import asynccontextmanager
 from typing import Optional, List
@@ -24,12 +24,11 @@ from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy import Column, Integer, String, Text, JSON, DateTime, func, select, text
 
 # ============================================================
-# 数据库配置
+# 数据库配置（MySQL）
 # ============================================================
-DB_PATH = os.path.join(os.path.dirname(__file__), "career.db")
-DATABASE_URL = f"sqlite+aiosqlite:///{DB_PATH.replace(os.sep, '/')}"
+DATABASE_URL = "mysql+aiomysql://root:2549966637@localhost:3306/career?charset=utf8mb4"
 
-engine = create_async_engine(DATABASE_URL, echo=False)
+engine = create_async_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
 async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 
 
@@ -91,6 +90,20 @@ class UserLoginLog(Base):
     role = Column(String(20), nullable=False)
     last_login = Column(String(32), nullable=False)
     search_count = Column(Integer, default=0)
+
+
+class Job(Base):
+    __tablename__ = "jobs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    job_name = Column(String(200), nullable=False)
+    salary = Column(String(50))
+    edu_require = Column(String(50))
+    major_require = Column(String(200))
+    skills = Column(Text)
+    duty = Column(Text)
+    city = Column(String(50))
+    industry = Column(String(50))
 
 
 # ============================================================
@@ -185,16 +198,26 @@ except ImportError:
 
 
 # ============================================================
-# 岗位匹配工具（同步 SQLite，保留原有逻辑）
+# 岗位匹配工具（异步 MySQL）
 # ============================================================
-def get_all_jobs() -> List[dict]:
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM jobs")
-    jobs = cursor.fetchall()
-    conn.close()
-    return [dict(job) for job in jobs]
+async def get_all_jobs() -> List[dict]:
+    async with async_session() as session:
+        result = await session.execute(select(Job))
+        jobs = result.scalars().all()
+        return [
+            {
+                "id": j.id,
+                "job_name": j.job_name,
+                "salary": j.salary,
+                "edu_require": j.edu_require,
+                "major_require": j.major_require,
+                "skills": j.skills,
+                "duty": j.duty,
+                "city": j.city,
+                "industry": j.industry,
+            }
+            for j in jobs
+        ]
 
 
 def keyword_match(user_skills: List[str], job_skills_str: str) -> dict:
@@ -233,8 +256,44 @@ def keyword_match(user_skills: List[str], job_skills_str: str) -> dict:
     }
 
 
-def filter_jobs_by_keywords(user_skills: List[str], min_match_rate: int = 30):
-    jobs = get_all_jobs()
+def keyword_match(user_skills: List[str], job_skills_str: str) -> dict:
+    if not job_skills_str or not user_skills:
+        return {
+            "match_rate": 0,
+            "matched": [],
+            "missing": [],
+            "total_required": 0,
+            "matched_count": 0,
+        }
+    job_skills = [s.strip().lower() for s in job_skills_str.split(",")]
+    user_skills_lower = [s.strip().lower() for s in user_skills]
+    matched, missing = [], []
+    for job_skill in job_skills:
+        found = any(job_skill in us or us in job_skill for us in user_skills_lower)
+        if found:
+            matched.append(job_skill)
+        else:
+            missing.append(job_skill)
+    if not job_skills:
+        return {
+            "match_rate": 0,
+            "matched": [],
+            "missing": [],
+            "total_required": 0,
+            "matched_count": 0,
+        }
+    match_rate = len(matched) / len(job_skills) * 100
+    return {
+        "match_rate": round(match_rate, 1),
+        "matched": matched,
+        "missing": missing,
+        "total_required": len(job_skills),
+        "matched_count": len(matched),
+    }
+
+
+async def filter_jobs_by_keywords(user_skills: List[str], min_match_rate: int = 30):
+    jobs = await get_all_jobs()
     results = []
     for job in jobs:
         result = keyword_match(user_skills, job.get("skills", ""))
@@ -350,23 +409,12 @@ async def get_current_admin(
 
 
 # ============================================================
-# Lifespan
+# Lifespan（MySQL 下由 SQLAlchemy create_all 自动建表）
 # ============================================================
-async def _migrate_schema():
-    """启动时确保旧表结构与 ORM 模型一致（同步执行，仅运行一次）"""
-    import sqlite3
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.execute("PRAGMA table_info(user)")
-    cols = [r[1] for r in cursor]
-    if "role" not in cols:
-        conn.execute("ALTER TABLE user ADD COLUMN role VARCHAR(20) DEFAULT 'user'")
-        conn.commit()
-    conn.close()
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await _migrate_schema()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
     yield
 
 
@@ -569,7 +617,7 @@ async def chat(data: ChatRequest):
         source_type = "database"
     else:
         skills = [s.strip() for s in message.split(",") if s.strip()]
-        results = filter_jobs_by_keywords(skills, min_match_rate=20)
+        results = await filter_jobs_by_keywords(skills, min_match_rate=20)
         db_jobs = results[:5]
 
         if db_jobs:
@@ -609,13 +657,13 @@ async def chat(data: ChatRequest):
 @app.get("/api/jobs", tags=["岗位"])
 async def get_jobs():
     """获取所有岗位列表"""
-    return {"jobs": get_all_jobs()}
+    return {"jobs": await get_all_jobs()}
 
 
 @app.post("/api/match", tags=["岗位"])
 async def match_jobs(data: MatchRequest):
     """技能匹配岗位接口"""
-    return {"results": filter_jobs_by_keywords(data.skills, data.min_match_rate)}
+    return {"results": await filter_jobs_by_keywords(data.skills, data.min_match_rate)}
 
 
 # ============================================================
@@ -704,7 +752,7 @@ async def analyze_resume(file: UploadFile = File(...)):
         chat_answer = f"您的技能涵盖 {', '.join(skills[:5])} 等，综合评分 {score} 分。建议深化核心技术栈，积累大型项目经验。"
 
     try:
-        results = filter_jobs_by_keywords(skills, min_match_rate=30)
+        results = await filter_jobs_by_keywords(skills, min_match_rate=30)
         recommended_jobs = [
             {
                 "job_id": j["job_id"],
@@ -799,39 +847,33 @@ async def get_user_logs(
 async def add_job(
     data: JobCreate,
     current_admin: dict = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
 ):
     """添加新岗位（仅 admin 可访问）。"""
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute(
-        """INSERT INTO jobs
-           (job_name, salary, edu_require, major_require, skills, duty, city, industry)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-        (
-            data.job_name,
-            data.salary,
-            "本科",
-            "不限",
-            ",".join(data.skills),
-            data.description,
-            data.city,
-            "互联网",
-        ),
+    new_job = Job(
+        job_name=data.job_name,
+        salary=data.salary,
+        edu_require="本科",
+        major_require="不限",
+        skills=",".join(data.skills),
+        duty=data.description,
+        city=data.city,
+        industry="互联网",
     )
-    job_id = cursor.lastrowid
-    conn.commit()
-    conn.close()
+    db.add(new_job)
+    await db.commit()
+    await db.refresh(new_job)
 
     return {
         "success": True,
         "message": "岗位添加成功",
         "job": {
-            "job_id": job_id,
-            "job_name": data.job_name,
-            "city": data.city,
-            "salary": data.salary,
-            "skills": ",".join(data.skills),
-            "description": data.description,
+            "job_id": new_job.id,
+            "job_name": new_job.job_name,
+            "city": new_job.city,
+            "salary": new_job.salary,
+            "skills": new_job.skills,
+            "description": new_job.duty,
         },
     }
 
