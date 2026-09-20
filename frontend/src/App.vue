@@ -58,7 +58,8 @@ const skillInput = ref('')
 // Resume analysis state
 const isAnalyzing = ref(false)
 const analysisResult = ref(null)
-const twelveMetrics = ref([])
+// 8 维可取证指标：每项为 { key, name, weight, score, rationale, evidence[] }
+const metrics = ref([])
 const uploadedFile = ref(null)
 const dragOver = ref(false)
 const radarChartRef = ref(null)
@@ -66,15 +67,24 @@ let radarChartInstance = null
 
 const apiBase = '/api'
 
-// Mock beat rate based on match rate
-const beatRate = computed(() => {
+// 平均岗位匹配度：直接取岗位匹配结果的平均技能覆盖率，真实数据、不做任何加成。
+// 注：原「市场击败率 / 击败同龄人」为 `平均匹配度 + 15` 的伪造值（源码注释自承 Mock），已移除。
+// 真正的「击败同龄人」需要分岗位、分经验年限的基准分布数据，当前不具备，不做假。
+const avgMatchRate = computed(() => {
   if (jobMatches.value.length === 0) return 0
-  const avgMatch = jobMatches.value.reduce((sum, j) => sum + (j.keyword_match?.match_rate || 0), 0) / jobMatches.value.length
-  return Math.round(avgMatch + 15)
+  const total = jobMatches.value.reduce((sum, j) => sum + (j.keyword_match?.match_rate || 0), 0)
+  return Math.round(total / jobMatches.value.length)
 })
 
-// 监听十二维数据变化，渲染雷达图
-watch(twelveMetrics, async (newVal) => {
+// 维度得分分档（用于配色）
+const scoreClass = (score) => {
+  if (score >= 80) return 'score-high'
+  if (score >= 50) return 'score-mid'
+  return 'score-low'
+}
+
+// 监听维度数据变化，渲染雷达图
+watch(metrics, async (newVal) => {
   if (newVal && newVal.length > 0) {
     await nextTick()
     initRadarChart()
@@ -436,8 +446,6 @@ const handleFileDrop = (event) => {
 }
 
 const analyzeFile = async (file) => {
-  console.log('analyzeFile called:', file.name, file.type, file.size)
-
   if (!isLoggedIn.value) {
     ElMessage.warning('请先登录后再使用简历分析功能')
     showAuthModal.value = true
@@ -445,38 +453,48 @@ const analyzeFile = async (file) => {
   }
 
   // 修复：扩展名验证优先，因为浏览器对 MIME type 识别不一致
-  const validExtensions = ['pdf', 'txt', 'md', 'docx']
+  // 注：后端目前只支持文本简历解析，PDF / DOCX 会在后端返回 415 并给出说明
+  const validExtensions = ['txt', 'md']
   const fileExt = file.name.split('.').pop().toLowerCase()
   if (!validExtensions.includes(fileExt)) {
-    ElMessage.error('请上传 PDF、TXT、MD 或 DOCX 格式的文件')
+    ElMessage.error('当前仅支持 TXT / MD 文本简历，PDF / DOCX 解析即将支持')
     return
   }
 
   uploadedFile.value = file
   isAnalyzing.value = true
   analysisResult.value = null
+  metrics.value = []
 
   try {
     const formData = new FormData()
     formData.append('file', file)
 
-    console.log('Sending request to', `${apiBase}/resume/analyze`)
     const res = await fetch(`${apiBase}/resume/analyze`, {
       method: 'POST',
       body: formData
     })
-    console.log('Response status:', res.status)
-    const data = await res.json()
-    console.log('Response data:', data)
 
-    if (data.error) {
-      ElMessage.error(data.error)
-      isAnalyzing.value = false
+    // HTTP 层错误必须显式处理，否则 404/415 会被当成成功结果渲染
+    let data = null
+    try {
+      data = await res.json()
+    } catch (e) {
+      data = null
+    }
+
+    if (!res.ok) {
+      const detail = (data && (data.detail || data.error)) || `请求失败（HTTP ${res.status}）`
+      ElMessage.error(detail)
+      return
+    }
+    if (!data) {
+      ElMessage.error('服务返回内容无法解析，请稍后重试')
       return
     }
 
     analysisResult.value = data
-    twelveMetrics.value = data.twelve_metrics || []
+    metrics.value = data.metrics || []
 
     // Update job matches if recommended_jobs exists
     if (data.recommended_jobs && data.recommended_jobs.length > 0) {
@@ -485,7 +503,7 @@ const analyzeFile = async (file) => {
 
     ElMessage.success('简历分析完成！')
   } catch (e) {
-    ElMessage.error('分析失败，请重试')
+    ElMessage.error('分析失败，请检查后端服务是否已启动')
   } finally {
     isAnalyzing.value = false
   }
@@ -494,7 +512,7 @@ const analyzeFile = async (file) => {
 const resetResumeAnalysis = () => {
   uploadedFile.value = null
   analysisResult.value = null
-  twelveMetrics.value = []
+  metrics.value = []
   jobMatches.value = []
   chatHistory.value = []
   hasResult.value = false
@@ -506,13 +524,7 @@ const resetResumeAnalysis = () => {
 }
 
 const initRadarChart = () => {
-  console.log('initRadarChart called', {
-    radarChartRef: radarChartRef.value,
-    twelveMetricsLength: twelveMetrics.value.length,
-    twelveMetricsData: twelveMetrics.value
-  })
-  if (!radarChartRef.value || !twelveMetrics.value.length) {
-    console.log('initRadarChart early return')
+  if (!radarChartRef.value || !metrics.value.length) {
     return
   }
 
@@ -522,7 +534,7 @@ const initRadarChart = () => {
 
   radarChartInstance = echarts.init(radarChartRef.value)
 
-  const indicator = twelveMetrics.value.map(item => ({
+  const indicator = metrics.value.map(item => ({
     name: item.name,
     max: 100
   }))
@@ -558,7 +570,7 @@ const initRadarChart = () => {
     series: [{
       type: 'radar',
       data: [{
-        value: twelveMetrics.value.map(item => item.value),
+        value: metrics.value.map(item => item.value),
         name: '能力画像',
         areaStyle: {
           color: new echarts.graphic.RadialGradient(0.5, 0.5, 1, [
@@ -645,7 +657,7 @@ const handleResize = () => {
       <div class="resume-container glass-card">
         <div class="resume-header">
           <h2>简历分析</h2>
-          <p>上传您的简历，AI 将为您进行十二维深度画像提取</p>
+          <p>上传您的简历，AI 将从原文取证进行八维深度画像提取</p>
         </div>
 
         <!-- Upload Zone -->
@@ -657,7 +669,7 @@ const handleResize = () => {
           @dragleave.prevent="dragOver = false"
           @drop.prevent="handleFileDrop"
         >
-          <input type="file" accept=".pdf,.docx,.md,.txt" @change="handleFileSelect" class="file-input" />
+          <input type="file" accept=".txt,.md" @change="handleFileSelect" class="file-input" />
           <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
             <polyline points="14 2 14 8 20 8"/>
@@ -666,7 +678,7 @@ const handleResize = () => {
             <line x1="15" y1="15" x2="12" y2="12"/>
           </svg>
           <p class="upload-text">将简历拖拽到此处，或<span class="upload-link">点击选择文件</span></p>
-          <p class="upload-hint">支持 PDF / DOCX / MD / TXT 格式</p>
+          <p class="upload-hint">当前支持 TXT / MD 文本简历；PDF / DOCX 解析即将支持</p>
         </div>
 
         <!-- Analyzing State -->
@@ -674,7 +686,7 @@ const handleResize = () => {
           <div class="scanner-container">
             <div class="scanner-line"></div>
           </div>
-          <p class="analyzing-text">AI 正在为您进行十二维深度画像提取，请稍候...</p>
+          <p class="analyzing-text">AI 正在从简历原文取证，进行八维深度画像提取，请稍候...</p>
         </div>
 
         <!-- Analysis Result -->
@@ -692,14 +704,41 @@ const handleResize = () => {
                   <span class="score-label">综合评分</span>
                   <span class="score-value">{{ analysisResult.score }}</span>
                 </div>
+                <p v-if="analysisResult.reference_job" class="reference-job">
+                  参照岗位：{{ analysisResult.reference_job.job_name }}
+                </p>
                 <h4>AI 核心诊断</h4>
                 <div class="chat-answer-content" v-html="renderMarkdown(analysisResult.chat_answer || '')"></div>
+                <p v-if="analysisResult.ai_available === false" class="ai-fallback-hint">
+                  AI 文字诊断暂不可用，以上内容由规则引擎依据维度评分与原文证据生成。
+                </p>
               </div>
 
-              <!-- Twelve Metrics Radar Chart Container -->
-              <div v-if="twelveMetrics.length > 0" class="metrics-section">
-                <h4>十二维能力画像</h4>
+              <!-- 8 维雷达图 + 逐维原文证据 -->
+              <div v-if="metrics.length > 0" class="metrics-section">
+                <h4>八维能力画像</h4>
                 <div class="radar-container" ref="radarChartRef"></div>
+
+                <div class="dimension-detail">
+                  <div v-for="m in metrics" :key="m.key" class="dimension-item">
+                    <div class="dimension-head">
+                      <span class="dimension-name">{{ m.name }}</span>
+                      <span class="dimension-weight">权重 {{ Math.round(m.weight * 100) }}%</span>
+                      <span class="dimension-score" :class="scoreClass(m.score)">{{ m.score }}</span>
+                    </div>
+                    <div class="dimension-bar">
+                      <div class="dimension-bar-fill" :style="{ width: m.score + '%' }"></div>
+                    </div>
+                    <p class="dimension-rationale">{{ m.rationale }}</p>
+                    <ul v-if="m.evidence && m.evidence.length" class="dimension-evidence">
+                      <li v-for="(e, i) in m.evidence" :key="i">
+                        <span class="evidence-source">{{ e.source }}</span>
+                        <span class="evidence-text">{{ e.text }}</span>
+                      </li>
+                    </ul>
+                    <p v-else class="dimension-no-evidence">未找到可取证内容，该项按 0 分计</p>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -904,22 +943,28 @@ const handleResize = () => {
       <div class="dashboard-content">
         <!-- Left Panel: Personal Competitiveness (25%) -->
         <aside class="left-panel glass-card">
-          <div class="panel-section">
-            <h3 class="section-title">市场击败率</h3>
-            <div class="beat-rate-gauge">
+          <div v-if="jobMatches.length > 0" class="panel-section">
+            <h3 class="section-title">平均岗位匹配度</h3>
+            <div class="match-rate-gauge">
               <svg viewBox="0 0 120 120" class="gauge-svg">
+                <defs>
+                  <linearGradient id="goldGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                    <stop offset="0%" stop-color="#c9a227"/>
+                    <stop offset="100%" stop-color="#d4af37"/>
+                  </linearGradient>
+                </defs>
                 <circle cx="60" cy="60" r="50" class="gauge-bg"/>
                 <circle
                   cx="60" cy="60" r="50"
                   class="gauge-fill"
-                  :stroke-dasharray="beatRate * 3.14 + ' 314'"
+                  :stroke-dasharray="avgMatchRate * 3.14 + ' 314'"
                 />
               </svg>
               <div class="gauge-value">
-                <span class="gauge-number">{{ beatRate }}</span>
+                <span class="gauge-number">{{ avgMatchRate }}</span>
                 <span class="gauge-percent">%</span>
               </div>
-              <p class="gauge-label">击败同龄人</p>
+              <p class="gauge-label">与 {{ jobMatches.length }} 个匹配岗位的平均技能覆盖率</p>
             </div>
           </div>
 
@@ -1539,8 +1584,8 @@ html, body {
   margin-bottom: 16px;
 }
 
-/* Beat Rate Gauge */
-.beat-rate-gauge {
+/* Match Rate Gauge（原「市场击败率」伪造指标已移除） */
+.match-rate-gauge {
   position: relative;
   width: 160px;
   margin: 0 auto;
@@ -1819,34 +1864,36 @@ html, body {
 }
 
 /* Tech Highlight */
-.message-content :deep(.tech-highlight) {
+/* 注：本文件 <style> 未使用 scoped，:deep() 不是合法 CSS（构建时会被丢弃），
+   此处直接使用普通后代选择器即可正确命中 v-html 渲染出的子节点。 */
+.message-content .tech-highlight {
   color: var(--accent-gold);
   font-weight: 500;
   padding: 0 2px;
 }
 
-.message-content :deep(h1),
-.message-content :deep(h2),
-.message-content :deep(h3) {
+.message-content h1,
+.message-content h2,
+.message-content h3 {
   font-family: var(--font-display);
   margin: 12px 0 8px;
 }
 
-.message-content :deep(p) {
+.message-content p {
   margin: 8px 0;
 }
 
-.message-content :deep(ul),
-.message-content :deep(ol) {
+.message-content ul,
+.message-content ol {
   margin: 8px 0;
   padding-left: 20px;
 }
 
-.message-content :deep(strong) {
+.message-content strong {
   color: var(--accent-gold);
 }
 
-.message-content :deep(code) {
+.message-content code {
   padding: 2px 6px;
   background: rgba(212, 175, 55, 0.1);
   border-radius: 4px;
@@ -2891,7 +2938,7 @@ html, body {
   color: var(--text-primary);
 }
 
-.chat-answer-content :deep(.tech-highlight) {
+.chat-answer-content .tech-highlight {
   color: var(--accent-gold);
   font-weight: 500;
 }
@@ -2905,6 +2952,125 @@ html, body {
 .radar-container {
   width: 100%;
   height: 300px;
+}
+
+/* ---- 八维逐维明细与原文证据 ---- */
+.reference-job {
+  margin-bottom: 14px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.ai-fallback-hint {
+  margin-top: 12px;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  background: rgba(201, 162, 39, 0.08);
+  border-left: 3px solid var(--accent-gold);
+  border-radius: var(--radius-sm);
+}
+
+.dimension-detail {
+  margin-top: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.dimension-item {
+  padding: 16px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-sm);
+}
+
+.dimension-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.dimension-name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.dimension-weight {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.dimension-score {
+  margin-left: auto;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--accent-gold);
+}
+
+.dimension-score.score-high { color: var(--accent-cyan); }
+.dimension-score.score-mid  { color: var(--accent-gold); }
+.dimension-score.score-low  { color: var(--warning); }
+
+.dimension-bar {
+  height: 4px;
+  background: rgba(201, 162, 39, 0.12);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.dimension-bar-fill {
+  height: 100%;
+  background: var(--accent-gold-light);
+  border-radius: 2px;
+  transition: width 0.4s ease;
+}
+
+.dimension-rationale {
+  margin-top: 10px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.dimension-evidence {
+  margin-top: 10px;
+  padding-left: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dimension-evidence li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+
+.evidence-source {
+  flex: 0 0 auto;
+  padding: 1px 7px;
+  font-size: 11.5px;
+  color: var(--accent-gold);
+  background: rgba(201, 162, 39, 0.1);
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.evidence-text {
+  color: var(--text-primary);
+}
+
+.dimension-no-evidence {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--text-muted);
 }
 
 .result-jobs h4 {

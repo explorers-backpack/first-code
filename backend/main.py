@@ -6,10 +6,14 @@ Career.ai FastAPI 后端
 import os
 import re
 import json
+import sys
 import asyncio
 import hashlib
+import hmac
+import base64
 import time
 from datetime import datetime
+from urllib.parse import urlencode
 from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
@@ -25,6 +29,10 @@ import aiosqlite
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from sqlalchemy import Column, Integer, String, Text, JSON, DateTime, func, select, text
+
+# 保证以任意工作目录启动都能导入 services 包
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from services.resume_scoring import build_prompt_summary, evaluate_resume  # noqa: E402
 
 # ============================================================
 # 数据库配置（MySQL）
@@ -120,12 +128,10 @@ async def get_db():
 # ============================================================
 # SparkAI X1 WebSocket（认证已修复）
 # ============================================================
-import hashlib
-import hmac
-import base64
-import datetime
-from urllib.parse import urlencode
-
+# 注：此处曾重复 `import hashlib` / `import datetime`。后者把顶部
+# `from datetime import datetime` 绑定的「类」重新绑定为「模块」，
+# 导致运行期 `datetime.now()` 抛 AttributeError（登录接口恒 500）。
+# 相关依赖已统一收敛到文件顶部，此处不再重复导入。
 try:
     import websocket as _ws
     _spark_ok = True
@@ -134,7 +140,7 @@ except ImportError:
 
 
 def _make_url(host, path, api_key, api_secret):
-    date_str = datetime.datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT")
+    date_str = datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT")
     sig_str = f"host: {host}\ndate: {date_str}\nGET {path} HTTP/1.1"
     sig = hmac.new(api_secret.encode(), sig_str.encode(), hashlib.sha256).digest()
     sig_b64 = base64.b64encode(sig).decode()
@@ -166,6 +172,7 @@ class SparkAPI:
             }
             ws.send(json.dumps(req))
             text = ""
+            reasoning = ""
             while True:
                 frame = json.loads(ws.recv())
                 hdr = frame.get("header", {})
@@ -173,13 +180,19 @@ class SparkAPI:
                     ws.close()
                     return f"API调用失败: {hdr.get('message', hdr.get('code'))}"
                 choices = frame.get("payload", {}).get("choices", {}).get("text", [])
-                if choices:
-                    chunk = choices[0].get("content") or choices[0].get("reasoning_content") or ""
-                    text += chunk
+                for choice in choices:
+                    # X1 为推理模型：content 是最终答案，reasoning_content 是内部思考过程。
+                    # 两者必须分开累计，否则会把思考过程当结论一起返回给用户。
+                    if choice.get("content"):
+                        text += choice["content"]
+                    elif choice.get("reasoning_content"):
+                        reasoning += choice["reasoning_content"]
                 if hdr.get("status") == 2:
                     break
             ws.close()
-            return text if text else "AI 回答为空"
+            # 仅当 content 全程为空时才退回 reasoning，保证不返回空答案
+            answer = text.strip() or reasoning.strip()
+            return answer if answer else "AI 回答为空"
         except Exception as e:
             return f"API调用失败: {e}"
 
@@ -721,90 +734,115 @@ async def match_jobs(data: MatchRequest):
 # ============================================================
 # 路由：简历分析
 # ============================================================
-RESUME_ANALYSIS_PROMPT = """你是简历分析助手。请根据以下简历信息，生成一段精简的职业诊断报告（不超过100字），直接输出，不要其他内容。
+# 说明：评分不再由 LLM 决定。维度分数与证据由 services.resume_scoring 纯规则计算
+# （同输入同输出，可复现），LLM 只负责基于这些结构化事实撰写文字诊断。
+RESUME_ANALYSIS_PROMPT = """你是简历分析助手。下面是对该简历的**结构化事实**，由规则引擎从简历原文提取，每条维度均附原文证据。
 
-简历技能：{skills}
-综合评分：{score}分
+{summary}
 
 要求：
-1. 直接指出核心竞争力
-2. 最多2条提升建议
-3. 风格简洁专业，不要废话
+1. 只依据上述事实撰写诊断，不得引入事实之外的信息
+2. 直接指出核心竞争力，并引用至少一条原文证据
+3. 最多 2 条提升建议，须针对「未覆盖」或「得分为 0」的维度
+4. 禁止编造简历中不存在的经历、技能或成果；禁止复述分数
+5. 不超过 150 字，风格简洁专业，不要废话
 
 输出格式：
 【核心优势】：xxx
 【提升建议】：xxx"""
 
 
-@app.post("/api/analyze-resume", tags=["AI 看板"])
+def _decode_resume(content: bytes) -> str:
+    """解码简历文本。
+
+    二进制格式（PDF / DOCX）不在此处硬解——用 latin-1 强行解码会把二进制
+    变成"看起来成功"的乱码，进而产出基于噪声的评分。此处显式报错，交由前端
+    提示用户，PDF / DOCX 的真实解析在下一阶段接入。
+    """
+    head = content[:8]
+    if head.startswith(b"%PDF"):
+        raise HTTPException(
+            status_code=415,
+            detail="暂不支持 PDF 解析：请上传 TXT / MD 文本简历（PDF 解析将在下一阶段接入）",
+        )
+    if head.startswith(b"PK\x03\x04"):
+        raise HTTPException(
+            status_code=415,
+            detail="暂不支持 DOCX 解析：请上传 TXT / MD 文本简历（DOCX 解析将在下一阶段接入）",
+        )
+    for enc in ("utf-8", "gb18030", "utf-16"):
+        try:
+            return content.decode(enc)
+        except UnicodeDecodeError:
+            continue
+    raise HTTPException(
+        status_code=400,
+        detail="无法识别文件编码，请另存为 UTF-8 编码的 TXT / MD 文件后重试",
+    )
+
+
+@app.post("/api/resume/analyze", tags=["简历分析"])
+@app.post("/api/analyze-resume", tags=["简历分析"], include_in_schema=False)
 async def analyze_resume(file: UploadFile = File(...)):
     """
-    简历分析接口 - 接收简历文件，进行十二维诊断。
+    简历分析接口 —— 8 维可取证诊断。
+
+    每个维度返回 {key, name, weight, score, rationale, evidence}，
+    evidence 为指向简历原文的片段；取不到证据的维度记 0 分并说明原因，
+    不做无依据的推算。
     """
     if not file.filename:
         raise HTTPException(status_code=400, detail="文件名为空")
 
     content = await file.read()
-
-    try:
-        text = content.decode("utf-8")
-    except Exception:
-        try:
-            text = content.decode("gbk")
-        except Exception:
-            text = content.decode("latin-1", errors="ignore")
+    text = _decode_resume(content)
 
     if len(text.strip()) < 20:
         raise HTTPException(status_code=400, detail="简历内容过少，无法进行分析")
 
-    tech_keywords = [
-        "Python", "JavaScript", "TypeScript", "Vue", "React", "Angular",
-        "Node.js", "Flask", "Django", "FastAPI", "Spring", "MySQL",
-        "PostgreSQL", "MongoDB", "Redis", "Docker", "Kubernetes",
-        "AWS", "Azure", "Git", "Linux", "API", "REST", "GraphQL",
-        "TensorFlow", "PyTorch", "Java", "Golang", "Rust", "C++",
-        "HTML", "CSS", "Scss", "jQuery", "Webpack", "Vite",
-    ]
+    # 岗位库仅用于「技能匹配度 / 岗位相关性」两维；数据库不可用时应降级为
+    # 这两维计 0 分并说明原因，而不是让整个简历分析接口 500。
+    try:
+        jobs = await get_all_jobs()
+    except Exception:
+        jobs = []
 
-    text_lower = text.lower()
-    skills = [
-        tech for tech in tech_keywords
-        if tech.lower() in text_lower or tech.lower().replace(".", "") in text_lower
-    ]
-    if not skills:
-        skills = ["Python", "JavaScript", "Git"]
+    result = evaluate_resume(text, jobs)
 
-    twelve_metrics = [
-        {"name": "架构能力",   "value": min(95, 65 + len(skills) * 3)},
-        {"name": "代码规范",   "value": min(95, 70 + len(skills) * 2)},
-        {"name": "业务理解",   "value": min(95, 60 + len(skills) * 2)},
-        {"name": "全栈能力",   "value": min(95, 55 + len(skills) * 3)},
-        {"name": "性能优化",   "value": min(95, 50 + len(skills) * 2)},
-        {"name": "团队协作",   "value": min(95, 65 + len(skills))},
-        {"name": "云原生",     "value": min(95, 45 + len(skills) * 2)},
-        {"name": "数据库",     "value": min(95, 60 + len(skills) * 2)},
-        {"name": "DevOps",     "value": min(95, 40 + len(skills) * 2)},
-        {"name": "安全意识",   "value": min(95, 50 + len(skills))},
-        {"name": "创新能力",   "value": min(95, 55 + len(skills))},
-        {"name": "学习能力",   "value": min(95, 70 + len(skills) * 2)},
-    ]
+    metrics = result["metrics"]
+    skills = result["skills"]
+    score = result["score"]
 
-    score = min(95, 55 + len(skills) * 4)
+    prompt = RESUME_ANALYSIS_PROMPT.format(summary=build_prompt_summary(result))
 
-    prompt = RESUME_ANALYSIS_PROMPT.format(
-        skills="、".join(skills[:8]) if skills else "未识别到特定技能",
-        score=score,
-    )
+    def _fallback_diagnosis() -> str:
+        """LLM 不可用时的降级文案：直接由规则引擎的维度分生成，不编造内容。"""
+        ranked = sorted(metrics, key=lambda m: (-m["score"], m["key"]))
+        best = ranked[0]
+        weakest = "；".join(f"{m['name']}（{m['score']} 分）" for m in ranked[-2:])
+        return (
+            f"【核心优势】：{best['name']} 得分最高（{best['score']} 分）。\n"
+            f"【提升建议】：优先补强 {weakest}。"
+            "（AI 文字诊断暂不可用，以上结论直接取自规则引擎的维度评分与原文证据。）"
+        )
 
+    ai_available = True
     try:
         chat_answer = await spark_api.chat_async(prompt)
-        if chat_answer.startswith("Error") or len(chat_answer) < 10:
-            chat_answer = f"您的技能涵盖 {', '.join(skills[:5])} 等，综合评分 {score} 分。建议深化核心技术栈，积累大型项目经验。"
     except Exception:
-        chat_answer = f"您的技能涵盖 {', '.join(skills[:5])} 等，综合评分 {score} 分。建议深化核心技术栈，积累大型项目经验。"
+        chat_answer = ""
+
+    # SparkAPI 失败时返回的是中文字符串而非异常，必须按前缀识别
+    if (
+        not chat_answer
+        or len(chat_answer.strip()) < 10
+        or chat_answer.startswith(("API调用失败", "SparkAPI not available", "AI 回答为空"))
+    ):
+        ai_available = False
+        chat_answer = _fallback_diagnosis()
 
     try:
-        results = await filter_jobs_by_keywords(skills, min_match_rate=30)
+        results = await filter_jobs_by_keywords(skills, min_match_rate=30) if skills else []
         recommended_jobs = [
             {
                 "job_id": j["job_id"],
@@ -820,9 +858,12 @@ async def analyze_resume(file: UploadFile = File(...)):
 
     return {
         "chat_answer": chat_answer,
+        "ai_available": ai_available,
         "skills": skills,
         "score": score,
-        "twelve_metrics": twelve_metrics,
+        "metrics": metrics,
+        "reference_job": result["reference_job"],
+        "sections": result["sections"],
         "recommended_jobs": recommended_jobs,
     }
 

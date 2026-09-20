@@ -13,3 +13,12 @@ dist/
 
 # Env
 .env
+
+# Docs（本地文档，不纳入版本管理）
+docs/
+
+# Tools（本地脚本，不纳入版本管理）
+tools/
+
+# AI 工作区数据（本地记忆与技能，不纳入版本管理）
+.workbuddy-ai/
