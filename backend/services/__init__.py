@@ -20,12 +20,18 @@
   **只做出题**：不做回答评分、动态追问、下一题决策、面试报告；
   不读库不写库（持久化由调用方负责）。  Prompt 取自 ``prompts/interview/``，
   失败最多修复一次，绝不伪造问题。
-- ``question_validator``：面试问题的**校验器**。
+- ``question_validator``：面试问题的**校验器 + 标准化器**。
   ``QuestionValidator.validate(question_data, context, plan) -> ValidationResult``，
-  ``errors`` 中为**稳定错误码**（``question_empty`` / ``topic_empty``）。
-  零第三方依赖（不 import fastapi / sqlalchemy / main），纯内存、可脱离 HTTP 与
-  数据库单测。当前**只实现 question / topic 的基础字段校验**；
-  difficulty 校验、重复检测、字段补全、Agent 集成尚未实现。
+  ``errors`` 中为**稳定错误码**（``question_empty`` / ``topic_empty`` /
+  ``invalid_difficulty`` / ``duplicate_question``）。
+  校验通过后按固定六字段契约（``NORMALIZED_FIELDS``）产出
+  ``normalized_question``：``difficulty`` 缺失时回落到 ``plan.difficulty``，
+  ``expected_points`` 补 ``[]``，``reason`` / ``question_type`` 补 ``""``。
+  重复检测对照 ``context.asked_questions``：**完全相同**拒绝，
+  **高度相似**只记 warning（纯字符规则，不用 embedding / 向量库 / RAG）。
+  零第三方依赖（不 import fastapi / sqlalchemy / main / models），纯内存、可脱离
+  HTTP 与数据库单测，**纯函数**（不改入参、同输入同输出）。
+  当前**未实现**：Agent 集成。
 
 设计约定
 --------

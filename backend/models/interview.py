@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""AI 模拟面试 ORM 模型（4 张表）。
+"""AI 模拟面试 ORM 模型（5 张表）。
 
 设计说明
 --------
@@ -42,6 +42,17 @@ SESSION_STATUS_FINISHED = "finished"
 
 INTERVIEW_TYPES = ("technical", "behavioral", "comprehensive")
 DIFFICULTIES = ("junior", "mid", "senior")
+
+# 面试阶段（InterviewContext.current_stage 的合法取值，顺序即推进顺序）
+INTERVIEW_STAGES = (
+    "introduction",
+    "resume",
+    "technical",
+    "project",
+    "scenario",
+    "hr",
+    "closing",
+)
 
 
 class InterviewSession(Base):
@@ -148,3 +159,52 @@ class InterviewReport(Base):
     suggestions = Column(Text)    # 改进建议（成段文字）
 
     created_at = Column(DateTime, default=datetime.utcnow)
+
+
+class InterviewContext(Base):
+    """面试上下文表：一场面试一份（``session_id`` 唯一约束），记录运行期状态。
+
+    为什么是**独立表**而不是给 ``interview_session`` 加 JSON 列
+    ----------------------------------------------------------
+    ``main.py`` 的 lifespan 用 ``Base.metadata.create_all`` 建表——
+    **新表会被自动创建**，但在**既有表上加列不会被补上**（必须人工 ALTER）。
+    独立表因此做到「零 DDL、零迁移」，且完全不触碰既有表结构。
+
+    为什么**不重复存** ``current_question_no`` / ``total_questions``
+    --------------------------------------------------------------
+    这两个字段的权威来源是 ``interview_session`` 的既有列（状态机正在使用它们）。
+    Context 读取时**实时投影**，避免双写导致两处不一致。
+
+    语义区分
+    --------
+    - ``total_questions``（来自 session）：本场**计划**题量
+    - ``max_questions``（本表）：本场**允许的最大**题量（含追问），达到即应进入收尾
+    """
+
+    __tablename__ = "interview_context"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+
+    # 一场面试一份上下文：UNIQUE 从数据库层保证 1:1
+    session_id = Column(
+        Integer,
+        ForeignKey("interview_session.id"),
+        nullable=False,
+        index=True,
+        unique=True,
+    )
+
+    # ---- 阶段 ----
+    current_stage = Column(String(20), nullable=False, default="introduction")
+
+    # ---- 列表型状态（JSON 数组）----
+    asked_questions = Column(JSON, nullable=False, default=list)  # 已提问（有序，允许重复）
+    covered_topics = Column(JSON, nullable=False, default=list)   # 已覆盖知识点（去重）
+    weak_topics = Column(JSON, nullable=False, default=list)      # 薄弱知识点（去重）
+
+    # ---- 计数 ----
+    follow_up_count = Column(Integer, nullable=False, default=0)   # 追问次数
+    max_questions = Column(Integer, nullable=False, default=10)    # 题量上限
+
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

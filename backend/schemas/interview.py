@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # ============================================================
 # 枚举（与 models.interview 中的常量保持一致）
@@ -22,6 +22,10 @@ from pydantic import BaseModel, Field
 InterviewType = Literal["technical", "behavioral", "comprehensive"]
 DifficultyLevel = Literal["junior", "mid", "senior"]
 SessionStatus = Literal["created", "ongoing", "finished"]
+StageName = Literal[
+    "introduction", "resume", "technical", "project", "scenario", "hr", "closing"
+]
+PlanSource = Literal["rule", "llm"]
 
 
 # ============================================================
@@ -106,6 +110,68 @@ class InterviewReportOut(BaseModel):
     weaknesses: Optional[List[str]] = None
     suggestions: Optional[str] = None
     created_at: Optional[datetime] = None
+
+
+# ============================================================
+# InterviewPlan（Interview Planner 的输出契约）
+# ============================================================
+class InterviewPlanStage(BaseModel):
+    """面试计划中的一个阶段。"""
+
+    stage: StageName = Field(..., description="阶段名，与 models.INTERVIEW_STAGES 一致")
+    weight: int = Field(..., ge=0, le=100, description="该阶段的时间权重（各阶段合计 100）")
+    target_questions: int = Field(
+        ..., ge=0, le=20, description="该阶段的目标题量（各阶段合计 = total_questions）"
+    )
+
+
+class InterviewPlanOut(BaseModel):
+    """面试计划（Interview Planner 产出）。
+
+    由 ``services.interview_planner`` 制定，**只描述考察计划，不含任何具体题目**。
+    两个结构性不变量在模型层强制校验：
+
+    1. ``stages[*].weight`` 合计 == 100
+    2. ``stages[*].target_questions`` 合计 == ``total_questions``
+    """
+
+    interview_type: InterviewType
+    difficulty: DifficultyLevel
+    duration: int = Field(..., ge=5, le=180, description="计划时长（分钟）")
+    total_questions: int = Field(..., ge=1, le=20, description="全场目标题量")
+
+    stages: List[InterviewPlanStage] = Field(
+        default_factory=list, description="阶段计划，顺序与状态机推进顺序一致"
+    )
+    target_topics: List[str] = Field(default_factory=list, description="本场需考察的知识点")
+    priority_topics: List[str] = Field(
+        default_factory=list, description="优先考察点，为 target_topics 的子集"
+    )
+    resume_focus_points: List[str] = Field(
+        default_factory=list, description="简历中值得深挖的项目/系统"
+    )
+
+    source: PlanSource = Field(default="rule", description="计划来源：rule（规则）或 llm（模型增强）")
+    job_id: Optional[int] = Field(default=None, description="目标岗位 id（未指定为 null）")
+    resume_id: Optional[int] = Field(default=None, description="简历 id（未指定为 null）")
+
+    @model_validator(mode="after")
+    def _check_invariants(self) -> "InterviewPlanOut":
+        if not self.stages:
+            raise ValueError("stages 不能为空")
+        weight_sum = sum(s.weight for s in self.stages)
+        if weight_sum != 100:
+            raise ValueError(f"stages 权重合计必须为 100，当前 {weight_sum}")
+        question_sum = sum(s.target_questions for s in self.stages)
+        if question_sum != self.total_questions:
+            raise ValueError(
+                f"stages 题量合计 {question_sum} 与 total_questions "
+                f"{self.total_questions} 不一致"
+            )
+        stages = [s.stage for s in self.stages]
+        if len(stages) != len(set(stages)):
+            raise ValueError("stages 中阶段不可重复")
+        return self
 
 
 # ============================================================
