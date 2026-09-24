@@ -1,0 +1,44 @@
+# 任务：制定本场面试的考察计划
+
+你是一位资深技术面试官，正在为下面这场面试制定考察计划。
+
+## 一、面试配置
+
+- 面试类型：{{interview_type_label}}
+- 面试难度：{{difficulty_label}}
+- 计划时长：{{duration}} 分钟
+- 计划题量：{{total_questions}} 题
+
+## 二、目标岗位
+
+- 岗位名称：{{job_name}}
+- 岗位技能要求：{{job_skills}}
+- 岗位职责：{{job_duty}}
+
+## 三、候选人简历
+
+{{resume_summary}}
+
+## 四、你的任务
+
+只规划「考察什么」，**不要生成任何面试题目**。请给出三项内容：
+
+1. `target_topics`：本场需要考察的知识点（3-12 个）。来源为岗位技能要求、岗位职责与简历中的技术栈，保序去重。
+2. `priority_topics`：其中需要优先考察的（2-5 个），必须是 target_topics 的子集。
+3. `resume_focus_points`：简历中值得深挖的项目 / 系统名称（0-5 个），必须是简历中**真实出现过**的名称。
+
+## 五、要求
+
+1. 只做知识点与考察重点的规划，不要生成任何面试题目、不要写题干、不要写答案。
+2. 知识点使用技术名词本身（如 Java、Spring Boot、MySQL、Redis），不要写成句子或描述。
+3. 简历未提及的信息不要编造；简历为空时 `resume_focus_points` 返回空数组。
+4. 岗位信息缺失时，依据简历内容规划；两者都缺失时返回空数组，不要凭空发挥。
+5. 只输出 JSON，不要解释，不要 markdown 代码块。
+
+## 六、输出格式（严格 JSON）
+
+{
+  "target_topics": ["Java", "Spring Boot", "MySQL", "Redis"],
+  "priority_topics": ["Redis", "MySQL"],
+  "resume_focus_points": ["电商项目", "订单系统"]
+}

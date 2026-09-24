@@ -1,0 +1,33 @@
+# 任务：修复上一次的输出
+
+你上一次的回复无法通过校验，请重新生成。
+
+## 一、失败原因
+
+{{error}}
+
+## 二、你上一次的原始输出
+
+{{raw_output}}
+
+## 三、已提问问题（新问题不得与其中任何一条重复）
+
+{{asked_questions}}
+
+## 四、要求
+
+1. 只输出一个合法的 JSON 对象，不要任何解释、前言、道歉或 markdown 代码块围栏。
+2. 重新生成一道**新的**面试问题，并修正上面「失败原因」指出的问题。
+3. 字段与取值要求：
+   - `question`：非空的完整问题文本，不含答案、答案要点或评分标准
+   - `question_type`：introduction / resume / technical / project / scenario / hr / closing 之一
+   - `topic`：非空的知识点名称
+   - `difficulty`：junior / mid / senior 之一
+   - `expected_points`：字符串数组（3-6 个采分点关键词，仅供内部评分）
+   - `reason`：非空的一句话出题理由
+4. 如果确实无法生成有效问题，输出：
+
+{
+  "question": "",
+  "error": "说明无法生成的原因"
+}
