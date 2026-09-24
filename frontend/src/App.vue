@@ -4,6 +4,7 @@ import { ElMessage, ElCollapse, ElCollapseItem } from 'element-plus'
 import MarkdownIt from 'markdown-it'
 import * as echarts from 'echarts'
 import AuthModal from './components/AuthModal.vue'
+import { apiClient, clearToken, setStoredUser } from './api/apiClient'
 
 const md = new MarkdownIt()
 
@@ -65,7 +66,8 @@ const dragOver = ref(false)
 const radarChartRef = ref(null)
 let radarChartInstance = null
 
-const apiBase = '/api'
+// 所有后端请求统一走 src/api/apiClient.js（自动携带 Authorization），
+// 本文件不再保留 apiBase 常量与内联 fetch。
 
 // 平均岗位匹配度：直接取岗位匹配结果的平均技能覆盖率，真实数据、不做任何加成。
 // 注：原「市场击败率 / 击败同龄人」为 `平均匹配度 + 15` 的伪造值（源码注释自承 Mock），已移除。
@@ -202,22 +204,17 @@ const handleAsk = async () => {
   isLoading.value = true
 
   try {
-    const matchRes = await fetch(`${apiBase}/match`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ skills: userMsg.split(',').map(s => s.trim()) })
+    // 岗位匹配 + AI 看板对话：统一由 apiClient 注入 Authorization
+    const matchData = await apiClient.post('/match', {
+      body: { skills: userMsg.split(',').map(s => s.trim()) }
     })
-    const matchData = await matchRes.json()
 
     const jobsData = matchData.results ? matchData.results.slice(0, 5) : []
     jobMatches.value = jobsData
 
-    const chatRes = await fetch(`${apiBase}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: userMsg, jobs: jobsData })
+    const chatData = await apiClient.post('/chat', {
+      body: { message: userMsg, jobs: jobsData }
     })
-    const chatData = await chatRes.json()
 
     const { badges, parsedTasks, parsedPath } = parseStructuredResponse(chatData.chat_answer || '')
     userBadges.value = badges
@@ -265,22 +262,17 @@ const sendMessage = async () => {
   isLoading.value = true
 
   try {
-    const matchRes = await fetch(`${apiBase}/match`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ skills: userMsg.split(',').map(s => s.trim()) })
+    // 岗位匹配 + AI 看板对话：统一由 apiClient 注入 Authorization
+    const matchData = await apiClient.post('/match', {
+      body: { skills: userMsg.split(',').map(s => s.trim()) }
     })
-    const matchData = await matchRes.json()
 
     const jobsData = matchData.results ? matchData.results.slice(0, 5) : []
     jobMatches.value = jobsData
 
-    const chatRes = await fetch(`${apiBase}/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: userMsg, jobs: jobsData })
+    const chatData = await apiClient.post('/chat', {
+      body: { message: userMsg, jobs: jobsData }
     })
-    const chatData = await chatRes.json()
 
     chatHistory.value.push({
       role: 'assistant',
@@ -358,6 +350,9 @@ const handleLoginSuccess = (user) => {
 }
 
 const handleLogout = () => {
+  // 退出时清除本地 token，避免后续请求继续携带已失效凭证
+  clearToken()
+  setStoredUser(null)
   currentUser.value = { email: '', role: 'user' }
   isLoggedIn.value = false
   currentPage.value = 'home'
@@ -377,15 +372,19 @@ const openAuthModal = (mode = 'login') => {
 // Admin page handlers
 const fetchUserLogs = async () => {
   try {
-    const res = await fetch(`${apiBase}/admin/user-logs`)
-    const data = await res.json()
+    // 管理员接口：由 apiClient 统一携带 Authorization
+    const data = await apiClient.get('/admin/user-logs')
     userLogs.value = data.logs || []
   } catch (e) {
+    // 401/403 明确提示（不静默吞掉），并保留演示数据兜底以便页面仍可用
+    if (e && (e.status === 401 || e.status === 403)) {
+      ElMessage.error(e.status === 401 ? '登录状态已失效，请重新登录后查看' : '当前账号无管理员权限')
+    }
     // Mock data for demo
     userLogs.value = [
       { email: 'user1@example.com', lastLogin: '2026-06-11 10:30', role: 'user', searchCount: 12 },
       { email: 'user2@example.com', lastLogin: '2026-06-11 09:15', role: 'user', searchCount: 8 },
-      { email: 'admin@career.ai', lastLogin: '2026-06-11 11:00', role: 'admin', searchCount: 0 },
+      { email: 'admin@example.com', lastLogin: '2026-06-11 11:00', role: 'admin', searchCount: 0 },
     ]
   }
 }
@@ -409,15 +408,13 @@ const submitJob = async () => {
   }
 
   try {
-    await fetch(`${apiBase}/admin/add-job`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(jobForm.value)
-    })
+    // 管理员接口：由 apiClient 统一携带 Authorization。
+    // 非 2xx 会抛出 ApiError，避免此前"失败也提示成功"的问题。
+    await apiClient.post('/admin/add-job', { body: jobForm.value })
     ElMessage.success('岗位添加成功')
     jobForm.value = { job_name: '', city: '', salary: '', skills: [], description: '' }
   } catch (e) {
-    ElMessage.error('添加失败，请重试')
+    ElMessage.error((e && e.message) || '添加失败，请重试')
   }
 }
 
@@ -470,24 +467,11 @@ const analyzeFile = async (file) => {
     const formData = new FormData()
     formData.append('file', file)
 
-    const res = await fetch(`${apiBase}/resume/analyze`, {
-      method: 'POST',
-      body: formData
-    })
+    // 简历分析：由 apiClient 统一携带 Authorization。
+    // 非 2xx（400/415/404 等）会抛出 ApiError，其 message 即后端 detail，
+    // 避免此前 404/415 被当成成功结果渲染。
+    const data = await apiClient.post('/resume/analyze', { body: formData })
 
-    // HTTP 层错误必须显式处理，否则 404/415 会被当成成功结果渲染
-    let data = null
-    try {
-      data = await res.json()
-    } catch (e) {
-      data = null
-    }
-
-    if (!res.ok) {
-      const detail = (data && (data.detail || data.error)) || `请求失败（HTTP ${res.status}）`
-      ElMessage.error(detail)
-      return
-    }
     if (!data) {
       ElMessage.error('服务返回内容无法解析，请稍后重试')
       return
@@ -503,7 +487,10 @@ const analyzeFile = async (file) => {
 
     ElMessage.success('简历分析完成！')
   } catch (e) {
-    ElMessage.error('分析失败，请检查后端服务是否已启动')
+    // 后端返回的错误详情优先（如 415 的文件类型说明）；网络异常时给通用提示
+    ElMessage.error(
+      e && e.status ? (e.message || '分析失败，请稍后重试') : '分析失败，请检查后端服务是否已启动'
+    )
   } finally {
     isAnalyzing.value = false
   }
@@ -523,6 +510,16 @@ const resetResumeAnalysis = () => {
   window.removeEventListener('resize', handleResize)
 }
 
+// 后端 /api/resume/analyze 返回的 metrics 项字段为
+// {key, name, weight, score, rationale, evidence} —— 维度分数在 `score`。
+// 统一做数值兜底：缺失 / 非数值 / 越界一律安全降级为 0，
+// 保证 0 分可正常显示，且 null/undefined 不会让 ECharts 报错。
+const toRadarScore = (v) => {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return 0
+  return Math.max(0, Math.min(100, n))
+}
+
 const initRadarChart = () => {
   if (!radarChartRef.value || !metrics.value.length) {
     return
@@ -534,8 +531,9 @@ const initRadarChart = () => {
 
   radarChartInstance = echarts.init(radarChartRef.value)
 
+  // 8 个维度全部进入 indicator，顺序与后端 DIMENSION_META 一致
   const indicator = metrics.value.map(item => ({
-    name: item.name,
+    name: item.name || '',
     max: 100
   }))
 
@@ -570,7 +568,9 @@ const initRadarChart = () => {
     series: [{
       type: 'radar',
       data: [{
-        value: metrics.value.map(item => item.value),
+        // 字段修正：后端维度分数字段为 score（此前误读为 value，
+        // 导致雷达图数据全为 undefined、图形无法绘制）
+        value: metrics.value.map(item => toRadarScore(item.score)),
         name: '能力画像',
         areaStyle: {
           color: new echarts.graphic.RadialGradient(0.5, 0.5, 1, [

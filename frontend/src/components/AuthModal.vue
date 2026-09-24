@@ -1,6 +1,7 @@
 <script setup>
 import { ref, reactive, defineEmits } from 'vue'
 import { ElMessage } from 'element-plus'
+import { publicApi, setToken, setStoredUser } from '../api/apiClient'
 
 const emit = defineEmits(['close', 'loginSuccess'])
 
@@ -19,6 +20,26 @@ const validateEmailLimit = (email) => {
   const emails = JSON.parse(stored)
   const count = emails[email] || 0
   return count < 5
+}
+
+// 向后端换取并持久化 token —— 统一请求层（apiClient）的 token 唯一来源。
+// 后端未启动 / 数据库不可用 / 后端校验失败时静默降级，不改变既有本地登录流程与提示文案。
+// 返回后端权威 user（含 role）；失败返回 null。**前端不硬编码任何角色判定**，
+// 管理员身份完全以后端返回为准。
+const syncBackendToken = async (path) => {
+  try {
+    const body = { email: form.email, password: form.password }
+    if (isRegister.value) body.username = form.username
+    const data = await publicApi.post(path, { body })
+    if (data && data.token) {
+      setToken(data.token)
+      setStoredUser(data.user || null)
+      return data.user || { email: form.email, role: 'user' }
+    }
+  } catch (e) {
+    // 有意静默：保持原有纯本地登录体验，token 缺失时后续请求按未登录处理
+  }
+  return null
 }
 
 const handleSubmit = async () => {
@@ -78,33 +99,37 @@ const handleSubmit = async () => {
       localStorage.setItem('registered_emails', JSON.stringify(emails))
 
       ElMessage.success('注册成功！')
-      emit('loginSuccess', { email: form.email, role: 'user' })
+      const backendUser = await syncBackendToken('/auth/register')
+      // 注册角色同样以后端返回为准（后端固定为 user），前端不自行决定。
+      emit('loginSuccess', { email: form.email, role: (backendUser && backendUser.role) || 'user' })
     } else {
       // 登录逻辑
-      // 检查硬编码的管理员账号
-      if (form.email === 'admin@career.ai' && form.password === 'admin123') {
-        ElMessage.success('欢迎回来，管理员！')
-        emit('loginSuccess', { email: form.email, role: 'admin' })
-        return
-      }
-
+      // 角色一律由后端权威返回，前端**不硬编码任何管理员账号或权限判断**。
       const users = JSON.parse(localStorage.getItem('users') || '{}')
       const user = users[form.email]
 
-      if (!user) {
-        error.value = '该邮箱尚未注册'
-        isSubmitting.value = false
+      if (user) {
+        if (user.password !== form.password) {
+          error.value = '密码错误，请重试'
+          isSubmitting.value = false
+          return
+        }
+        ElMessage.success(`欢迎回来，${user.username}！`)
+        await syncBackendToken('/auth/login')
+        emit('loginSuccess', { email: form.email, role: user.role })
         return
       }
 
-      if (user.password !== form.password) {
-        error.value = '密码错误，请重试'
-        isSubmitting.value = false
+      // 本地无此账号（例如由数据库脚本创建的管理员）：交由后端判定角色。
+      const backendUser = await syncBackendToken('/auth/login')
+      if (backendUser) {
+        ElMessage.success(`欢迎回来，${backendUser.username || form.email}！`)
+        emit('loginSuccess', { email: form.email, role: backendUser.role || 'user' })
         return
       }
 
-      ElMessage.success(`欢迎回来，${user.username}！`)
-      emit('loginSuccess', { email: form.email, role: user.role })
+      error.value = '该邮箱尚未注册'
+      isSubmitting.value = false
     }
   } catch (e) {
     error.value = '操作失败，请稍后重试'
@@ -185,7 +210,7 @@ const handleClose = () => {
       </div>
 
       <div class="admin-hint">
-        <p>管理员测试账号：admin@career.ai / admin123</p>
+        <p>管理员账号请联系系统管理员获取。</p>
       </div>
     </div>
   </div>

@@ -1,7 +1,12 @@
 # Python
 __pycache__/
 *.py[cod]
+
+# 数据库文件（可能含真实用户数据，严禁提交）
 *.db
+*.sqlite
+*.sqlite3
+backend/instance/
 
 # Node / Vite
 node_modules/
@@ -11,8 +16,17 @@ dist/
 .vscode/
 .idea/
 
-# Env
+# Env / 密钥（敏感，严禁提交）
 .env
+.env.*
+*.env
+!.env.example
+
+# 证书与私钥
+*.pem
+*.key
+*.p12
+*.jks
 
 # Docs（本地文档，不纳入版本管理）
 docs/

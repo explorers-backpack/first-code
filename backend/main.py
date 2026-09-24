@@ -20,109 +20,64 @@ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 from contextlib import asynccontextmanager
 from typing import Optional, List
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Header, Request
+from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
-import aiosqlite
-from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase
-from sqlalchemy import Column, Integer, String, Text, JSON, DateTime, func, select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import func, select
 
-# 保证以任意工作目录启动都能导入 services 包
+# 保证以任意工作目录启动都能导入本项目的顶层模块
+# （database / deps / models / services / api）
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# ---- 基础设施：Base / engine / 会话工厂 / get_db ----
+# 原定义在本文件，为支持 models / services / api 分层而抽取到 database.py，
+# 避免分层模块反向 import main 造成循环依赖。
+# DATABASE_URL 在本文件已无直接引用，保留导入是为了不破坏既有的
+# `main.DATABASE_URL` 引用点（与抽取前的模块命名空间保持一致）。
+from database import (  # noqa: E402,F401
+    DATABASE_URL,
+    Base,
+    async_session,
+    engine,
+    get_db,
+)
+
+# ---- 鉴权依赖：原定义在本文件，同样为分层复用而抽取到 deps.py ----
+from deps import get_current_admin, get_current_user  # noqa: E402
+
+# ---- ORM 模型：已迁移至 models/ 包，此处导入以保持既有引用（User/Job/...）不变 ----
+# Resume / ChatHistory 在本文件中无直接引用，保留是为了维持
+# `main.Resume` / `main.ChatHistory` 的模块命名空间兼容；
+# 表的注册由 models/__init__.py 负责，不依赖本文件是否 import。
+from models import (  # noqa: E402,F401
+    ChatHistory,
+    Job,
+    Resume,
+    User,
+    UserLoginLog,
+    UserSession,
+)
+
+# ---- 业务服务 ----
 from services.resume_scoring import build_prompt_summary, evaluate_resume  # noqa: E402
 
-# ============================================================
-# 数据库配置（MySQL）
-# ============================================================
-DATABASE_URL = "mysql+aiomysql://root:2549966637@localhost:3306/career?charset=utf8mb4"
+# ---- 岗位匹配：keyword_match 曾在本文件重复定义两份（逐字节相同），
+# 现统一收敛为 services/job_matching.py 中的唯一实现，此处仅导入使用。
+from services.job_matching import keyword_match  # noqa: E402
 
-engine = create_async_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
-async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
-
-
-# ============================================================
-# SQLAlchemy ORM 模型（异步）
-# ============================================================
-class Base(DeclarativeBase):
-    pass
-
-
-class User(Base):
-    __tablename__ = "user"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    username = Column(String(80), unique=True, nullable=False)
-    email = Column(String(120), unique=True, nullable=False)
-    password_hash = Column(String(200), nullable=False)
-    role = Column(String(20), default="user")
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-class Resume(Base):
-    __tablename__ = "resume"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, nullable=False)
-    filename = Column(String(200))
-    content = Column(Text)
-    parsed_data = Column(JSON)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-class ChatHistory(Base):
-    __tablename__ = "chat_history"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, nullable=False)
-    role = Column(String(20), nullable=False)
-    content = Column(Text, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-class UserSession(Base):
-    __tablename__ = "user_session"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, nullable=False)
-    token = Column(String(64), unique=True, nullable=False, index=True)
-    email = Column(String(120), nullable=False)
-    role = Column(String(20), nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-
-class UserLoginLog(Base):
-    __tablename__ = "user_login_log"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    email = Column(String(120), nullable=False)
-    role = Column(String(20), nullable=False)
-    last_login = Column(String(32), nullable=False)
-    search_count = Column(Integer, default=0)
-
-
-class Job(Base):
-    __tablename__ = "jobs"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    job_name = Column(String(200), nullable=False)
-    salary = Column(String(50))
-    edu_require = Column(String(50))
-    major_require = Column(String(200))
-    skills = Column(Text)
-    duty = Column(Text)
-    city = Column(String(50))
-    industry = Column(String(50))
+# ---- 路由：AI 模拟面试模块（独立分层，见 api/interview.py）----
+from api.interview import router as interview_router  # noqa: E402
 
 
 # ============================================================
 # 数据库会话依赖
 # ============================================================
-async def get_db():
-    async with async_session() as session:
-        yield session
+# get_db 已随 engine / async_session 一并抽取到 database.py，
+# 由顶部 `from database import ... get_db` 导入。
+# 既有用法 `db: AsyncSession = Depends(get_db)` 保持不变。
 
 
 # ============================================================
@@ -227,76 +182,10 @@ async def get_all_jobs() -> List[dict]:
         ]
 
 
-def keyword_match(user_skills: List[str], job_skills_str: str) -> dict:
-    if not job_skills_str or not user_skills:
-        return {
-            "match_rate": 0,
-            "matched": [],
-            "missing": [],
-            "total_required": 0,
-            "matched_count": 0,
-        }
-    job_skills = [s.strip().lower() for s in job_skills_str.split(",")]
-    user_skills_lower = [s.strip().lower() for s in user_skills]
-    matched, missing = [], []
-    for job_skill in job_skills:
-        found = any(job_skill in us or us in job_skill for us in user_skills_lower)
-        if found:
-            matched.append(job_skill)
-        else:
-            missing.append(job_skill)
-    if not job_skills:
-        return {
-            "match_rate": 0,
-            "matched": [],
-            "missing": [],
-            "total_required": 0,
-            "matched_count": 0,
-        }
-    match_rate = len(matched) / len(job_skills) * 100
-    return {
-        "match_rate": round(match_rate, 1),
-        "matched": matched,
-        "missing": missing,
-        "total_required": len(job_skills),
-        "matched_count": len(matched),
-    }
-
-
-def keyword_match(user_skills: List[str], job_skills_str: str) -> dict:
-    if not job_skills_str or not user_skills:
-        return {
-            "match_rate": 0,
-            "matched": [],
-            "missing": [],
-            "total_required": 0,
-            "matched_count": 0,
-        }
-    job_skills = [s.strip().lower() for s in job_skills_str.split(",")]
-    user_skills_lower = [s.strip().lower() for s in user_skills]
-    matched, missing = [], []
-    for job_skill in job_skills:
-        found = any(job_skill in us or us in job_skill for us in user_skills_lower)
-        if found:
-            matched.append(job_skill)
-        else:
-            missing.append(job_skill)
-    if not job_skills:
-        return {
-            "match_rate": 0,
-            "matched": [],
-            "missing": [],
-            "total_required": 0,
-            "matched_count": 0,
-        }
-    match_rate = len(matched) / len(job_skills) * 100
-    return {
-        "match_rate": round(match_rate, 1),
-        "matched": matched,
-        "missing": missing,
-        "total_required": len(job_skills),
-        "matched_count": len(matched),
-    }
+# keyword_match 曾在此处**重复定义两次**（两份逐字节相同，后者覆盖前者）。
+# 现合并为唯一实现并迁移至 services/job_matching.py，
+# 本文件顶部已 `from services.job_matching import keyword_match`，
+# 下方 filter_jobs_by_keywords 的调用点保持不变。
 
 
 async def filter_jobs_by_keywords(user_skills: List[str], min_match_rate: int = 30):
@@ -352,6 +241,15 @@ def _generate_token(user_id: int, email: str, role: str) -> str:
 
 
 class UserRegister(BaseModel):
+    """注册请求体。
+
+    安全约定（**不要添加 role 字段**）：显式声明 ``extra="ignore"``，客户端即使传入
+    ``{"role": "admin"}`` 也会被丢弃；role 由 ``register()`` 在服务端固定为 ``"user"``，
+    任何情况下都不允许由请求体决定权限。
+    """
+
+    model_config = ConfigDict(extra="ignore")
+
     username: str = Field(..., min_length=2, max_length=80)
     email: str = Field(..., max_length=120)
     password: str = Field(..., min_length=6, max_length=128)
@@ -387,32 +285,9 @@ class ResumeParseRequest(BaseModel):
 # ============================================================
 # 依赖：当前用户（从数据库会话表查询）
 # ============================================================
-async def get_current_user(
-    authorization: Optional[str] = Header(None),
-    db: AsyncSession = Depends(get_db),
-) -> dict:
-    if not authorization or not authorization.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="未登录")
-    token = authorization[7:]
-
-    result = await db.execute(select(UserSession).where(UserSession.token == token))
-    session = result.scalar_one_or_none()
-    if not session:
-        raise HTTPException(status_code=401, detail="登录已过期")
-
-    return {
-        "user_id": session.user_id,
-        "email": session.email,
-        "role": session.role,
-    }
-
-
-async def get_current_admin(
-    current_user: dict = Depends(get_current_user),
-) -> dict:
-    if current_user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="需要管理员权限")
-    return current_user
+# get_current_user / get_current_admin 已抽取到 deps.py，由顶部导入，
+# 供 main.py 与 api/ 分层（如 api/interview.py）共用同一套鉴权口径。
+# 既有用法 `Depends(get_current_admin)` 保持不变。
 
 
 # ============================================================
@@ -467,6 +342,15 @@ async def cors_exception_handler(request: Request, exc: Exception):
         content={"detail": f"服务器内部错误: {str(exc)}"},
         headers=headers,
     )
+
+
+# ============================================================
+# 路由挂载：AI 模拟面试模块
+# ============================================================
+# 独立分层实现（api/interview.py + services/interview_service.py +
+# schemas/interview.py + models/interview.py），此处仅做挂载。
+# 前缀为 /api/interview，与既有路由（/api/chat、/api/resume/* 等）互不影响。
+app.include_router(interview_router)
 
 
 # ============================================================

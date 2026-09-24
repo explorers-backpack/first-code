@@ -1,11 +1,28 @@
+import os
+from urllib.parse import unquote, urlparse
+
 import pymysql
+from dotenv import load_dotenv
+
+# 与 main.py 保持一致：连接配置统一从 backend/.env 读取，不把凭据写进源码。
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+
+DATABASE_URL = os.getenv("DATABASE_URL", "").strip()
+if not DATABASE_URL:
+    raise RuntimeError(
+        "缺少数据库连接配置：请在 backend/.env 中设置 DATABASE_URL，"
+        "格式为 mysql+aiomysql://<user>:<password>@<host>:<port>/<db>?charset=utf8mb4"
+    )
+
+_parsed = urlparse(DATABASE_URL)
 
 conn = pymysql.connect(
-    host='localhost',
-    user='root',
-    password='2549966637',
-    database='career',
-    charset='utf8mb4'
+    host=_parsed.hostname or "localhost",
+    port=_parsed.port or 3306,
+    user=unquote(_parsed.username or ""),
+    password=unquote(_parsed.password or ""),
+    database=(_parsed.path or "/").lstrip("/") or None,
+    charset="utf8mb4",
 )
 cursor = conn.cursor()
 

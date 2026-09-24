@@ -1,9 +1,16 @@
 """讯飞星火 v2.1 REST API 认证测试"""
 import os, hashlib, hmac, base64, time, requests
+from dotenv import load_dotenv
 
-APP_ID = os.getenv('SPARK_APP_ID', '0c00a4b1')
-API_KEY = os.getenv('SPARK_API_KEY', '874db996e73544fe2d8637eef9572ea8')
-API_SECRET = os.getenv('SPARK_API_SECRET', 'ZDQ0Y2QzMzQxM2EyMmYxZDg2NzViNjIx')
+# 凭据只从环境变量读取（backend/.env 或系统环境），源码中不保留任何默认值
+load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
+APP_ID = os.getenv('SPARK_APP_ID', '')
+API_KEY = os.getenv('SPARK_API_KEY', '')
+API_SECRET = os.getenv('SPARK_API_SECRET', '')
+_missing = [k for k, v in (('SPARK_APP_ID', APP_ID), ('SPARK_API_KEY', API_KEY),
+                           ('SPARK_API_SECRET', API_SECRET)) if not v]
+if _missing:
+    raise SystemExit(f"缺少环境变量：{'、'.join(_missing)}；请在 backend/.env 中配置后重试。")
 
 def test_basic_auth():
     """方式1: Basic Auth (最简单)"""
