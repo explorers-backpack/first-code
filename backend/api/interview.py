@@ -5,7 +5,9 @@
 --------
 本层只做三件事：**参数校验 → 调用 service → 声明响应模型**。
 一切业务判断（状态流转、出题、评分、汇总）都在
-``services/interview_service.py``，便于脱离 HTTP 单独测试与复用。
+``services/interview_service.py``（会话与 API 门面）与
+``services/interview_core.py``（面试流程控制与业务规则），便于脱离 HTTP 单独测试与复用。
+本层**只依赖 ``interview_service``**，不直接依赖 Core / Agent / Validator。
 
 异常处理
 --------
@@ -62,7 +64,9 @@ async def _run(action: str, coro):
     summary="创建面试会话",
     description=(
         "创建一场模拟面试。此时仅落库会话配置，**不生成题目**，"
-        "状态为 `created`；需再调用 `/start` 才会生成题目并进入 `ongoing`。"
+        "状态为 `created`；需再调用 `/start` 才会生成题目并进入 `ongoing`。\n\n"
+        "`mode` 为**交互模式**：`text` 文字面试 / `avatar` 数字人视频面试，"
+        "缺省 `text`。该字段只选择交互方式，不改变出题与评分逻辑。"
     ),
 )
 async def create_interview(

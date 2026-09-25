@@ -15,6 +15,10 @@
 4. **新增字段**：``total_questions`` / ``current_question_no`` 是驱动面试
    生命周期所必需的进度状态，不在原始字段清单内，但无此二者无法判断
    「下一题是哪题」「是否已问完」。
+5. **新增字段**：``interview_mode``（``text`` / ``avatar``）**只选择交互方式**，
+   不参与出题、评分、报告与状态机中的任何判断——文字面试与数字人视频面试
+   共用同一套面试核心，差异仅在前端交互与（未来的）音视频通道。
+   默认 ``text``：与新增该列之前的既有会话行为完全一致，向后兼容。
 """
 
 from __future__ import annotations
@@ -42,6 +46,15 @@ SESSION_STATUS_FINISHED = "finished"
 
 INTERVIEW_TYPES = ("technical", "behavioral", "comprehensive")
 DIFFICULTIES = ("junior", "mid", "senior")
+
+# 交互模式（**仅**选择交互方式，不参与任何面试业务逻辑）
+#   text   = 文字面试：前端输入框作答（当前既有流程）
+#   avatar = 数字人视频面试：后续接入讯飞数字人 / ASR / TTS，
+#            当前只记录选择，不产生任何音视频行为
+INTERVIEW_MODE_TEXT = "text"
+INTERVIEW_MODE_AVATAR = "avatar"
+INTERVIEW_MODES = (INTERVIEW_MODE_TEXT, INTERVIEW_MODE_AVATAR)
+DEFAULT_INTERVIEW_MODE = INTERVIEW_MODE_TEXT
 
 # 面试阶段（InterviewContext.current_stage 的合法取值，顺序即推进顺序）
 INTERVIEW_STAGES = (
@@ -71,6 +84,16 @@ class InterviewSession(Base):
     interview_type = Column(String(30), nullable=False, default="comprehensive")
     difficulty = Column(String(20), nullable=False, default="mid")
     duration = Column(Integer, nullable=False, default=30)  # 计划时长（分钟）
+
+    # ---- 交互模式（只选「怎么面」，不影响「面什么」）----
+    # server_default 使「既有库 ALTER 补列」与「新建表」的默认值口径一致；
+    # 见 utils/schema_sync.py：create_all 不给既有表补列，需要启动时幂等补齐。
+    interview_mode = Column(
+        String(20),
+        nullable=False,
+        default=DEFAULT_INTERVIEW_MODE,
+        server_default=DEFAULT_INTERVIEW_MODE,
+    )
 
     # ---- 生命周期 ----
     status = Column(String(20), nullable=False, default=SESSION_STATUS_CREATED, index=True)

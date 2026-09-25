@@ -14,7 +14,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import AliasChoices, BaseModel, Field, model_validator
 
 # ============================================================
 # 枚举（与 models.interview 中的常量保持一致）
@@ -27,12 +27,22 @@ StageName = Literal[
 ]
 PlanSource = Literal["rule", "llm"]
 
+# 交互模式：text=文字面试，avatar=数字人视频面试
+# 该字段**只负责选择交互方式**，不改变出题 / 评分 / 状态机（见 models.interview）。
+InterviewMode = Literal["text", "avatar"]
+
 
 # ============================================================
 # 请求体
 # ============================================================
 class SessionCreateRequest(BaseModel):
-    """创建面试会话。``user_id`` 来自登录态，不接受前端传入。"""
+    """创建面试会话。``user_id`` 来自登录态，不接受前端传入。
+
+    ``mode`` 是**交互模式**（``text`` 文字面试 / ``avatar`` 数字人视频面试）。
+    为了同时兼容 ``{"mode": "avatar"}`` 与 ``{"interview_mode": "avatar"}``
+    两种写法（后者与数据库列同名），这里用 ``AliasChoices`` 同时接受两个键名；
+    两者都缺省时为 ``text``。
+    """
 
     job_id: Optional[int] = Field(default=None, ge=1, description="目标岗位 id，关联 jobs 表")
     resume_id: Optional[int] = Field(default=None, ge=1, description="简历 id，关联 resume 表")
@@ -40,6 +50,11 @@ class SessionCreateRequest(BaseModel):
     difficulty: DifficultyLevel = Field(default="mid", description="难度")
     duration: int = Field(default=30, ge=5, le=180, description="计划时长（分钟）")
     total_questions: int = Field(default=5, ge=1, le=20, description="计划题量")
+    mode: InterviewMode = Field(
+        default="text",
+        validation_alias=AliasChoices("mode", "interview_mode"),
+        description="交互模式：text=文字面试，avatar=数字人视频面试",
+    )
 
 
 class AnswerSubmitRequest(BaseModel):
@@ -87,6 +102,9 @@ class InterviewSessionOut(BaseModel):
     interview_type: str
     difficulty: str
     duration: int
+    interview_mode: str = Field(
+        default="text", description="交互模式：text=文字面试，avatar=数字人视频面试"
+    )
     status: str
     total_questions: int
     current_question_no: int

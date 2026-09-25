@@ -94,13 +94,14 @@ async def run() -> bool:
     # ============================================================
     # [A] Prompt 加载
     # ============================================================
-    print("\n[A1] 加载四个 Prompt 文件")
-    for name in ("system", "question", "question_repair", "planner"):
+    print("\n[A1] 加载五个 Prompt 文件")
+    for name in ("system", "question", "question_knowledge", "question_repair", "planner"):
         text = prompts.load_prompt(name)
         _check(f"{name}.txt 可加载", isinstance(text, str) and bool(text.strip()))
         _check(f"{name}.txt 内容长度 > 200", len(text) > 200, str(len(text)))
-    _check("list_prompts 返回全部四个",
-           prompts.list_prompts() == ["planner", "question", "question_repair", "system"],
+    _check("list_prompts 返回全部五个",
+           prompts.list_prompts()
+           == ["planner", "question", "question_knowledge", "question_repair", "system"],
            str(prompts.list_prompts()))
     _check("list_prompts 不存在的分组返回空列表",
            prompts.list_prompts("nope") == [])
@@ -171,6 +172,14 @@ async def run() -> bool:
            str(prompts.template_variables("planner")))
     _check("system.txt 无占位符（纯角色定义）",
            prompts.template_variables("system") == [])
+    # question_knowledge.txt 是 question.txt 的**超集**：原 10 个变量 + knowledge_context
+    knowledge_vars = prompts.template_variables("question_knowledge")
+    _check("question_knowledge.txt = question.txt 的 10 个变量 + knowledge_context",
+           set(knowledge_vars) == set(QUESTION_VARIABLES) | {"knowledge_context"},
+           str(set(knowledge_vars) ^ (set(QUESTION_VARIABLES) | {"knowledge_context"})))
+    _check("  └ 变量数量恰为 11", len(knowledge_vars) == 11, str(len(knowledge_vars)))
+    _check("  └ question.txt 未被污染（仍不含 knowledge_context）",
+           "knowledge_context" not in question_vars, str(question_vars))
 
     # ============================================================
     # [B] 变量注入

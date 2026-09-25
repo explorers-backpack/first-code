@@ -48,6 +48,9 @@ from database import (  # noqa: E402,F401
 # ---- 鉴权依赖：原定义在本文件，同样为分层复用而抽取到 deps.py ----
 from deps import get_current_admin, get_current_user  # noqa: E402
 
+# ---- 轻量 schema 同步：create_all 不给既有表加列，新增列需启动时幂等补齐 ----
+from utils.schema_sync import ensure_columns  # noqa: E402
+
 # ---- ORM 模型：已迁移至 models/ 包，此处导入以保持既有引用（User/Job/...）不变 ----
 # Resume / ChatHistory 在本文件中无直接引用，保留是为了维持
 # `main.Resume` / `main.ChatHistory` 的模块命名空间兼容；
@@ -291,12 +294,21 @@ class ResumeParseRequest(BaseModel):
 
 
 # ============================================================
-# Lifespan（MySQL 下由 SQLAlchemy create_all 自动建表）
+# Lifespan（MySQL 下由 SQLAlchemy create_all 自动建表 + 幂等补列）
 # ============================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
+        # ① 建表：只创建**不存在的新表**
         await conn.run_sync(Base.metadata.create_all)
+        # ② 补列：create_all **不会给既有表加列**。
+        #    模型新增的列（如 interview_session.interview_mode）由本步幂等补齐，
+        #    否则升级上来的库会在查询时报 Unknown column。
+        #    只加列、不改列、不删列、不清数据，重复启动不会重复 ALTER。
+        #    见 utils/schema_sync.py。
+        added = await ensure_columns(conn)
+        if added:
+            print(f"[schema] 已补齐缺失列：{', '.join(added)}")
     yield
 
 
@@ -347,8 +359,10 @@ async def cors_exception_handler(request: Request, exc: Exception):
 # ============================================================
 # 路由挂载：AI 模拟面试模块
 # ============================================================
-# 独立分层实现（api/interview.py + services/interview_service.py +
-# schemas/interview.py + models/interview.py），此处仅做挂载。
+# 独立分层实现（api/interview.py 路由 + services/interview_service.py 会话门面
+# + services/interview_core.py 流程控制与业务规则 + services/interview_agent.py
+# + services/question_validator.py + schemas/interview.py + models/interview.py），
+# 此处仅做挂载。
 # 前缀为 /api/interview，与既有路由（/api/chat、/api/resume/* 等）互不影响。
 app.include_router(interview_router)
 

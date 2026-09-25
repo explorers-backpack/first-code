@@ -9,12 +9,25 @@
 - 动态追问
 - 下一题决策
 - 面试报告
-- 讯飞数字人 / ASR / TTS / RAG
+- 讯飞数字人 / ASR / TTS
+- **真实 RAG**（向量库 / Embedding / 文档上传）：本模块只**接收**调用方传入的
+  ``knowledge_context`` 并渲染进 Prompt，**不检索、不向量化、不调用任何 Retriever**
+  （接口见 ``services/knowledge_retriever.py``）
 
 ``generate_question`` 是**无副作用的纯生成函数**：不读库、不写库、不推进面试状态、
 不改动表结构。生成结果由调用方负责持久化（例如
 ``interview_context.add_asked_question``）——Agent 只负责「组装上下文 → 调模型 →
 解析 → 校验 → 返回结构化问题」。
+
+外部知识上下文（可选）
+----------------------
+``generate_question(..., knowledge_context=[...])`` 可接收外部检索到的领域知识，
+由 :func:`normalize_knowledge_context` 归一后注入
+``prompts/interview/question_knowledge.txt`` 的「参考知识」小节。
+
+**空知识时行为与引入本参数之前完全一致**：走原模板 ``question.txt``，
+渲染结果逐字节相同（见 :func:`render_question_prompt`）。
+两个模板的一致性由测试的漂移守卫锁死。
 
 内部流程（对应用户要求的 9 步）
 ------------------------------
@@ -22,7 +35,7 @@
 2. 取已提问问题 ``context.asked_questions``（用于查重）
 3. 取已覆盖知识点 ``context.covered_topics``
 4. 取优先考察点 ``plan.priority_topics``（经 ``interview_plan`` 注入模型）
-5. 加载 ``prompts/interview/question.txt``
+5. 加载出题模板（``question.txt``；有外部知识时改用 ``question_knowledge.txt``）
 6. 调用**既有** Spark 服务（``SparkAPI.chat_async``，不重新实现鉴权）
 7. 解析 JSON（``prompts.parse_question_output``）
 8. 校验问题（非空 / 不重复 / topic 非空 / difficulty 合法）
@@ -51,7 +64,7 @@
 from __future__ import annotations
 
 import re
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
 from models import DIFFICULTIES, INTERVIEW_STAGES
 from prompts import parse_question_output, render_prompt
@@ -61,6 +74,10 @@ from prompts import parse_question_output, render_prompt
 # ============================================================
 PROMPT_GROUP = "interview"
 PROMPT_QUESTION = "question"
+#: 带「参考知识」小节的变体模板。
+#: **知识为空时不会使用它**——见 :func:`render_question_prompt`：
+#: 空知识必须走 :data:`PROMPT_QUESTION`，以保证 Prompt 与引入知识能力之前**逐字节相同**。
+PROMPT_QUESTION_KNOWLEDGE = "question_knowledge"
 PROMPT_QUESTION_REPAIR = "question_repair"
 
 DEFAULT_STAGE = INTERVIEW_STAGES[0]          # introduction
@@ -371,6 +388,106 @@ def build_question_variables(
 
 
 # ============================================================
+# 五·五、外部知识上下文（RAG 扩展点）
+# ============================================================
+def _knowledge_line(item: Any) -> str:
+    """把**单条**知识归一为一行文本；取不到内容时返回空串（由调用方剔除）。"""
+    if item is None:
+        return ""
+
+    if isinstance(item, str):
+        return item.strip()
+
+    # dict / KnowledgeChunk.to_dict() 形态
+    if isinstance(item, Mapping):
+        content = _clean(item.get("content"))
+        source = _clean(item.get("source"))
+        if content:
+            return f"{content}（来源：{source}）" if source else content
+        return ""
+
+    # 带 content 属性的对象（如 services.knowledge_retriever.KnowledgeChunk）
+    # 刻意用鸭子类型读取：Agent **不 import** knowledge_retriever，避免耦合具体实现
+    content = _clean(getattr(item, "content", None))
+    if content:
+        source = _clean(getattr(item, "source", None))
+        return f"{content}（来源：{source}）" if source else content
+
+    # 其余标量（数字 / 布尔 / 任意对象）**一律丢弃**：它们不是「知识」，
+    # 若用 _clean 转成 str 会把 ``123`` / ``true`` 这类 repr 塞进 Prompt。
+    # 注意：这里刻意不复用 _clean——_clean 面向「字段值」语义，与知识行不同。
+    return ""
+
+
+def normalize_knowledge_context(value: Any) -> List[str]:
+    """把外部知识上下文归一为**去重、保序、非空**的文本行列表。
+
+    刻意做得**宽松**：调用方拿到什么形状都能用，Agent 不挑剔上游实现。
+
+    ==========================  ==========================================
+    ``None`` / ``[]`` / ``""``  → ``[]``（即「无知识」）
+    ``str``                     → ``["该字符串"]``
+    ``Mapping``                 → 取 ``content``，有 ``source`` 时附「（来源：…）」
+    带 ``content`` 属性的对象    → 同上（鸭子类型，不 import 具体类型）
+    ``list`` / ``tuple``        → 逐条归一
+    ``set`` / ``frozenset``     → **先按 ``str`` 排序**再归一（集合无序，保证确定性）
+    其他标量（数字 / 布尔 / 任意对象） → **丢弃**（不是知识，不塞 repr）
+    ==========================  ==========================================
+
+    **确定性**：同输入同输出（``set`` 也先排序），空串与重复项被剔除。
+    """
+    if value is None:
+        return []
+
+    if isinstance(value, (set, frozenset)):
+        items: List[Any] = sorted(value, key=str)
+    elif isinstance(value, Sequence) and not isinstance(value, str):
+        items = list(value)
+    else:
+        items = [value]
+
+    out: List[str] = []
+    seen: set[str] = set()
+    for item in items:
+        line = _knowledge_line(item)
+        if line and line not in seen:
+            seen.add(line)
+            out.append(line)
+    return out
+
+
+def render_question_prompt(
+    variables: Mapping[str, Any],
+    knowledge_context: Any = None,
+) -> Tuple[str, str]:
+    """渲染出题 Prompt，返回 ``(模板名, Prompt 正文)``。
+
+    **分流规则（要求 1 的关键）**：
+
+    - 知识为空 → 用 :data:`PROMPT_QUESTION`（**原模板、原变量集**），
+      因此 Prompt 与引入知识能力之前**逐字节相同**，行为完全不变；
+    - 知识非空 → 用 :data:`PROMPT_QUESTION_KNOWLEDGE`，在原 10 个变量之外
+      额外注入 ``knowledge_context``。
+
+    之所以用**两个模板**而不是在同一个模板里放条件块：``prompts`` 的严格模式会
+    双向校验变量，模板里只要有 ``{{knowledge_context}}``，空知识时也会渲染出
+    「参考知识：（无）」——那就不再是「行为完全一致」了。
+    两个模板的一致性由 ``tests/test_agent_knowledge.py`` 的漂移守卫锁死
+    （去掉知识小节后必须与原模板逐字节相同）。
+    """
+    lines = normalize_knowledge_context(knowledge_context)
+    if not lines:
+        return PROMPT_QUESTION, render_prompt(PROMPT_QUESTION, variables, group=PROMPT_GROUP)
+
+    with_knowledge = dict(variables)
+    with_knowledge["knowledge_context"] = lines
+    return (
+        PROMPT_QUESTION_KNOWLEDGE,
+        render_prompt(PROMPT_QUESTION_KNOWLEDGE, with_knowledge, group=PROMPT_GROUP),
+    )
+
+
+# ============================================================
 # 六、对外入口
 # ============================================================
 def _evaluate(
@@ -394,6 +511,7 @@ async def generate_question(
     resume: Any = None,
     job: Any = None,
     *,
+    knowledge_context: Any = None,
     spark: Any = None,
 ) -> Dict[str, Any]:
     """根据当前面试状态生成**一道**问题。
@@ -406,8 +524,19 @@ async def generate_question(
     - ``plan``：InterviewPlan（``interview_planner.build_plan_for`` 的 dict）。
       使用 ``interview_type`` / ``difficulty`` / ``priority_topics`` 等。
     - ``resume`` / ``job``：Resume / Job（ORM 对象、dict 或简历正文字符串）。
+    - ``knowledge_context``：**外部知识上下文**（RAG 扩展点），可选。
+      接受 ``List[str]`` / ``List[KnowledgeChunk]`` / ``List[dict]`` / 单个 ``str``
+      ——具体见 :func:`normalize_knowledge_context`，形状由调用方决定，Agent 不挑剔。
+      **为空（``None`` / ``[]`` / ``()`` / ``""``）时走原模板，行为与引入本参数之前
+      完全一致**（Prompt 逐字节相同）。
+      **Agent 不主动调用任何 Retriever**——知识由调用方取好后传进来，
+      这样 Agent 既不依赖向量库，也能脱离检索单独测试。
     - ``spark``：可选，注入的 Spark 客户端（须提供 ``async chat_async(str) -> str``）。
       不传则取 ``main.spark_api``；单元测试一律注入 Mock，不调用真实 API。
+
+    **``knowledge_context`` 是关键字参数（keyword-only）**：如果把它插进
+    ``resume`` 之前的形参位置，任何按位置传参的既有调用方都会被静默错位
+    （``resume`` 被当成知识），因此刻意只允许按关键字传。
 
     返回
     ----
@@ -424,9 +553,9 @@ async def generate_question(
 
     # ---- 首次请求 ----
     try:
-        raw = await client.chat_async(
-            render_prompt(PROMPT_QUESTION, variables, group=PROMPT_GROUP)
-        )
+        # 知识为空 → 原模板（Prompt 与改动前逐字节相同）；非空 → 带参考知识的变体模板
+        _, prompt = render_question_prompt(variables, knowledge_context)
+        raw = await client.chat_async(prompt)
     except Exception as exc:  # noqa: BLE001 - 服务级故障，不重试
         return failure(f"调用 Spark 服务失败：{exc}")
 

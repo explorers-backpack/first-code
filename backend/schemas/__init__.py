@@ -11,6 +11,7 @@ from schemas.interview import (
     DifficultyLevel,
     EndSessionResponse,
     InterviewAnswerOut,
+    InterviewMode,
     InterviewPlanOut,
     InterviewPlanStage,
     InterviewQuestionOut,
@@ -44,4 +45,5 @@ __all__ = [
     "DifficultyLevel",
     "StageName",
     "PlanSource",
+    "InterviewMode",
 ]
