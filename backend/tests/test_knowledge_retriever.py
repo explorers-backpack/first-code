@@ -280,13 +280,43 @@ async def run() -> bool:
     # [5] 接线点唯一：只有 interview_core（Agent 仍不 import 本模块）
     # ------------------------------------------------------------
     print("\n[5] 接线点唯一（只有 interview_core 调检索；Agent 只接收知识）")
+    # **实现方**（实现本接口的模块）天然要 import 本模块——那是「实现」而不是「接线」，
+    # 因此按路径排除；其余模块则用**精确模块匹配**判定（不用
+    # ``endswith("knowledge_retriever")``，否则 ``services.knowledge_rag`` 这类
+    # 名字相近的模块会被误判）。
+    INTERFACE = "services.knowledge_retriever"
+    IMPLEMENTATIONS = {"services/vector_knowledge_retriever.py"}
+
+    def _imports_interface(mods: set) -> bool:
+        return any(m == INTERFACE or m.startswith(INTERFACE + ".") for m in mods)
+
     offenders = []
     for path in _production_sources():
-        mods = _imported_modules(path.read_text(encoding="utf-8"))
-        if any(name.endswith("knowledge_retriever") for name in mods):
-            offenders.append(path.relative_to(BACKEND_DIR).as_posix())
-    _check("全后端生产代码中**唯一**接线点是 interview_core",
+        rel = path.relative_to(BACKEND_DIR).as_posix()
+        if rel in IMPLEMENTATIONS:
+            continue
+        if _imports_interface(_imported_modules(path.read_text(encoding="utf-8"))):
+            offenders.append(rel)
+    _check("面试流程侧**唯一**接线点是 interview_core（实现方不计；精确匹配接口模块）",
            offenders == ["services/interview_core.py"], str(offenders))
+
+    impl_path = BACKEND_DIR / "services" / "vector_knowledge_retriever.py"
+    _check("真实检索器存在（实现本接口，正向依赖）", impl_path.exists())
+    impl_imports = _imported_modules(impl_path.read_text(encoding="utf-8"))
+    _check("  └ 它 import 本接口（实现方）", _imports_interface(impl_imports),
+           str(sorted(impl_imports)))
+    _check("  └ 但**不**反向 import 面试流程（interview_* / main）",
+           not any("interview" in name or name == "main" for name in impl_imports),
+           str(sorted(impl_imports)))
+
+    rag_path = BACKEND_DIR / "services" / "knowledge_rag.py"
+    _check("组装器 knowledge_rag 存在（唯一一处知道用哪个 Embedding / 向量后端）",
+           rag_path.exists())
+    rag_imports = _imported_modules(rag_path.read_text(encoding="utf-8"))
+    _check("  └ 它**不**直接 import 接口（只组装实现方），也不反向 import 面试流程",
+           not _imports_interface(rag_imports)
+           and not any("interview" in name or name == "main" for name in rag_imports),
+           str(sorted(rag_imports)))
 
     agent_src = pathlib.Path(interview_agent.__file__).read_text(encoding="utf-8")
     agent_imports = _imported_modules(agent_src)

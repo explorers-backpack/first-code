@@ -1,0 +1,1033 @@
+{
+  "name": "knowledge_context 组装优化（任务 72）",
+  "scope": "只改 context formatter；Retriever 与 InterviewAgent 输出结构不变",
+  "old_formatter": "normalize_knowledge_context",
+  "new_formatter": "format_knowledge_context",
+  "max_chars": 4000,
+  "overlap_min_chars": 16,
+  "benchmark": "backend\\scripts\\interview_eval_benchmark.json",
+  "corpus": "backend\\scripts\\interview_knowledge.json",
+  "arms": [
+    {
+      "id": "declared",
+      "label": "按基准声明阈值（s1/s2=0.25、s3=0.40）"
+    },
+    {
+      "id": "raw",
+      "label": "不设阈值（min_score=None，保留全部 top_k 召回）"
+    }
+  ],
+  "runs": [
+    {
+      "scenario_id": "s1-mysql-index-mid",
+      "label": "后端开发工程师 · MySQL 索引 · 中级 · 项目阶段",
+      "arm": "declared",
+      "arm_label": "按基准声明阈值（s1/s2=0.25、s3=0.40）",
+      "conditions": {
+        "query_topic": "MySQL 索引",
+        "top_k": 5,
+        "min_score": 0.25,
+        "min_score_declared": 0.25,
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "retriever_output": {
+        "type": "list",
+        "count": 2,
+        "sources": [
+          "handbook://mysql/index",
+          "handbook://mysql/index"
+        ],
+        "chunks": [
+          {
+            "source": "handbook://mysql/index",
+            "content_chars": 335,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          },
+          {
+            "source": "handbook://mysql/index",
+            "content_chars": 262,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          }
+        ]
+      },
+      "old": {
+        "formatter": "normalize_knowledge_context",
+        "line_count": 2,
+        "knowledge_block_chars": 652,
+        "knowledge_section_chars": 781,
+        "prompt_chars": 3207,
+        "source_suffix_chars": 54,
+        "lines": [
+          "InnoDB 使用 B+ 树作为索引结构。相比 B 树，B+ 树的非叶子节点只存键值不存数据，因此单页能容纳更多键、树高更低，一次查找通常只需要三到四次磁盘 IO；同时叶子节点用双向链表串联，天然支持范围扫描。\n\n聚簇索引的叶子节点存放整行数据，主键即聚簇索引。二级索引的叶子节点存放主键值，因此通过二级索引查非索引列时需要回表：先查二级索引拿到主键，再回聚簇索引取整行。如果查询需要的列都在索引里，就称为覆盖索引，可以避免回表。\n\n联合索引遵循最左前缀原则。范围查询之后的列无法继续走索引，例如在索引 (a, b, c) 上执行 where a = 1 and b > 2 and c = 3，c 用不到索引。因此联合索引的列顺序应当把等值条件放前面、范围条件放后面。（来源：handbook://mysql/index）",
+          ", c) 上执行 where a = 1 and b > 2 and c = 3，c 用不到索引。因此联合索引的列顺序应当把等值条件放前面、范围条件放后面。\n\n用 EXPLAIN 判断索引是否生效，重点看三个字段：type 表示访问类型，从优到劣依次是 const、eq_ref、ref、range、index、ALL；key 表示实际使用的索引；rows 表示预估扫描行数。另外 Extra 里出现 Using filesort 说明排序没走索引，出现 Using temporary 说明用了临时表，都是需要优化的信号。（来源：handbook://mysql/index）"
+        ]
+      },
+      "new": {
+        "formatter": "format_knowledge_context",
+        "line_count": 1,
+        "knowledge_block_chars": 546,
+        "knowledge_section_chars": 673,
+        "prompt_chars": 3099,
+        "source_suffix_chars": 27,
+        "lines": [
+          "InnoDB 使用 B+ 树作为索引结构。相比 B 树，B+ 树的非叶子节点只存键值不存数据，因此单页能容纳更多键、树高更低，一次查找通常只需要三到四次磁盘 IO；同时叶子节点用双向链表串联，天然支持范围扫描。\n\n聚簇索引的叶子节点存放整行数据，主键即聚簇索引。二级索引的叶子节点存放主键值，因此通过二级索引查非索引列时需要回表：先查二级索引拿到主键，再回聚簇索引取整行。如果查询需要的列都在索引里，就称为覆盖索引，可以避免回表。\n\n联合索引遵循最左前缀原则。范围查询之后的列无法继续走索引，例如在索引 (a, b, c) 上执行 where a = 1 and b > 2 and c = 3，c 用不到索引。因此联合索引的列顺序应当把等值条件放前面、范围条件放后面。\n\n用 EXPLAIN 判断索引是否生效，重点看三个字段：type 表示访问类型，从优到劣依次是 const、eq_ref、ref、range、index、ALL；key 表示实际使用的索引；rows 表示预估扫描行数。另外 Extra 里出现 Using filesort 说明排序没走索引，出现 Using temporary 说明用了临时表，都是需要优化的信号。（来源：handbook://mysql/index）"
+        ],
+        "truncated": false
+      },
+      "delta": {
+        "knowledge_block_chars": 106,
+        "knowledge_block_ratio": 16.26,
+        "knowledge_section_chars": 108,
+        "prompt_chars": 108,
+        "prompt_ratio": 3.37,
+        "line_count": 1
+      },
+      "duplicates": {
+        "same_source_overlaps": [
+          {
+            "left_index": 0,
+            "right_index": 1,
+            "source": "handbook://mysql/index",
+            "overlap_chars": 78
+          }
+        ],
+        "overlap_chars_total": 78,
+        "source_suffix_chars_saved": 27
+      },
+      "invariants": {
+        "retriever_returns_list": true,
+        "chunk_class": "KnowledgeChunk",
+        "chunk_field_names": [
+          "content",
+          "metadata",
+          "source"
+        ],
+        "chunk_field_names_expected": [
+          "content",
+          "metadata",
+          "source"
+        ],
+        "prompt_prefix_identical": true,
+        "prompt_suffix_identical": true,
+        "knowledge_section_changed": true,
+        "template_name": "question_knowledge",
+        "agent_keys": [
+          "difficulty",
+          "error",
+          "expected_points",
+          "ok",
+          "question",
+          "question_type",
+          "reason",
+          "topic"
+        ],
+        "agent_keys_expected": true,
+        "agent_prompt_equals_rendered": true,
+        "core_keys": [
+          "ok",
+          "question_no",
+          "question",
+          "question_type",
+          "topic",
+          "difficulty",
+          "expected_points",
+          "reason",
+          "stage",
+          "warnings",
+          "errors",
+          "error"
+        ],
+        "core_keys_expected": true,
+        "core_prompt_prefix_identical": true,
+        "core_prompt_suffix_identical": true,
+        "core_knowledge_section_equals_agent": true
+      }
+    },
+    {
+      "scenario_id": "s2-spring-boot-senior",
+      "label": "后端开发工程师（Java）· Spring Boot 自动配置 · 高级 · 技术阶段",
+      "arm": "declared",
+      "arm_label": "按基准声明阈值（s1/s2=0.25、s3=0.40）",
+      "conditions": {
+        "query_topic": "Spring Boot 自动配置",
+        "top_k": 5,
+        "min_score": 0.25,
+        "min_score_declared": 0.25,
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "retriever_output": {
+        "type": "list",
+        "count": 2,
+        "sources": [
+          "handbook://spring/auto-configuration",
+          "handbook://spring/auto-configuration"
+        ],
+        "chunks": [
+          {
+            "source": "handbook://spring/auto-configuration",
+            "content_chars": 442,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          },
+          {
+            "source": "handbook://spring/auto-configuration",
+            "content_chars": 463,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          }
+        ]
+      },
+      "old": {
+        "formatter": "normalize_knowledge_context",
+        "line_count": 2,
+        "knowledge_block_chars": 988,
+        "knowledge_section_chars": 1117,
+        "prompt_chars": 3574,
+        "source_suffix_chars": 82,
+        "lines": [
+          "Spring Boot 的自动配置建立在三个注解之上：@SpringBootConfiguration 声明这是一个配置类，@EnableAutoConfiguration 开启自动配置，@ComponentScan 扫描当前包及子包。\n\n@EnableAutoConfiguration 通过 @Import(AutoConfigurationImportSelector.class) 生效。AutoConfigurationImportSelector 会读取所有 jar 包中 META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports 文件（Spring Boot 2.7 之前是 spring.factories），得到一个候选配置类列表，再经过去重、排除（@EnableAutoConfiguration 的 exclude 属性）与条件过滤，最终决定哪些配置类生效。（来源：handbook://spring/auto-configuration）",
+          "，得到一个候选配置类列表，再经过去重、排除（@EnableAutoConfiguration 的 exclude 属性）与条件过滤，最终决定哪些配置类生效。\n\n条件过滤靠 @Conditional 系列注解完成。最常用的几个：@ConditionalOnClass 判断类路径上是否存在某个类，@ConditionalOnMissingBean 判断容器中是否已有该类型的 Bean，@ConditionalOnProperty 判断配置项取值，@ConditionalOnWebApplication 判断是否为 Web 环境。\n\n这解释了一个常见现象：为什么引入 spring-boot-starter-web 之后自动就有了内嵌 Tomcat 与 Jackson——因为对应自动配置类上的 @ConditionalOnClass 条件满足了。要排查某个自动配置为什么没生效，可以在启动参数里加上 --debug，启动日志会打印条件评估报告 ConditionEvaluationReport，逐条列出生效与未生效的原因。（来源：handbook://spring/auto-configuration）"
+        ]
+      },
+      "new": {
+        "formatter": "format_knowledge_context",
+        "line_count": 1,
+        "knowledge_block_chars": 868,
+        "knowledge_section_chars": 995,
+        "prompt_chars": 3452,
+        "source_suffix_chars": 41,
+        "lines": [
+          "Spring Boot 的自动配置建立在三个注解之上：@SpringBootConfiguration 声明这是一个配置类，@EnableAutoConfiguration 开启自动配置，@ComponentScan 扫描当前包及子包。\n\n@EnableAutoConfiguration 通过 @Import(AutoConfigurationImportSelector.class) 生效。AutoConfigurationImportSelector 会读取所有 jar 包中 META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports 文件（Spring Boot 2.7 之前是 spring.factories），得到一个候选配置类列表，再经过去重、排除（@EnableAutoConfiguration 的 exclude 属性）与条件过滤，最终决定哪些配置类生效。\n\n条件过滤靠 @Conditional 系列注解完成。最常用的几个：@ConditionalOnClass 判断类路径上是否存在某个类，@ConditionalOnMissingBean 判断容器中是否已有该类型的 Bean，@ConditionalOnProperty 判断配置项取值，@ConditionalOnWebApplication 判断是否为 Web 环境。\n\n这解释了一个常见现象：为什么引入 spring-boot-starter-web 之后自动就有了内嵌 Tomcat 与 Jackson——因为对应自动配置类上的 @ConditionalOnClass 条件满足了。要排查某个自动配置为什么没生效，可以在启动参数里加上 --debug，启动日志会打印条件评估报告 ConditionEvaluationReport，逐条列出生效与未生效的原因。（来源：handbook://spring/auto-configuration）"
+        ],
+        "truncated": false
+      },
+      "delta": {
+        "knowledge_block_chars": 120,
+        "knowledge_block_ratio": 12.15,
+        "knowledge_section_chars": 122,
+        "prompt_chars": 122,
+        "prompt_ratio": 3.41,
+        "line_count": 1
+      },
+      "duplicates": {
+        "same_source_overlaps": [
+          {
+            "left_index": 0,
+            "right_index": 1,
+            "source": "handbook://spring/auto-configuration",
+            "overlap_chars": 78
+          }
+        ],
+        "overlap_chars_total": 78,
+        "source_suffix_chars_saved": 41
+      },
+      "invariants": {
+        "retriever_returns_list": true,
+        "chunk_class": "KnowledgeChunk",
+        "chunk_field_names": [
+          "content",
+          "metadata",
+          "source"
+        ],
+        "chunk_field_names_expected": [
+          "content",
+          "metadata",
+          "source"
+        ],
+        "prompt_prefix_identical": true,
+        "prompt_suffix_identical": true,
+        "knowledge_section_changed": true,
+        "template_name": "question_knowledge",
+        "agent_keys": [
+          "difficulty",
+          "error",
+          "expected_points",
+          "ok",
+          "question",
+          "question_type",
+          "reason",
+          "topic"
+        ],
+        "agent_keys_expected": true,
+        "agent_prompt_equals_rendered": true,
+        "core_keys": [
+          "ok",
+          "question_no",
+          "question",
+          "question_type",
+          "topic",
+          "difficulty",
+          "expected_points",
+          "reason",
+          "stage",
+          "warnings",
+          "errors",
+          "error"
+        ],
+        "core_keys_expected": true,
+        "core_prompt_prefix_identical": true,
+        "core_prompt_suffix_identical": true,
+        "core_knowledge_section_equals_agent": true
+      }
+    },
+    {
+      "scenario_id": "s3-cache-consistency-senior",
+      "label": "后端架构师 · 分布式缓存一致性 · 高级 · 场景阶段",
+      "arm": "declared",
+      "arm_label": "按基准声明阈值（s1/s2=0.25、s3=0.40）",
+      "conditions": {
+        "query_topic": "分布式缓存一致性",
+        "top_k": 5,
+        "min_score": 0.4,
+        "min_score_declared": 0.4,
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "retriever_output": {
+        "type": "list",
+        "count": 1,
+        "sources": [
+          "handbook://architecture/cache-consistency"
+        ],
+        "chunks": [
+          {
+            "source": "handbook://architecture/cache-consistency",
+            "content_chars": 449,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          }
+        ]
+      },
+      "old": {
+        "formatter": "normalize_knowledge_context",
+        "line_count": 1,
+        "knowledge_block_chars": 495,
+        "knowledge_section_chars": 622,
+        "prompt_chars": 3071,
+        "source_suffix_chars": 46,
+        "lines": [
+          "缓存与数据库的一致性没有银弹，只能按业务容忍度选方案。\n\n最常用的是旁路缓存（Cache Aside）：读时先查缓存，未命中查库并回填；写时先更新数据库，再删除缓存。为什么不更新缓存而是删除？因为并发写场景下两次更新缓存的顺序无法保证，会留下旧值；删除则让下一次读自然回填最新值。\n\n先删缓存还是先更新数据库？先删缓存会在「删缓存、读回填旧值、更新数据库」的间隙里留下脏数据；先更新数据库再删缓存只在「读缓存未命中、查库旧值、更新库并删缓存、写回旧值」这种极端时序下出问题，概率低得多，因此工业界普遍选择先更新库再删缓存。要彻底规避，可以用延迟双删或订阅 binlog 异步删除。\n\n缓存穿透、击穿、雪崩要分开治理。穿透是查不存在的数据，方案是空值缓存或布隆过滤器；击穿是单个热点 key 失效，方案是互斥锁重建或逻辑过期；雪崩是大量 key 同时失效，方案是过期时间加随机扰动，并做好多级缓存与降级预案。\n\n强一致场景（例如账户余额）不建议用旁路缓存，应直接读库，或使用带一致性协议的分布式缓存。（来源：handbook://architecture/cache-consistency）"
+        ]
+      },
+      "new": {
+        "formatter": "format_knowledge_context",
+        "line_count": 1,
+        "knowledge_block_chars": 495,
+        "knowledge_section_chars": 622,
+        "prompt_chars": 3071,
+        "source_suffix_chars": 46,
+        "lines": [
+          "缓存与数据库的一致性没有银弹，只能按业务容忍度选方案。\n\n最常用的是旁路缓存（Cache Aside）：读时先查缓存，未命中查库并回填；写时先更新数据库，再删除缓存。为什么不更新缓存而是删除？因为并发写场景下两次更新缓存的顺序无法保证，会留下旧值；删除则让下一次读自然回填最新值。\n\n先删缓存还是先更新数据库？先删缓存会在「删缓存、读回填旧值、更新数据库」的间隙里留下脏数据；先更新数据库再删缓存只在「读缓存未命中、查库旧值、更新库并删缓存、写回旧值」这种极端时序下出问题，概率低得多，因此工业界普遍选择先更新库再删缓存。要彻底规避，可以用延迟双删或订阅 binlog 异步删除。\n\n缓存穿透、击穿、雪崩要分开治理。穿透是查不存在的数据，方案是空值缓存或布隆过滤器；击穿是单个热点 key 失效，方案是互斥锁重建或逻辑过期；雪崩是大量 key 同时失效，方案是过期时间加随机扰动，并做好多级缓存与降级预案。\n\n强一致场景（例如账户余额）不建议用旁路缓存，应直接读库，或使用带一致性协议的分布式缓存。（来源：handbook://architecture/cache-consistency）"
+        ],
+        "truncated": false
+      },
+      "delta": {
+        "knowledge_block_chars": 0,
+        "knowledge_block_ratio": 0.0,
+        "knowledge_section_chars": 0,
+        "prompt_chars": 0,
+        "prompt_ratio": 0.0,
+        "line_count": 0
+      },
+      "duplicates": {
+        "same_source_overlaps": [],
+        "overlap_chars_total": 0,
+        "source_suffix_chars_saved": 0
+      },
+      "invariants": {
+        "retriever_returns_list": true,
+        "chunk_class": "KnowledgeChunk",
+        "chunk_field_names": [
+          "content",
+          "metadata",
+          "source"
+        ],
+        "chunk_field_names_expected": [
+          "content",
+          "metadata",
+          "source"
+        ],
+        "prompt_prefix_identical": true,
+        "prompt_suffix_identical": true,
+        "knowledge_section_changed": false,
+        "template_name": "question_knowledge",
+        "agent_keys": [
+          "difficulty",
+          "error",
+          "expected_points",
+          "ok",
+          "question",
+          "question_type",
+          "reason",
+          "topic"
+        ],
+        "agent_keys_expected": true,
+        "agent_prompt_equals_rendered": true,
+        "core_keys": [
+          "ok",
+          "question_no",
+          "question",
+          "question_type",
+          "topic",
+          "difficulty",
+          "expected_points",
+          "reason",
+          "stage",
+          "warnings",
+          "errors",
+          "error"
+        ],
+        "core_keys_expected": true,
+        "core_prompt_prefix_identical": true,
+        "core_prompt_suffix_identical": true,
+        "core_knowledge_section_equals_agent": true
+      }
+    },
+    {
+      "scenario_id": "s1-mysql-index-mid",
+      "label": "后端开发工程师 · MySQL 索引 · 中级 · 项目阶段",
+      "arm": "raw",
+      "arm_label": "不设阈值（min_score=None，保留全部 top_k 召回）",
+      "conditions": {
+        "query_topic": "MySQL 索引",
+        "top_k": 5,
+        "min_score": null,
+        "min_score_declared": 0.25,
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "retriever_output": {
+        "type": "list",
+        "count": 5,
+        "sources": [
+          "handbook://mysql/index",
+          "handbook://mysql/index",
+          "handbook://spring/auto-configuration",
+          "resume://project/log-platform",
+          "handbook://redis/persistence-and-ha"
+        ],
+        "chunks": [
+          {
+            "source": "handbook://mysql/index",
+            "content_chars": 335,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          },
+          {
+            "source": "handbook://mysql/index",
+            "content_chars": 262,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          },
+          {
+            "source": "handbook://spring/auto-configuration",
+            "content_chars": 463,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          },
+          {
+            "source": "resume://project/log-platform",
+            "content_chars": 446,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          },
+          {
+            "source": "handbook://redis/persistence-and-ha",
+            "content_chars": 193,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          }
+        ]
+      },
+      "old": {
+        "formatter": "normalize_knowledge_context",
+        "line_count": 5,
+        "knowledge_block_chars": 1872,
+        "knowledge_section_chars": 2007,
+        "prompt_chars": 4433,
+        "source_suffix_chars": 169,
+        "lines": [
+          "InnoDB 使用 B+ 树作为索引结构。相比 B 树，B+ 树的非叶子节点只存键值不存数据，因此单页能容纳更多键、树高更低，一次查找通常只需要三到四次磁盘 IO；同时叶子节点用双向链表串联，天然支持范围扫描。\n\n聚簇索引的叶子节点存放整行数据，主键即聚簇索引。二级索引的叶子节点存放主键值，因此通过二级索引查非索引列时需要回表：先查二级索引拿到主键，再回聚簇索引取整行。如果查询需要的列都在索引里，就称为覆盖索引，可以避免回表。\n\n联合索引遵循最左前缀原则。范围查询之后的列无法继续走索引，例如在索引 (a, b, c) 上执行 where a = 1 and b > 2 and c = 3，c 用不到索引。因此联合索引的列顺序应当把等值条件放前面、范围条件放后面。（来源：handbook://mysql/index）",
+          ", c) 上执行 where a = 1 and b > 2 and c = 3，c 用不到索引。因此联合索引的列顺序应当把等值条件放前面、范围条件放后面。\n\n用 EXPLAIN 判断索引是否生效，重点看三个字段：type 表示访问类型，从优到劣依次是 const、eq_ref、ref、range、index、ALL；key 表示实际使用的索引；rows 表示预估扫描行数。另外 Extra 里出现 Using filesort 说明排序没走索引，出现 Using temporary 说明用了临时表，都是需要优化的信号。（来源：handbook://mysql/index）",
+          "，得到一个候选配置类列表，再经过去重、排除（@EnableAutoConfiguration 的 exclude 属性）与条件过滤，最终决定哪些配置类生效。\n\n条件过滤靠 @Conditional 系列注解完成。最常用的几个：@ConditionalOnClass 判断类路径上是否存在某个类，@ConditionalOnMissingBean 判断容器中是否已有该类型的 Bean，@ConditionalOnProperty 判断配置项取值，@ConditionalOnWebApplication 判断是否为 Web 环境。\n\n这解释了一个常见现象：为什么引入 spring-boot-starter-web 之后自动就有了内嵌 Tomcat 与 Jackson——因为对应自动配置类上的 @ConditionalOnClass 条件满足了。要排查某个自动配置为什么没生效，可以在启动参数里加上 --debug，启动日志会打印条件评估报告 ConditionEvaluationReport，逐条列出生效与未生效的原因。（来源：handbook://spring/auto-configuration）",
+          "背景：公司早期用 ELK 做日志检索，随着服务数量增长，日志量涨到每天约两 TB，Elasticsearch 集群频繁出现写入拒绝，查询一个大范围时间窗口经常超时，运维成本也很高。\n\n重构思路是先降量、再换引擎。降量方面：统一日志格式，把非结构化文本改成带固定字段的 JSON；按级别采样，DEBUG 与 INFO 级别按百分之一采样，WARN 与 ERROR 全量保留；热数据保留七天，超过七天的自动归档到对象存储，需要时再按需恢复。\n\n引擎方面迁移到 ClickHouse，利用它的列式存储与高压缩比。实测同样的数据量，磁盘占用降到原来的约四分之一，聚合查询的 P95 从八秒降到四百毫秒以内。\n\n配套做了两件事：一是给日志加上 traceId，把一次请求跨多个服务的日志串起来，排查问题时可以一键下钻；二是做了日志规范检查，在 CI 阶段拦截不符合格式要求的打点，避免格式再次劣化。\n\n结果：集群节点数从二十四台降到八台，年度成本下降约六成，同时平均故障定位时间从三十分钟缩短到八分钟。（来源：resume://project/log-platform）",
+          "上增加了自动故障转移：多个哨兵通过类 Raft 协议选出领导者，由它把一个从节点提升为新主，并通知客户端。哨兵集群至少需要三个节点，且应部署在奇数台机器上。\n\nRedis Cluster 解决的是容量与写扩展：把数据按 16384 个哈希槽分片，每个节点负责一部分槽，客户端根据槽路由。集群模式下多 key 操作要求所有 key 在同一个槽，可以用 hash tag 强制落到同一节点。（来源：handbook://redis/persistence-and-ha）"
+        ]
+      },
+      "new": {
+        "formatter": "format_knowledge_context",
+        "line_count": 4,
+        "knowledge_block_chars": 1766,
+        "knowledge_section_chars": 1899,
+        "prompt_chars": 4325,
+        "source_suffix_chars": 142,
+        "lines": [
+          "InnoDB 使用 B+ 树作为索引结构。相比 B 树，B+ 树的非叶子节点只存键值不存数据，因此单页能容纳更多键、树高更低，一次查找通常只需要三到四次磁盘 IO；同时叶子节点用双向链表串联，天然支持范围扫描。\n\n聚簇索引的叶子节点存放整行数据，主键即聚簇索引。二级索引的叶子节点存放主键值，因此通过二级索引查非索引列时需要回表：先查二级索引拿到主键，再回聚簇索引取整行。如果查询需要的列都在索引里，就称为覆盖索引，可以避免回表。\n\n联合索引遵循最左前缀原则。范围查询之后的列无法继续走索引，例如在索引 (a, b, c) 上执行 where a = 1 and b > 2 and c = 3，c 用不到索引。因此联合索引的列顺序应当把等值条件放前面、范围条件放后面。\n\n用 EXPLAIN 判断索引是否生效，重点看三个字段：type 表示访问类型，从优到劣依次是 const、eq_ref、ref、range、index、ALL；key 表示实际使用的索引；rows 表示预估扫描行数。另外 Extra 里出现 Using filesort 说明排序没走索引，出现 Using temporary 说明用了临时表，都是需要优化的信号。（来源：handbook://mysql/index）",
+          "，得到一个候选配置类列表，再经过去重、排除（@EnableAutoConfiguration 的 exclude 属性）与条件过滤，最终决定哪些配置类生效。\n\n条件过滤靠 @Conditional 系列注解完成。最常用的几个：@ConditionalOnClass 判断类路径上是否存在某个类，@ConditionalOnMissingBean 判断容器中是否已有该类型的 Bean，@ConditionalOnProperty 判断配置项取值，@ConditionalOnWebApplication 判断是否为 Web 环境。\n\n这解释了一个常见现象：为什么引入 spring-boot-starter-web 之后自动就有了内嵌 Tomcat 与 Jackson——因为对应自动配置类上的 @ConditionalOnClass 条件满足了。要排查某个自动配置为什么没生效，可以在启动参数里加上 --debug，启动日志会打印条件评估报告 ConditionEvaluationReport，逐条列出生效与未生效的原因。（来源：handbook://spring/auto-configuration）",
+          "背景：公司早期用 ELK 做日志检索，随着服务数量增长，日志量涨到每天约两 TB，Elasticsearch 集群频繁出现写入拒绝，查询一个大范围时间窗口经常超时，运维成本也很高。\n\n重构思路是先降量、再换引擎。降量方面：统一日志格式，把非结构化文本改成带固定字段的 JSON；按级别采样，DEBUG 与 INFO 级别按百分之一采样，WARN 与 ERROR 全量保留；热数据保留七天，超过七天的自动归档到对象存储，需要时再按需恢复。\n\n引擎方面迁移到 ClickHouse，利用它的列式存储与高压缩比。实测同样的数据量，磁盘占用降到原来的约四分之一，聚合查询的 P95 从八秒降到四百毫秒以内。\n\n配套做了两件事：一是给日志加上 traceId，把一次请求跨多个服务的日志串起来，排查问题时可以一键下钻；二是做了日志规范检查，在 CI 阶段拦截不符合格式要求的打点，避免格式再次劣化。\n\n结果：集群节点数从二十四台降到八台，年度成本下降约六成，同时平均故障定位时间从三十分钟缩短到八分钟。（来源：resume://project/log-platform）",
+          "上增加了自动故障转移：多个哨兵通过类 Raft 协议选出领导者，由它把一个从节点提升为新主，并通知客户端。哨兵集群至少需要三个节点，且应部署在奇数台机器上。\n\nRedis Cluster 解决的是容量与写扩展：把数据按 16384 个哈希槽分片，每个节点负责一部分槽，客户端根据槽路由。集群模式下多 key 操作要求所有 key 在同一个槽，可以用 hash tag 强制落到同一节点。（来源：handbook://redis/persistence-and-ha）"
+        ],
+        "truncated": false
+      },
+      "delta": {
+        "knowledge_block_chars": 106,
+        "knowledge_block_ratio": 5.66,
+        "knowledge_section_chars": 108,
+        "prompt_chars": 108,
+        "prompt_ratio": 2.44,
+        "line_count": 1
+      },
+      "duplicates": {
+        "same_source_overlaps": [
+          {
+            "left_index": 0,
+            "right_index": 1,
+            "source": "handbook://mysql/index",
+            "overlap_chars": 78
+          }
+        ],
+        "overlap_chars_total": 78,
+        "source_suffix_chars_saved": 27
+      },
+      "invariants": {
+        "retriever_returns_list": true,
+        "chunk_class": "KnowledgeChunk",
+        "chunk_field_names": [
+          "content",
+          "metadata",
+          "source"
+        ],
+        "chunk_field_names_expected": [
+          "content",
+          "metadata",
+          "source"
+        ],
+        "prompt_prefix_identical": true,
+        "prompt_suffix_identical": true,
+        "knowledge_section_changed": true,
+        "template_name": "question_knowledge",
+        "agent_keys": [
+          "difficulty",
+          "error",
+          "expected_points",
+          "ok",
+          "question",
+          "question_type",
+          "reason",
+          "topic"
+        ],
+        "agent_keys_expected": true,
+        "agent_prompt_equals_rendered": true,
+        "core_keys": [
+          "ok",
+          "question_no",
+          "question",
+          "question_type",
+          "topic",
+          "difficulty",
+          "expected_points",
+          "reason",
+          "stage",
+          "warnings",
+          "errors",
+          "error"
+        ],
+        "core_keys_expected": true,
+        "core_prompt_prefix_identical": true,
+        "core_prompt_suffix_identical": true,
+        "core_knowledge_section_equals_agent": true
+      }
+    },
+    {
+      "scenario_id": "s2-spring-boot-senior",
+      "label": "后端开发工程师（Java）· Spring Boot 自动配置 · 高级 · 技术阶段",
+      "arm": "raw",
+      "arm_label": "不设阈值（min_score=None，保留全部 top_k 召回）",
+      "conditions": {
+        "query_topic": "Spring Boot 自动配置",
+        "top_k": 5,
+        "min_score": null,
+        "min_score_declared": 0.25,
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "retriever_output": {
+        "type": "list",
+        "count": 5,
+        "sources": [
+          "handbook://spring/auto-configuration",
+          "handbook://spring/auto-configuration",
+          "company://career-ai/about",
+          "handbook://network/http-and-https",
+          "handbook://spring/transaction"
+        ],
+        "chunks": [
+          {
+            "source": "handbook://spring/auto-configuration",
+            "content_chars": 442,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          },
+          {
+            "source": "handbook://spring/auto-configuration",
+            "content_chars": 463,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          },
+          {
+            "source": "company://career-ai/about",
+            "content_chars": 399,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          },
+          {
+            "source": "handbook://network/http-and-https",
+            "content_chars": 354,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          },
+          {
+            "source": "handbook://spring/transaction",
+            "content_chars": 187,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          }
+        ]
+      },
+      "old": {
+        "formatter": "normalize_knowledge_context",
+        "line_count": 5,
+        "knowledge_block_chars": 2033,
+        "knowledge_section_chars": 2168,
+        "prompt_chars": 4625,
+        "source_suffix_chars": 184,
+        "lines": [
+          "Spring Boot 的自动配置建立在三个注解之上：@SpringBootConfiguration 声明这是一个配置类，@EnableAutoConfiguration 开启自动配置，@ComponentScan 扫描当前包及子包。\n\n@EnableAutoConfiguration 通过 @Import(AutoConfigurationImportSelector.class) 生效。AutoConfigurationImportSelector 会读取所有 jar 包中 META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports 文件（Spring Boot 2.7 之前是 spring.factories），得到一个候选配置类列表，再经过去重、排除（@EnableAutoConfiguration 的 exclude 属性）与条件过滤，最终决定哪些配置类生效。（来源：handbook://spring/auto-configuration）",
+          "，得到一个候选配置类列表，再经过去重、排除（@EnableAutoConfiguration 的 exclude 属性）与条件过滤，最终决定哪些配置类生效。\n\n条件过滤靠 @Conditional 系列注解完成。最常用的几个：@ConditionalOnClass 判断类路径上是否存在某个类，@ConditionalOnMissingBean 判断容器中是否已有该类型的 Bean，@ConditionalOnProperty 判断配置项取值，@ConditionalOnWebApplication 判断是否为 Web 环境。\n\n这解释了一个常见现象：为什么引入 spring-boot-starter-web 之后自动就有了内嵌 Tomcat 与 Jackson——因为对应自动配置类上的 @ConditionalOnClass 条件满足了。要排查某个自动配置为什么没生效，可以在启动参数里加上 --debug，启动日志会打印条件评估报告 ConditionEvaluationReport，逐条列出生效与未生效的原因。（来源：handbook://spring/auto-configuration）",
+          "我们是一家做在线教育与职业发展服务的公司，核心产品是面向求职者的智能求职助手，以及面向企业的招聘协同平台。\n\n业务线主要有三条：C 端求职工具（简历诊断、岗位匹配、模拟面试）、B 端招聘 SaaS（职位管理、候选人跟进、面试协同）、以及数据服务（行业薪酬与岗位画像）。三条业务线共用一套用户与权限体系，数据层按租户隔离。\n\n技术栈方面，后端以 Java 为主（Spring Boot、MyBatis），少量 Python 服务负责算法与数据加工；存储使用 MySQL 做业务库、Redis 做缓存与分布式锁、Elasticsearch 做检索；消息队列使用 Kafka；部署在 Kubernetes 上，通过 GitLab CI 做持续集成，发布采用滚动更新加灰度。\n\n研发组织按业务线划分成若干小组，每组配置一名技术负责人、若干后端与前端工程师、一名测试开发。跨组的技术方案由架构评审会统一把关。（来源：company://career-ai/about）",
+          "ne-Match，命中返回 304 且不带主体。ETag 比 Last-Modified 更精确，因为后者只能精确到秒，且文件内容未变时修改时间也可能变化。\n\nHTTPS 在 HTTP 与 TCP 之间加了 TLS 层，解决窃听、篡改与冒充。握手过程大致是：客户端发 ClientHello，带上支持的密码套件与随机数；服务端回 ServerHello，选定套件、返回证书与随机数；客户端验证证书链有效性（是否由受信 CA 签发、域名是否匹配、是否过期），然后生成预主密钥并用服务端公钥加密发送；双方用三个随机数推导出会话密钥，之后用对称加密通信。非对称加密只用于密钥交换，业务数据用对称加密，这是性能与安全的折中。\n\nTLS 1.3 把握手压缩到一次往返，并废除了 RSA 密钥交换，只保留前向安全的方案。（来源：handbook://network/http-and-https）",
+          "一是同类内部方法直接调用不走代理，@Transactional 会失效；二是事务方法里做远程调用或发消息，会长时间占用数据库连接，应当把外部调用挪到事务外。\n\n隔离级别方面，Spring 默认沿用数据库的默认级别，MySQL 的 InnoDB 默认是 REPEATABLE READ。注意 REQUIRES_NEW 与 NESTED 在自调用场景下同样会因为绕过代理而失效。（来源：handbook://spring/transaction）"
+        ]
+      },
+      "new": {
+        "formatter": "format_knowledge_context",
+        "line_count": 4,
+        "knowledge_block_chars": 1913,
+        "knowledge_section_chars": 2046,
+        "prompt_chars": 4503,
+        "source_suffix_chars": 143,
+        "lines": [
+          "Spring Boot 的自动配置建立在三个注解之上：@SpringBootConfiguration 声明这是一个配置类，@EnableAutoConfiguration 开启自动配置，@ComponentScan 扫描当前包及子包。\n\n@EnableAutoConfiguration 通过 @Import(AutoConfigurationImportSelector.class) 生效。AutoConfigurationImportSelector 会读取所有 jar 包中 META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports 文件（Spring Boot 2.7 之前是 spring.factories），得到一个候选配置类列表，再经过去重、排除（@EnableAutoConfiguration 的 exclude 属性）与条件过滤，最终决定哪些配置类生效。\n\n条件过滤靠 @Conditional 系列注解完成。最常用的几个：@ConditionalOnClass 判断类路径上是否存在某个类，@ConditionalOnMissingBean 判断容器中是否已有该类型的 Bean，@ConditionalOnProperty 判断配置项取值，@ConditionalOnWebApplication 判断是否为 Web 环境。\n\n这解释了一个常见现象：为什么引入 spring-boot-starter-web 之后自动就有了内嵌 Tomcat 与 Jackson——因为对应自动配置类上的 @ConditionalOnClass 条件满足了。要排查某个自动配置为什么没生效，可以在启动参数里加上 --debug，启动日志会打印条件评估报告 ConditionEvaluationReport，逐条列出生效与未生效的原因。（来源：handbook://spring/auto-configuration）",
+          "我们是一家做在线教育与职业发展服务的公司，核心产品是面向求职者的智能求职助手，以及面向企业的招聘协同平台。\n\n业务线主要有三条：C 端求职工具（简历诊断、岗位匹配、模拟面试）、B 端招聘 SaaS（职位管理、候选人跟进、面试协同）、以及数据服务（行业薪酬与岗位画像）。三条业务线共用一套用户与权限体系，数据层按租户隔离。\n\n技术栈方面，后端以 Java 为主（Spring Boot、MyBatis），少量 Python 服务负责算法与数据加工；存储使用 MySQL 做业务库、Redis 做缓存与分布式锁、Elasticsearch 做检索；消息队列使用 Kafka；部署在 Kubernetes 上，通过 GitLab CI 做持续集成，发布采用滚动更新加灰度。\n\n研发组织按业务线划分成若干小组，每组配置一名技术负责人、若干后端与前端工程师、一名测试开发。跨组的技术方案由架构评审会统一把关。（来源：company://career-ai/about）",
+          "ne-Match，命中返回 304 且不带主体。ETag 比 Last-Modified 更精确，因为后者只能精确到秒，且文件内容未变时修改时间也可能变化。\n\nHTTPS 在 HTTP 与 TCP 之间加了 TLS 层，解决窃听、篡改与冒充。握手过程大致是：客户端发 ClientHello，带上支持的密码套件与随机数；服务端回 ServerHello，选定套件、返回证书与随机数；客户端验证证书链有效性（是否由受信 CA 签发、域名是否匹配、是否过期），然后生成预主密钥并用服务端公钥加密发送；双方用三个随机数推导出会话密钥，之后用对称加密通信。非对称加密只用于密钥交换，业务数据用对称加密，这是性能与安全的折中。\n\nTLS 1.3 把握手压缩到一次往返，并废除了 RSA 密钥交换，只保留前向安全的方案。（来源：handbook://network/http-and-https）",
+          "一是同类内部方法直接调用不走代理，@Transactional 会失效；二是事务方法里做远程调用或发消息，会长时间占用数据库连接，应当把外部调用挪到事务外。\n\n隔离级别方面，Spring 默认沿用数据库的默认级别，MySQL 的 InnoDB 默认是 REPEATABLE READ。注意 REQUIRES_NEW 与 NESTED 在自调用场景下同样会因为绕过代理而失效。（来源：handbook://spring/transaction）"
+        ],
+        "truncated": false
+      },
+      "delta": {
+        "knowledge_block_chars": 120,
+        "knowledge_block_ratio": 5.9,
+        "knowledge_section_chars": 122,
+        "prompt_chars": 122,
+        "prompt_ratio": 2.64,
+        "line_count": 1
+      },
+      "duplicates": {
+        "same_source_overlaps": [
+          {
+            "left_index": 0,
+            "right_index": 1,
+            "source": "handbook://spring/auto-configuration",
+            "overlap_chars": 78
+          }
+        ],
+        "overlap_chars_total": 78,
+        "source_suffix_chars_saved": 41
+      },
+      "invariants": {
+        "retriever_returns_list": true,
+        "chunk_class": "KnowledgeChunk",
+        "chunk_field_names": [
+          "content",
+          "metadata",
+          "source"
+        ],
+        "chunk_field_names_expected": [
+          "content",
+          "metadata",
+          "source"
+        ],
+        "prompt_prefix_identical": true,
+        "prompt_suffix_identical": true,
+        "knowledge_section_changed": true,
+        "template_name": "question_knowledge",
+        "agent_keys": [
+          "difficulty",
+          "error",
+          "expected_points",
+          "ok",
+          "question",
+          "question_type",
+          "reason",
+          "topic"
+        ],
+        "agent_keys_expected": true,
+        "agent_prompt_equals_rendered": true,
+        "core_keys": [
+          "ok",
+          "question_no",
+          "question",
+          "question_type",
+          "topic",
+          "difficulty",
+          "expected_points",
+          "reason",
+          "stage",
+          "warnings",
+          "errors",
+          "error"
+        ],
+        "core_keys_expected": true,
+        "core_prompt_prefix_identical": true,
+        "core_prompt_suffix_identical": true,
+        "core_knowledge_section_equals_agent": true
+      }
+    },
+    {
+      "scenario_id": "s3-cache-consistency-senior",
+      "label": "后端架构师 · 分布式缓存一致性 · 高级 · 场景阶段",
+      "arm": "raw",
+      "arm_label": "不设阈值（min_score=None，保留全部 top_k 召回）",
+      "conditions": {
+        "query_topic": "分布式缓存一致性",
+        "top_k": 5,
+        "min_score": null,
+        "min_score_declared": 0.4,
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "retriever_output": {
+        "type": "list",
+        "count": 5,
+        "sources": [
+          "handbook://architecture/cache-consistency",
+          "resume://project/order-middle-cache",
+          "handbook://redis/data-structures",
+          "resume://project/payment-gateway",
+          "resume://project/order-middle-cache"
+        ],
+        "chunks": [
+          {
+            "source": "handbook://architecture/cache-consistency",
+            "content_chars": 449,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          },
+          {
+            "source": "resume://project/order-middle-cache",
+            "content_chars": 439,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          },
+          {
+            "source": "handbook://redis/data-structures",
+            "content_chars": 454,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          },
+          {
+            "source": "resume://project/payment-gateway",
+            "content_chars": 460,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          },
+          {
+            "source": "resume://project/order-middle-cache",
+            "content_chars": 162,
+            "metadata_keys": [
+              "category",
+              "chunk_id",
+              "chunk_index",
+              "document_id",
+              "embedding_model",
+              "score"
+            ]
+          }
+        ]
+      },
+      "old": {
+        "formatter": "normalize_knowledge_context",
+        "line_count": 5,
+        "knowledge_block_chars": 2168,
+        "knowledge_section_chars": 2303,
+        "prompt_chars": 4752,
+        "source_suffix_chars": 200,
+        "lines": [
+          "缓存与数据库的一致性没有银弹，只能按业务容忍度选方案。\n\n最常用的是旁路缓存（Cache Aside）：读时先查缓存，未命中查库并回填；写时先更新数据库，再删除缓存。为什么不更新缓存而是删除？因为并发写场景下两次更新缓存的顺序无法保证，会留下旧值；删除则让下一次读自然回填最新值。\n\n先删缓存还是先更新数据库？先删缓存会在「删缓存、读回填旧值、更新数据库」的间隙里留下脏数据；先更新数据库再删缓存只在「读缓存未命中、查库旧值、更新库并删缓存、写回旧值」这种极端时序下出问题，概率低得多，因此工业界普遍选择先更新库再删缓存。要彻底规避，可以用延迟双删或订阅 binlog 异步删除。\n\n缓存穿透、击穿、雪崩要分开治理。穿透是查不存在的数据，方案是空值缓存或布隆过滤器；击穿是单个热点 key 失效，方案是互斥锁重建或逻辑过期；雪崩是大量 key 同时失效，方案是过期时间加随机扰动，并做好多级缓存与降级预案。\n\n强一致场景（例如账户余额）不建议用旁路缓存，应直接读库，或使用带一致性协议的分布式缓存。（来源：handbook://architecture/cache-consistency）",
+          "背景：订单中台在双十一前出现过缓存击穿导致数据库被打挂的事故，核心下单接口 P99 冲到三秒以上并触发熔断，持续约十分钟。\n\n排查发现三个问题叠加：热点商品的缓存 key 在同一秒集中失效；不存在的商品 id 直接穿透到数据库；缓存过期时间统一设置为三十分钟，没有随机扰动。\n\n改造做了四件事。第一，对热点商品改成逻辑过期：value 里带过期时间戳，命中后先返回旧值，再用异步线程重建缓存，避免大量请求同时回源。第二，对空结果做短 TTL 的空值缓存，把不存在的商品 id 缓存三十秒，同时在接入层加布隆过滤器，把明显不存在的请求直接拦掉。第三，给缓存过期时间加随机扰动，在基础 TTL 上叠加零到三百秒的随机值。第四，把本地缓存与 Redis 组成两级缓存，本地缓存扛单机热点，Redis 保证集群一致；更新数据库后主动删除缓存而不是更新缓存。\n\n结果：数据库 QPS 从峰值八万降到一点二万，P99 从四百八十毫秒降到九十毫秒，缓存命中率从百分之七十六提升到百分之九十六。（来源：resume://project/order-middle-cache）",
+          "Redis 有五种基础数据结构。String 最常用，适合缓存对象序列化结果、计数器、分布式锁；Hash 适合存对象的部分字段更新，比整体序列化更省带宽；List 是有序可重复的链表，适合消息队列与最新列表；Set 无序去重，适合标签、共同关注；ZSet 带分数排序，适合排行榜与延迟队列。\n\n另有三种高级结构。Bitmap 用位存储，适合签到、活跃统计这类布尔型大规模场景，一亿用户一天的签到只占约 12 MB。HyperLogLog 用极小的固定内存做基数估算，误差约 0.81%，适合 UV 统计。GEO 基于 ZSet 实现地理位置检索。\n\n使用上的几个要点。第一，Redis 处理命令是单线程的，所以要避免大 key 与大 value，一次 O(N) 操作会阻塞所有请求，例如对大 Set 执行 SMEMBERS、对大 List 执行 LRANGE 0 -1。第二，过期时间要加随机扰动，避免大批 key 同时失效造成缓存雪崩。第三，不要用 KEYS 命令做线上扫描，应该用 SCAN 渐进式遍历。（来源：handbook://redis/data-structures）",
+          "背景：支付网关对接了六家渠道，日均交易量约两百万笔。上线初期出现过重复扣款投诉，根因是渠道回调重试加上本地网络超时重试，导致同一笔订单被处理两次。\n\n方案分三层。第一层是入口幂等：以「商户订单号加渠道标识」作为唯一键，在 Redis 里用 SET NX 加过期时间做前置拦截，同时在数据库对唯一键建唯一索引兜底——Redis 只用来挡流量，正确性由数据库保证。第二层是状态机：支付单状态严格按「待支付、支付中、成功、失败、已退款」流转，状态只能前进不能回退，重复回调直接返回当前状态。第三层是对账：每天凌晨拉取渠道对账文件，与本地下单流水做双向比对，差异分三类处理——本地有渠道无（可能掉单，发起查询）、渠道有本地无（可能漏记，补单并告警）、金额不一致（人工介入）。\n\n结果：重复扣款归零，对账差异率从万分之三降到十万分之一以内，资金问题的发现时效从「用户投诉」提前到「次日对账」。\n\n一个关键取舍：我们没有引入分布式事务框架，而是用「本地消息表加定时补偿」保证最终一致，因为支付场景更看重可用性与可追溯，而不是强一致。（来源：resume://project/payment-gateway）",
+          "动删除缓存而不是更新缓存。\n\n结果：数据库 QPS 从峰值八万降到一点二万，P99 从四百八十毫秒降到九十毫秒，缓存命中率从百分之七十六提升到百分之九十六。\n\n复盘教训：压测一定要用接近生产的流量模型。第一次压测只覆盖了均匀分布的商品 id，完全没暴露热点 key 的问题，改成按真实成交分布造数之后才把逻辑过期这条路走通。（来源：resume://project/order-middle-cache）"
+        ]
+      },
+      "new": {
+        "formatter": "format_knowledge_context",
+        "line_count": 4,
+        "knowledge_block_chars": 2049,
+        "knowledge_section_chars": 2182,
+        "prompt_chars": 4631,
+        "source_suffix_chars": 160,
+        "lines": [
+          "缓存与数据库的一致性没有银弹，只能按业务容忍度选方案。\n\n最常用的是旁路缓存（Cache Aside）：读时先查缓存，未命中查库并回填；写时先更新数据库，再删除缓存。为什么不更新缓存而是删除？因为并发写场景下两次更新缓存的顺序无法保证，会留下旧值；删除则让下一次读自然回填最新值。\n\n先删缓存还是先更新数据库？先删缓存会在「删缓存、读回填旧值、更新数据库」的间隙里留下脏数据；先更新数据库再删缓存只在「读缓存未命中、查库旧值、更新库并删缓存、写回旧值」这种极端时序下出问题，概率低得多，因此工业界普遍选择先更新库再删缓存。要彻底规避，可以用延迟双删或订阅 binlog 异步删除。\n\n缓存穿透、击穿、雪崩要分开治理。穿透是查不存在的数据，方案是空值缓存或布隆过滤器；击穿是单个热点 key 失效，方案是互斥锁重建或逻辑过期；雪崩是大量 key 同时失效，方案是过期时间加随机扰动，并做好多级缓存与降级预案。\n\n强一致场景（例如账户余额）不建议用旁路缓存，应直接读库，或使用带一致性协议的分布式缓存。（来源：handbook://architecture/cache-consistency）",
+          "背景：订单中台在双十一前出现过缓存击穿导致数据库被打挂的事故，核心下单接口 P99 冲到三秒以上并触发熔断，持续约十分钟。\n\n排查发现三个问题叠加：热点商品的缓存 key 在同一秒集中失效；不存在的商品 id 直接穿透到数据库；缓存过期时间统一设置为三十分钟，没有随机扰动。\n\n改造做了四件事。第一，对热点商品改成逻辑过期：value 里带过期时间戳，命中后先返回旧值，再用异步线程重建缓存，避免大量请求同时回源。第二，对空结果做短 TTL 的空值缓存，把不存在的商品 id 缓存三十秒，同时在接入层加布隆过滤器，把明显不存在的请求直接拦掉。第三，给缓存过期时间加随机扰动，在基础 TTL 上叠加零到三百秒的随机值。第四，把本地缓存与 Redis 组成两级缓存，本地缓存扛单机热点，Redis 保证集群一致；更新数据库后主动删除缓存而不是更新缓存。\n\n结果：数据库 QPS 从峰值八万降到一点二万，P99 从四百八十毫秒降到九十毫秒，缓存命中率从百分之七十六提升到百分之九十六。\n\n复盘教训：压测一定要用接近生产的流量模型。第一次压测只覆盖了均匀分布的商品 id，完全没暴露热点 key 的问题，改成按真实成交分布造数之后才把逻辑过期这条路走通。（来源：resume://project/order-middle-cache）",
+          "Redis 有五种基础数据结构。String 最常用，适合缓存对象序列化结果、计数器、分布式锁；Hash 适合存对象的部分字段更新，比整体序列化更省带宽；List 是有序可重复的链表，适合消息队列与最新列表；Set 无序去重，适合标签、共同关注；ZSet 带分数排序，适合排行榜与延迟队列。\n\n另有三种高级结构。Bitmap 用位存储，适合签到、活跃统计这类布尔型大规模场景，一亿用户一天的签到只占约 12 MB。HyperLogLog 用极小的固定内存做基数估算，误差约 0.81%，适合 UV 统计。GEO 基于 ZSet 实现地理位置检索。\n\n使用上的几个要点。第一，Redis 处理命令是单线程的，所以要避免大 key 与大 value，一次 O(N) 操作会阻塞所有请求，例如对大 Set 执行 SMEMBERS、对大 List 执行 LRANGE 0 -1。第二，过期时间要加随机扰动，避免大批 key 同时失效造成缓存雪崩。第三，不要用 KEYS 命令做线上扫描，应该用 SCAN 渐进式遍历。（来源：handbook://redis/data-structures）",
+          "背景：支付网关对接了六家渠道，日均交易量约两百万笔。上线初期出现过重复扣款投诉，根因是渠道回调重试加上本地网络超时重试，导致同一笔订单被处理两次。\n\n方案分三层。第一层是入口幂等：以「商户订单号加渠道标识」作为唯一键，在 Redis 里用 SET NX 加过期时间做前置拦截，同时在数据库对唯一键建唯一索引兜底——Redis 只用来挡流量，正确性由数据库保证。第二层是状态机：支付单状态严格按「待支付、支付中、成功、失败、已退款」流转，状态只能前进不能回退，重复回调直接返回当前状态。第三层是对账：每天凌晨拉取渠道对账文件，与本地下单流水做双向比对，差异分三类处理——本地有渠道无（可能掉单，发起查询）、渠道有本地无（可能漏记，补单并告警）、金额不一致（人工介入）。\n\n结果：重复扣款归零，对账差异率从万分之三降到十万分之一以内，资金问题的发现时效从「用户投诉」提前到「次日对账」。\n\n一个关键取舍：我们没有引入分布式事务框架，而是用「本地消息表加定时补偿」保证最终一致，因为支付场景更看重可用性与可追溯，而不是强一致。（来源：resume://project/payment-gateway）"
+        ],
+        "truncated": false
+      },
+      "delta": {
+        "knowledge_block_chars": 119,
+        "knowledge_block_ratio": 5.49,
+        "knowledge_section_chars": 121,
+        "prompt_chars": 121,
+        "prompt_ratio": 2.55,
+        "line_count": 1
+      },
+      "duplicates": {
+        "same_source_overlaps": [
+          {
+            "left_index": 1,
+            "right_index": 4,
+            "source": "resume://project/order-middle-cache",
+            "overlap_chars": 78,
+            "non_adjacent": true
+          }
+        ],
+        "overlap_chars_total": 78,
+        "source_suffix_chars_saved": 40
+      },
+      "invariants": {
+        "retriever_returns_list": true,
+        "chunk_class": "KnowledgeChunk",
+        "chunk_field_names": [
+          "content",
+          "metadata",
+          "source"
+        ],
+        "chunk_field_names_expected": [
+          "content",
+          "metadata",
+          "source"
+        ],
+        "prompt_prefix_identical": true,
+        "prompt_suffix_identical": true,
+        "knowledge_section_changed": true,
+        "template_name": "question_knowledge",
+        "agent_keys": [
+          "difficulty",
+          "error",
+          "expected_points",
+          "ok",
+          "question",
+          "question_type",
+          "reason",
+          "topic"
+        ],
+        "agent_keys_expected": true,
+        "agent_prompt_equals_rendered": true,
+        "core_keys": [
+          "ok",
+          "question_no",
+          "question",
+          "question_type",
+          "topic",
+          "difficulty",
+          "expected_points",
+          "reason",
+          "stage",
+          "warnings",
+          "errors",
+          "error"
+        ],
+        "core_keys_expected": true,
+        "core_prompt_prefix_identical": true,
+        "core_prompt_suffix_identical": true,
+        "core_knowledge_section_equals_agent": true
+      }
+    }
+  ],
+  "cap_probe": {
+    "max_chars": 4000,
+    "input_rows": 6,
+    "input_chars": 9000,
+    "kept_lines": 3,
+    "output_chars": 3047,
+    "truncated": true,
+    "marker": "……（参考知识已截断）",
+    "verdict": "上限生效：超限时按整行粒度截断并追加标记"
+  },
+  "summary": {
+    "arms": {
+      "declared": {
+        "scenarios": 3,
+        "prompt_chars_old": 9852,
+        "prompt_chars_new": 9622,
+        "prompt_chars_saved": 230,
+        "prompt_ratio": 2.33,
+        "knowledge_block_chars_old": 2135,
+        "knowledge_block_chars_new": 1909,
+        "knowledge_block_chars_saved": 226,
+        "knowledge_block_ratio": 10.59,
+        "line_count_old": 5,
+        "line_count_new": 3,
+        "invariants_hold": true
+      },
+      "raw": {
+        "scenarios": 3,
+        "prompt_chars_old": 13810,
+        "prompt_chars_new": 13459,
+        "prompt_chars_saved": 351,
+        "prompt_ratio": 2.54,
+        "knowledge_block_chars_old": 6073,
+        "knowledge_block_chars_new": 5728,
+        "knowledge_block_chars_saved": 345,
+        "knowledge_block_ratio": 5.68,
+        "line_count_old": 15,
+        "line_count_new": 12,
+        "invariants_hold": true
+      }
+    },
+    "all_arms": {
+      "scenarios": 6,
+      "prompt_chars_old": 23662,
+      "prompt_chars_new": 23081,
+      "prompt_chars_saved": 581,
+      "prompt_ratio": 2.46,
+      "knowledge_block_chars_old": 8208,
+      "knowledge_block_chars_new": 7637,
+      "knowledge_block_chars_saved": 571,
+      "knowledge_block_ratio": 6.96,
+      "line_count_old": 20,
+      "line_count_new": 15,
+      "invariants_hold": true
+    }
+  }
+}

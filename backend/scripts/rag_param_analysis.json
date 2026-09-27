@@ -1,0 +1,594 @@
+{
+  "name": "rag-param-analysis",
+  "version": 1,
+  "purpose": "分析当前 RAG 检索参数（top_k / min_score）对 knowledge_context 的影响，定位检索策略问题。只分析已有实验数据，不评价生成质量。",
+  "scope": {
+    "modifies_code": false,
+    "reruns_experiments": false,
+    "evaluates_quality": false,
+    "sources": {
+      "rag_baseline": "backend/scripts/rag_baseline.json",
+      "no_rag_baseline": "backend/scripts/no_rag_baseline.json",
+      "benchmark": "backend/scripts/interview_eval_benchmark.json"
+    }
+  },
+  "effective_params": {
+    "top_k": 5,
+    "min_score": null,
+    "dedup": true,
+    "model_name": "hash-local",
+    "source_name": "vector",
+    "built_by": "interview_core.resolve_retriever(db, None, True) -> knowledge_rag.build_vector_retriever(db)",
+    "note": "use_rag=True 默认组装，不传 retriever_kwargs",
+    "min_score_bypassed": true,
+    "min_score_bypassed_detail": "基准为各场景声明了 min_score，但实际生效值为 None ⇒ 阈值过滤完全未生效"
+  },
+  "declared_params": {
+    "top_k": {
+      "s1-mysql-index-mid": 5,
+      "s2-spring-boot-senior": 5,
+      "s3-cache-consistency-senior": 5
+    },
+    "min_score": {
+      "s1-mysql-index-mid": 0.25,
+      "s2-spring-boot-senior": 0.25,
+      "s3-cache-consistency-senior": 0.4
+    },
+    "expected_chunk_count": {
+      "s1-mysql-index-mid": 2,
+      "s2-spring-boot-senior": 2,
+      "s3-cache-consistency-senior": 1
+    }
+  },
+  "scenarios": [
+    {
+      "scenario_id": "s1-mysql-index-mid",
+      "query_topic": "MySQL 索引",
+      "target_source": [
+        "handbook://mysql/index"
+      ],
+      "declared_params": {
+        "top_k": 5,
+        "min_score": 0.25,
+        "expected_chunk_count": 2
+      },
+      "chunk_count": {
+        "actual": 5,
+        "at_declared_min_score": 2,
+        "declared_expected": 2,
+        "actual_equals_top_k": true,
+        "extra_vs_declared": 3,
+        "at_declared_matches_expected": true
+      },
+      "score_distribution": {
+        "all": [
+          0.547609,
+          0.377964,
+          0.156532,
+          0.134523,
+          0.125471
+        ],
+        "target_source": [
+          0.547609,
+          0.377964
+        ],
+        "non_target_source": [
+          0.156532,
+          0.134523,
+          0.125471
+        ],
+        "stats": {
+          "count": 5,
+          "min": 0.125471,
+          "max": 0.547609,
+          "mean": 0.26842,
+          "median": 0.156532,
+          "target_floor": 0.377964,
+          "noise_ceiling": 0.156532,
+          "gap_after_target": 0.221432
+        },
+        "sources": [
+          "handbook://mysql/index",
+          "handbook://mysql/index",
+          "handbook://spring/auto-configuration",
+          "resume://project/log-platform",
+          "handbook://redis/persistence-and-ha"
+        ],
+        "buckets": {
+          ">=0.50": 1,
+          "0.30-0.50": 1,
+          "0.20-0.30": 0,
+          "0.10-0.20": 3,
+          "<0.10": 0
+        }
+      },
+      "low_relevance": {
+        "definition_source": "source ∉ 基准声明的 expected_hit_sources",
+        "definition_score": "score < 基准声明的 min_score",
+        "by_source": {
+          "count": 3,
+          "ratio": 0.6,
+          "sources": [
+            "handbook://spring/auto-configuration",
+            "resume://project/log-platform",
+            "handbook://redis/persistence-and-ha"
+          ]
+        },
+        "by_score": {
+          "count": 3,
+          "ratio": 0.6,
+          "scores": [
+            0.156532,
+            0.134523,
+            0.125471
+          ]
+        },
+        "agrees": true
+      },
+      "prompt_length": {
+        "off_chars": 2426,
+        "on_chars": 4433,
+        "delta_chars": 2007,
+        "delta_ratio": 0.8273,
+        "block_chars": 2007,
+        "knowledge_context_chars": 1981,
+        "block_share_of_on": 0.4527,
+        "rebuilt_matches_actual": true,
+        "projected_at_declared": {
+          "chunks": 2,
+          "knowledge_context_chars": 755,
+          "block_chars": 779,
+          "prompt_chars": 3207,
+          "saved_chars": 1226,
+          "saved_ratio_of_block": 0.6189
+        }
+      },
+      "min_score_window": {
+        "noise_ceiling": 0.156532,
+        "target_floor": 0.377964,
+        "safe_window": [
+          0.156532,
+          0.377964
+        ],
+        "width": 0.221432,
+        "declared_in_window": true,
+        "runner_up_score_crosscheck": 0.156532,
+        "crosscheck_ok": true
+      }
+    },
+    {
+      "scenario_id": "s2-spring-boot-senior",
+      "query_topic": "Spring Boot 自动配置",
+      "target_source": [
+        "handbook://spring/auto-configuration"
+      ],
+      "declared_params": {
+        "top_k": 5,
+        "min_score": 0.25,
+        "expected_chunk_count": 2
+      },
+      "chunk_count": {
+        "actual": 5,
+        "at_declared_min_score": 2,
+        "declared_expected": 2,
+        "actual_equals_top_k": true,
+        "extra_vs_declared": 3,
+        "at_declared_matches_expected": true
+      },
+      "score_distribution": {
+        "all": [
+          0.542934,
+          0.339153,
+          0.138212,
+          0.123463,
+          0.100504
+        ],
+        "target_source": [
+          0.542934,
+          0.339153
+        ],
+        "non_target_source": [
+          0.138212,
+          0.123463,
+          0.100504
+        ],
+        "stats": {
+          "count": 5,
+          "min": 0.100504,
+          "max": 0.542934,
+          "mean": 0.248853,
+          "median": 0.138212,
+          "target_floor": 0.339153,
+          "noise_ceiling": 0.138212,
+          "gap_after_target": 0.200941
+        },
+        "sources": [
+          "handbook://spring/auto-configuration",
+          "handbook://spring/auto-configuration",
+          "company://career-ai/about",
+          "handbook://network/http-and-https",
+          "handbook://spring/transaction"
+        ],
+        "buckets": {
+          ">=0.50": 1,
+          "0.30-0.50": 1,
+          "0.20-0.30": 0,
+          "0.10-0.20": 3,
+          "<0.10": 0
+        }
+      },
+      "low_relevance": {
+        "definition_source": "source ∉ 基准声明的 expected_hit_sources",
+        "definition_score": "score < 基准声明的 min_score",
+        "by_source": {
+          "count": 3,
+          "ratio": 0.6,
+          "sources": [
+            "company://career-ai/about",
+            "handbook://network/http-and-https",
+            "handbook://spring/transaction"
+          ]
+        },
+        "by_score": {
+          "count": 3,
+          "ratio": 0.6,
+          "scores": [
+            0.138212,
+            0.123463,
+            0.100504
+          ]
+        },
+        "agrees": true
+      },
+      "prompt_length": {
+        "off_chars": 2457,
+        "on_chars": 4625,
+        "delta_chars": 2168,
+        "delta_ratio": 0.8824,
+        "block_chars": 2168,
+        "knowledge_context_chars": 2142,
+        "block_share_of_on": 0.4688,
+        "rebuilt_matches_actual": true,
+        "projected_at_declared": {
+          "chunks": 2,
+          "knowledge_context_chars": 1091,
+          "block_chars": 1115,
+          "prompt_chars": 3574,
+          "saved_chars": 1051,
+          "saved_ratio_of_block": 0.4907
+        }
+      },
+      "min_score_window": {
+        "noise_ceiling": 0.138212,
+        "target_floor": 0.339153,
+        "safe_window": [
+          0.138212,
+          0.339153
+        ],
+        "width": 0.200941,
+        "declared_in_window": true,
+        "runner_up_score_crosscheck": 0.138212,
+        "crosscheck_ok": true
+      }
+    },
+    {
+      "scenario_id": "s3-cache-consistency-senior",
+      "query_topic": "分布式缓存一致性",
+      "target_source": [
+        "handbook://architecture/cache-consistency"
+      ],
+      "declared_params": {
+        "top_k": 5,
+        "min_score": 0.4,
+        "expected_chunk_count": 1
+      },
+      "chunk_count": {
+        "actual": 5,
+        "at_declared_min_score": 1,
+        "declared_expected": 1,
+        "actual_equals_top_k": true,
+        "extra_vs_declared": 4,
+        "at_declared_matches_expected": true
+      },
+      "score_distribution": {
+        "all": [
+          0.423982,
+          0.360771,
+          0.30613,
+          0.251351,
+          0.249029
+        ],
+        "target_source": [
+          0.423982
+        ],
+        "non_target_source": [
+          0.360771,
+          0.30613,
+          0.251351,
+          0.249029
+        ],
+        "stats": {
+          "count": 5,
+          "min": 0.249029,
+          "max": 0.423982,
+          "mean": 0.318253,
+          "median": 0.30613,
+          "target_floor": 0.423982,
+          "noise_ceiling": 0.360771,
+          "gap_after_target": 0.063211
+        },
+        "sources": [
+          "handbook://architecture/cache-consistency",
+          "resume://project/order-middle-cache",
+          "handbook://redis/data-structures",
+          "resume://project/payment-gateway",
+          "resume://project/order-middle-cache"
+        ],
+        "buckets": {
+          ">=0.50": 0,
+          "0.30-0.50": 3,
+          "0.20-0.30": 2,
+          "0.10-0.20": 0,
+          "<0.10": 0
+        }
+      },
+      "low_relevance": {
+        "definition_source": "source ∉ 基准声明的 expected_hit_sources",
+        "definition_score": "score < 基准声明的 min_score",
+        "by_source": {
+          "count": 4,
+          "ratio": 0.8,
+          "sources": [
+            "resume://project/order-middle-cache",
+            "handbook://redis/data-structures",
+            "resume://project/payment-gateway",
+            "resume://project/order-middle-cache"
+          ]
+        },
+        "by_score": {
+          "count": 4,
+          "ratio": 0.8,
+          "scores": [
+            0.360771,
+            0.30613,
+            0.251351,
+            0.249029
+          ]
+        },
+        "agrees": true
+      },
+      "prompt_length": {
+        "off_chars": 2449,
+        "on_chars": 4752,
+        "delta_chars": 2303,
+        "delta_ratio": 0.9404,
+        "block_chars": 2303,
+        "knowledge_context_chars": 2277,
+        "block_share_of_on": 0.4846,
+        "rebuilt_matches_actual": true,
+        "projected_at_declared": {
+          "chunks": 1,
+          "knowledge_context_chars": 596,
+          "block_chars": 620,
+          "prompt_chars": 3071,
+          "saved_chars": 1681,
+          "saved_ratio_of_block": 0.7383
+        }
+      },
+      "min_score_window": {
+        "noise_ceiling": 0.360771,
+        "target_floor": 0.423982,
+        "safe_window": [
+          0.360771,
+          0.423982
+        ],
+        "width": 0.063211,
+        "declared_in_window": true,
+        "runner_up_score_crosscheck": 0.360771,
+        "crosscheck_ok": true
+      }
+    }
+  ],
+  "aggregate": {
+    "scenarios": 3,
+    "chunks_injected_total": 15,
+    "chunks_at_declared_min_score_total": 5,
+    "low_relevance_total": 10,
+    "low_relevance_ratio": 0.6667,
+    "prompt_chars_off_total": 7332,
+    "prompt_chars_on_total": 13810,
+    "prompt_chars_projected_total": 9852,
+    "prompt_growth_ratio": 0.8835,
+    "prompt_saved_by_min_score": 3958
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "title": "min_score 被绕过：声明的阈值没有生效",
+      "evidence": {
+        "effective_min_score": null,
+        "declared_min_score": {
+          "s1-mysql-index-mid": 0.25,
+          "s2-spring-boot-senior": 0.25,
+          "s3-cache-consistency-senior": 0.4
+        },
+        "why": "有 RAG 臂走 use_rag=True ⇒ resolve_retriever → build_vector_retriever(db) 不传任何 retriever_kwargs ⇒ min_score 取默认 None"
+      }
+    },
+    {
+      "id": "F2",
+      "title": "top_k=5 是唯一约束 ⇒ 无论相关与否都恰好注入 5 条",
+      "evidence": {
+        "top_k": 5,
+        "chunks_per_scenario": [
+          5,
+          5,
+          5
+        ],
+        "corpus_chunks_in_store": 32
+      }
+    },
+    {
+      "id": "F3",
+      "title": "低相关 chunk 占比约三分之二，且两种口径结论一致",
+      "evidence": {
+        "total_chunks": 15,
+        "low_relevance_chunks": 10,
+        "ratio": 0.6667,
+        "per_scenario_ratio": [
+          0.6,
+          0.6,
+          0.8
+        ],
+        "two_definitions_agree": true
+      }
+    },
+    {
+      "id": "F4",
+      "title": "分数呈「头重脚轻」：目标 chunk 集中在头部，尾部骤降",
+      "evidence": {
+        "target_floor": {
+          "s1-mysql-index-mid": 0.377964,
+          "s2-spring-boot-senior": 0.339153,
+          "s3-cache-consistency-senior": 0.423982
+        },
+        "noise_ceiling": {
+          "s1-mysql-index-mid": 0.156532,
+          "s2-spring-boot-senior": 0.138212,
+          "s3-cache-consistency-senior": 0.360771
+        },
+        "gap_after_target": {
+          "s1-mysql-index-mid": 0.221432,
+          "s2-spring-boot-senior": 0.200941,
+          "s3-cache-consistency-senior": 0.063211
+        }
+      }
+    },
+    {
+      "id": "F5",
+      "title": "知识注入让 Prompt 长度接近翻倍",
+      "evidence": {
+        "prompt_chars_off_total": 7332,
+        "prompt_chars_on_total": 13810,
+        "delta_ratio_total": 0.8835,
+        "block_share_of_on": [
+          0.4527,
+          0.4688,
+          0.4846
+        ]
+      }
+    },
+    {
+      "id": "F6",
+      "title": "按声明 min_score 过滤可精确复现基准的期望条数",
+      "evidence": {
+        "at_declared_chunks": [
+          2,
+          2,
+          1
+        ],
+        "declared_expected": [
+          2,
+          2,
+          1
+        ],
+        "all_match": true
+      }
+    }
+  ],
+  "recommendations": [
+    {
+      "id": "R1",
+      "priority": "高",
+      "title": "把 min_score 真正接上（当前唯一开关是 use_rag，接不了阈值）",
+      "action": "按场景阈值运行时，改用**显式注入** VectorKnowledgeRetriever(..., min_score=…, top_k=…) （resolve_retriever 的优先级是「显式注入 > use_rag」）；或给 build_vector_retriever 增加 retriever_kwargs 透传（需改生产代码，本次未做）。",
+      "expected_effect": "注入条数 15 → 5，Prompt 合计 13810 → 9852 字",
+      "evidence_ref": [
+        "F1",
+        "F6"
+      ]
+    },
+    {
+      "id": "R2",
+      "priority": "高",
+      "title": "按实测分数窗口标定每个场景的 min_score",
+      "action": "窗口 = (噪声上限, 目标下限)，取窗口内即可；本实验三个场景的窗口与声明值均落在窗口内。",
+      "per_scenario": {
+        "s1-mysql-index-mid": {
+          "safe_window": [
+            0.156532,
+            0.377964
+          ],
+          "width": 0.221432,
+          "declared": 0.25,
+          "declared_in_window": true
+        },
+        "s2-spring-boot-senior": {
+          "safe_window": [
+            0.138212,
+            0.339153
+          ],
+          "width": 0.200941,
+          "declared": 0.25,
+          "declared_in_window": true
+        },
+        "s3-cache-consistency-senior": {
+          "safe_window": [
+            0.360771,
+            0.423982
+          ],
+          "width": 0.063211,
+          "declared": 0.4,
+          "declared_in_window": true
+        }
+      },
+      "caveat": "窗口窄（如 s3）时对语料微调敏感，需重新标定。",
+      "evidence_ref": [
+        "F4"
+      ]
+    },
+    {
+      "id": "R3",
+      "priority": "中",
+      "title": "top_k 可下调，保留少量余量即可",
+      "action": "min_score 生效后 top_k 不再是约束；按期望条数（2/2/1）+ 余量取 top_k=8 左右，避免 top_k 过大把噪声一并纳入候选。",
+      "evidence_ref": [
+        "F2",
+        "F6"
+      ]
+    },
+    {
+      "id": "R4",
+      "priority": "中",
+      "title": "对同一来源限制条数（同源多片会挤占名额）",
+      "action": "按 source 限流（如每来源最多 2 片），避免单一文档占满 top_k。",
+      "evidence": "本实验 s3 中 resume://project/order-middle-cache 出现 2 次",
+      "evidence_ref": [
+        "F2"
+      ]
+    },
+    {
+      "id": "R5",
+      "priority": "中",
+      "title": "关注窄间隔场景：换更强 Embedding 或人工确认语料",
+      "action": "当前 embedder 是词面哈希（hash-local，semantic_enabled=False），分数只在**同一模型内**可比。窄间隔场景建议配置真实 Embedding （EMBEDDING_* 环境变量）后重新标定。",
+      "evidence_ref": [
+        "F4"
+      ]
+    },
+    {
+      "id": "R6",
+      "priority": "低",
+      "title": "把三个量纳入常规观测",
+      "action": "注入条数 / 低相关比例 / Prompt 增幅——三者任一异常即告警。",
+      "evidence_ref": [
+        "F3",
+        "F5"
+      ]
+    }
+  ],
+  "integrity": {
+    "checks_passed": true,
+    "problems": []
+  }
+}

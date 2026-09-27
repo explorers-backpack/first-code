@@ -25,6 +25,8 @@
 
 from __future__ import annotations
 
+from typing import Any, Dict
+
 from fastapi import APIRouter, Depends, HTTPException, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -36,6 +38,8 @@ from schemas.interview import (
     CurrentQuestionResponse,
     EndSessionResponse,
     InterviewReportOut,
+    NextQuestionRequest,
+    NextQuestionResponse,
     SessionCreateRequest,
     SessionCreateResponse,
     SessionDetailResponse,
@@ -199,3 +203,43 @@ async def get_report(
         interview_service.get_report(db, current_user["user_id"], session_id),
     )
     return InterviewReportOut(**data)
+
+
+@router.post(
+    "/{session_id}/next-question",
+    response_model=NextQuestionResponse,
+    summary="按需生成下一题（可启用 RAG）",
+    description=(
+        "走**大模型出题通道**：Core 编排「上下文 → 计划 → 知识检索 → Agent → Validator」"
+        "生成**一道**候选题。与 `/start` 的**规则出题路径互不影响**——"
+        "`/start` 仍一次性生成全部题目，本接口不会接管现有流程。\n\n"
+        "**RAG 开关**：`use_rag=true` 时才组装真实检索链路（Embedding + 向量后端 + 检索器），"
+        "缺省 `false` ⇒ 不检索。`top_k` / `min_score` 为检索参数，仅 `use_rag=true` 时生效。\n\n"
+        "**本接口不落库**（除幂等创建上下文）：题目持久化由 `/start` 负责，"
+        "因此重复调用是安全的。知识检索失败**不算失败**，只在 `warnings` 中体现。"
+    ),
+)
+async def next_question(
+    payload: NextQuestionRequest,
+    session_id: int = SessionId,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> NextQuestionResponse:
+    # 只把**显式给出**的检索参数传下去：两者都缺省 → 传 None ⇒ 组装器用自身默认值
+    retriever_kwargs: Dict[str, Any] = {}
+    if payload.top_k is not None:
+        retriever_kwargs["top_k"] = payload.top_k
+    if payload.min_score is not None:
+        retriever_kwargs["min_score"] = payload.min_score
+
+    data = await _run(
+        "生成下一题",
+        interview_service.generate_next_question(
+            db,
+            current_user["user_id"],
+            session_id,
+            use_rag=payload.use_rag,
+            retriever_kwargs=retriever_kwargs or None,
+        ),
+    )
+    return NextQuestionResponse(**data)

@@ -1,0 +1,339 @@
+{
+  "generated_at": "2026-09-28T01:44:34+0800",
+  "runner": "tests/rag_production_chain_spark_run.py",
+  "purpose": "真实 Embedding 下的业务链路端到端验证（生产语料只读搬运）",
+  "production_snapshot": {
+    "documents": 22,
+    "chunks": 32,
+    "embedding_models": [
+      "xinghuo-embedding"
+    ],
+    "embedding_dims": [
+      2560
+    ],
+    "unvectorized_chunks": 0,
+    "sources": [
+      "company://career-ai/about",
+      "company://career-ai/engineering-culture",
+      "company://career-ai/interview-process",
+      "handbook://architecture/cache-consistency",
+      "handbook://java/concurrency",
+      "handbook://jvm/memory-and-gc",
+      "handbook://jvm/troubleshooting",
+      "handbook://kafka/reliability-and-idempotence",
+      "handbook://mysql/index",
+      "handbook://mysql/isolation-and-lock",
+      "handbook://network/http-and-https",
+      "handbook://redis/data-structures",
+      "handbook://redis/persistence-and-ha",
+      "handbook://spring/auto-configuration",
+      "handbook://spring/transaction",
+      "jd://career-ai/bigdata-engineer",
+      "jd://career-ai/java-backend-senior",
+      "jd://career-ai/sdet",
+      "resume://project/log-platform",
+      "resume://project/order-middle-cache",
+      "resume://project/payment-gateway",
+      "resume://project/seckill"
+    ]
+  },
+  "retriever_config": {
+    "top_k": 8,
+    "min_score": 0.7685,
+    "min_score_ratio": 0.9947,
+    "model": null,
+    "embedder": "xinghuo-embedding",
+    "domain": "query"
+  },
+  "profiler_config": {
+    "top_k": 8,
+    "min_score": null,
+    "min_score_ratio": 0.9947,
+    "model": null,
+    "embedder": "xinghuo-embedding",
+    "domain": "query"
+  },
+  "effective_rule": {
+    "min_score": 0.7685,
+    "min_score_ratio": 0.9947
+  },
+  "retrieval_calls": [
+    {
+      "topic": "MySQL",
+      "count": 0,
+      "sources": [],
+      "scores": []
+    },
+    {
+      "topic": "MySQL",
+      "count": 4,
+      "sources": [
+        "handbook://mysql/index",
+        "handbook://mysql/index",
+        "handbook://spring/transaction",
+        "handbook://redis/data-structures"
+      ],
+      "scores": [
+        0.770028,
+        0.769813,
+        0.768175,
+        0.767775
+      ]
+    },
+    {
+      "topic": "Redis",
+      "count": 3,
+      "sources": [
+        "handbook://redis/data-structures",
+        "handbook://redis/persistence-and-ha",
+        "handbook://redis/persistence-and-ha"
+      ],
+      "scores": [
+        0.776644,
+        0.774811,
+        0.773732
+      ]
+    },
+    {
+      "topic": "Python",
+      "count": 8,
+      "sources": [
+        "handbook://mysql/index",
+        "handbook://mysql/index",
+        "handbook://spring/auto-configuration",
+        "handbook://java/concurrency",
+        "handbook://java/concurrency",
+        "handbook://redis/data-structures",
+        "handbook://spring/auto-configuration",
+        "handbook://spring/transaction"
+      ],
+      "scores": [
+        0.766315,
+        0.766008,
+        0.765494,
+        0.765402,
+        0.764474,
+        0.764385,
+        0.763907,
+        0.76377
+      ]
+    }
+  ],
+  "real_current_topic": "MySQL",
+  "production_topic_profile": [
+    {
+      "topic": "MySQL",
+      "top1": 0.770028,
+      "candidates": 4,
+      "effective_threshold": 0.7685,
+      "hits": 2,
+      "covers_topic": true,
+      "is_short_term": true,
+      "error": null
+    },
+    {
+      "topic": "Redis",
+      "top1": 0.776644,
+      "candidates": 3,
+      "effective_threshold": 0.772527,
+      "hits": 3,
+      "covers_topic": true,
+      "is_short_term": true,
+      "error": null
+    },
+    {
+      "topic": "Python",
+      "top1": 0.766315,
+      "candidates": 8,
+      "effective_threshold": 0.7685,
+      "hits": 0,
+      "covers_topic": false,
+      "is_short_term": true,
+      "error": null
+    }
+  ],
+  "findings": [],
+  "prompt_chars": {
+    "rag_off": 2225,
+    "rag_on": 2898
+  },
+  "checks": [
+    {
+      "name": "生产库有知识文档",
+      "ok": true,
+      "detail": "22"
+    },
+    {
+      "name": "生产库有知识切片",
+      "ok": true,
+      "detail": "32"
+    },
+    {
+      "name": "切片全部已向量化（无 NULL）",
+      "ok": true,
+      "detail": "NULL=0"
+    },
+    {
+      "name": "向量模型唯一",
+      "ok": true,
+      "detail": "['xinghuo-embedding']"
+    },
+    {
+      "name": "向量维度唯一且非空",
+      "ok": true,
+      "detail": "[2560]"
+    },
+    {
+      "name": "生产向量已复制进内存库",
+      "ok": true,
+      "detail": "32 vs 32"
+    },
+    {
+      "name": "切片 metadata 完整搬运（source 非空）",
+      "ok": true,
+      "detail": "32 vs 32（_row_dict 取错列名会静默丢 metadata）"
+    },
+    {
+      "name": "HTTP 200",
+      "ok": true,
+      "detail": "200 {\"ok\":true,\"question_no\":1,\"question\":\"请结合项目说明索引与缓存的取舍。\",\"question_type\":\"technical\",\"topic\":\"综合\",\"difficulty\":\"mid\",\"expected_points\":[\"取舍\",\"量化\"],\"reason\":\"考察工"
+    },
+    {
+      "name": "ok=true",
+      "ok": true,
+      "detail": "{'ok': True, 'question_no': 1, 'question': '请结合项目说明索引与缓存的取舍。', 'question_type': 'technical', 'topic': '综合', 'difficulty': 'mid', 'expected_points': ['取舍', '量化'], 'reason': '考察工程判断', 'stage': 'introduc"
+    },
+    {
+      "name": "未组装检索器",
+      "ok": true,
+      "detail": "None"
+    },
+    {
+      "name": "Prompt 无知识小节",
+      "ok": true,
+      "detail": "含知识小节"
+    },
+    {
+      "name": "HTTP 200",
+      "ok": true,
+      "detail": "200 {\"ok\":true,\"question_no\":1,\"question\":\"请结合项目说明索引与缓存的取舍。\",\"question_type\":\"technical\",\"topic\":\"综合\",\"difficulty\":\"mid\",\"expected_points\":[\"取舍\",\"量化\"],\"reason\":\"考察工"
+    },
+    {
+      "name": "ok=true",
+      "ok": true,
+      "detail": "{'ok': True, 'question_no': 1, 'question': '请结合项目说明索引与缓存的取舍。', 'question_type': 'technical', 'topic': '综合', 'difficulty': 'mid', 'expected_points': ['取舍', '量化'], 'reason': '考察工程判断', 'stage': 'introduction', 'warnings': [], 'errors': [], 'er"
+    },
+    {
+      "name": "检索器已组装",
+      "ok": true,
+      "detail": "{'top_k': 8, 'min_score': 0.7685, 'min_score_ratio': 0.9947, 'model': None, 'embedder': 'xinghuo-embedding', 'domain': 'query'}"
+    },
+    {
+      "name": "读侧用真实模型（非离线占位）",
+      "ok": true,
+      "detail": "{'top_k': 8, 'min_score': 0.7685, 'min_score_ratio': 0.9947, 'model': None, 'embedder': 'xinghuo-embedding', 'domain': 'query'}"
+    },
+    {
+      "name": "读侧 role=query（非对称编码配对正确）",
+      "ok": true,
+      "detail": "{'top_k': 8, 'min_score': 0.7685, 'min_score_ratio': 0.9947, 'model': None, 'embedder': 'xinghuo-embedding', 'domain': 'query'}"
+    },
+    {
+      "name": "无降级 warning",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "注入条数 <= top_k",
+      "ok": true,
+      "detail": "2"
+    },
+    {
+      "name": "检索到的分数全部 >= min_score",
+      "ok": true,
+      "detail": "[[0.770028, 0.769813]]"
+    },
+    {
+      "name": "Prompt 含知识小节",
+      "ok": true,
+      "detail": "缺知识小节"
+    },
+    {
+      "name": "知识小节含来源标注",
+      "ok": true,
+      "detail": "['handbook://mysql/index']"
+    },
+    {
+      "name": "来源全部来自生产语料",
+      "ok": true,
+      "detail": "越界=[]"
+    },
+    {
+      "name": "HTTP 200",
+      "ok": true,
+      "detail": "200"
+    },
+    {
+      "name": "显式 top_k 生效",
+      "ok": true,
+      "detail": "{'top_k': 2, 'min_score': 0.9, 'min_score_ratio': 0.9947, 'model': None, 'embedder': 'xinghuo-embedding', 'domain': 'query'}"
+    },
+    {
+      "name": "显式 min_score 生效",
+      "ok": true,
+      "detail": "{'top_k': 2, 'min_score': 0.9, 'min_score_ratio': 0.9947, 'model': None, 'embedder': 'xinghuo-embedding', 'domain': 'query'}"
+    },
+    {
+      "name": "ok=true（0.9 过严也只是无知识，不报错）",
+      "ok": true,
+      "detail": "{'ok': True, 'question_no': 1, 'question': '请结合项目说明索引与缓存的取舍。', 'question_type': 'technical', 'topic': '综合', 'difficulty': 'mid', 'expected_points': ['取舍', '量化'], 'reason': '考察工程判断', 'stage': 'introduc"
+    },
+    {
+      "name": "HTTP 200（不 500）",
+      "ok": true,
+      "detail": "200 {\"ok\":true,\"question_no\":1,\"question\":\"请结合项目说明索引与缓存的取舍。\",\"question_type\":\"technical\",\"topic\":\"综合\",\"difficulty\":\"mid\",\"expected_points\":[\"取舍\",\"量化\"],\"reason\":\"考察工"
+    },
+    {
+      "name": "ok=true（不阻塞出题）",
+      "ok": true,
+      "detail": "{'ok': True, 'question_no': 1, 'question': '请结合项目说明索引与缓存的取舍。', 'question_type': 'technical', 'topic': '综合', 'difficulty': 'mid', 'expected_points': ['取舍', '量化'], 'reason': '考察工程判断', 'stage': 'introduction', 'warnings': ['knowledge_retrieval"
+    },
+    {
+      "name": "带降级 warning",
+      "ok": true,
+      "detail": "['knowledge_retrieval_failed']"
+    },
+    {
+      "name": "能从 plan 推导出真实 current_topic",
+      "ok": true,
+      "detail": "'MySQL'"
+    },
+    {
+      "name": "画像覆盖 plan.priority_topics",
+      "ok": true,
+      "detail": "3 vs 3"
+    },
+    {
+      "name": "生产 topic 全部是短技能词（无空格）",
+      "ok": true,
+      "detail": "['MySQL', 'Redis', 'Python']"
+    },
+    {
+      "name": "画像无上游错误（结论不被频控污染）",
+      "ok": true,
+      "detail": "[]"
+    },
+    {
+      "name": "★ 已覆盖主题在生效阈值下确实注入知识（内容层可用）",
+      "ok": true,
+      "detail": "[('MySQL', 2), ('Redis', 3)]"
+    },
+    {
+      "name": "★ 未覆盖主题在生效阈值下注入 0 条（不靠相对值硬凑无关片段）",
+      "ok": true,
+      "detail": "[('Python', 0, 0.766315)]"
+    }
+  ],
+  "passed": 35,
+  "failed": 0
+}

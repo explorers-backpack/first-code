@@ -767,8 +767,13 @@ async def run() -> bool:
 
         original_core_flow = interview_core.generate_next_question
         sentinel = {"SENTINEL": True}
+        seen = {}
 
-        async def _fake_core_flow(db_, sid, *, user_id=None, spark=None):
+        async def _fake_core_flow(db_, sid, *, user_id=None, spark=None,
+                                  retriever=None, use_rag=False,
+                                  retriever_kwargs=None):
+            seen.update(user_id=user_id, spark=spark, retriever=retriever,
+                        use_rag=use_rag, retriever_kwargs=retriever_kwargs)
             return sentinel
 
         interview_core.generate_next_question = _fake_core_flow
@@ -778,6 +783,32 @@ async def run() -> bool:
             interview_core.generate_next_question = original_core_flow
         _check("  └ 替换 Core 实现后 Service 返回值随之改变（确实经由 Core）",
                observed is sentinel)
+        _check("  └ Service 把 retriever / use_rag / retriever_kwargs 原样透传"
+               "（默认都不开 → 不接 RAG）",
+               seen["retriever"] is None and seen["use_rag"] is False
+               and seen["retriever_kwargs"] is None, str(seen))
+
+        probe = object()
+        interview_core.generate_next_question = _fake_core_flow
+        try:
+            await interview_service.generate_next_question(
+                db, user_id, flow_sid, retriever=probe, use_rag=True
+            )
+        finally:
+            interview_core.generate_next_question = original_core_flow
+        _check("  └ 显式传入时也透传（Service 只做透传，不自己组装检索器）",
+               seen["retriever"] is probe and seen["use_rag"] is True, str(seen))
+
+        tuned = {"top_k": 3, "min_score": 0.25}
+        interview_core.generate_next_question = _fake_core_flow
+        try:
+            await interview_service.generate_next_question(
+                db, user_id, flow_sid, use_rag=True, retriever_kwargs=tuned
+            )
+        finally:
+            interview_core.generate_next_question = original_core_flow
+        _check("  └ retriever_kwargs 原样透传（Service 不解释、不裁剪、不白名单）",
+               seen["retriever_kwargs"] is tuned and seen["use_rag"] is True, str(seen))
 
         _check("  └ Service 未直接调用 Agent 的 generate_question",
                "generate_question" not in service_src)

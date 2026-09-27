@@ -1,0 +1,2946 @@
+{
+  "generated_at": "2026-09-28T01:39:25+0800",
+  "runner": "tests/rag_production_query_calibration_spark_run.py",
+  "purpose": "生产短词 query 的分数地形 + 相对阈值 α 标定（长问句数据复用任务 79 产物）",
+  "alpha_grid": [
+    1.0,
+    0.9999,
+    0.9995,
+    0.999,
+    0.998,
+    0.997,
+    0.996,
+    0.995,
+    0.99,
+    0.985,
+    0.98,
+    0.97,
+    0.96,
+    0.95,
+    0.94,
+    0.92,
+    0.9
+  ],
+  "absolute_grid": [
+    0.83,
+    0.8,
+    0.78,
+    0.77,
+    0.76,
+    0.75,
+    0.7
+  ],
+  "short_query": {
+    "total_candidates": 32,
+    "topics": {
+      "Python": {
+        "query": "Python",
+        "landscape": [
+          {
+            "score": 0.7663152759786335,
+            "source": "handbook://mysql/index",
+            "is_target": false
+          },
+          {
+            "score": 0.7660076588858599,
+            "source": "handbook://mysql/index",
+            "is_target": false
+          },
+          {
+            "score": 0.7654944688200364,
+            "source": "handbook://spring/auto-configuration",
+            "is_target": false
+          },
+          {
+            "score": 0.7654020335725908,
+            "source": "handbook://java/concurrency",
+            "is_target": false
+          },
+          {
+            "score": 0.7644739822190456,
+            "source": "handbook://java/concurrency",
+            "is_target": false
+          },
+          {
+            "score": 0.7643845030616903,
+            "source": "handbook://redis/data-structures",
+            "is_target": false
+          },
+          {
+            "score": 0.7639069326368176,
+            "source": "handbook://spring/auto-configuration",
+            "is_target": false
+          },
+          {
+            "score": 0.7637696639242728,
+            "source": "handbook://spring/transaction",
+            "is_target": false
+          },
+          {
+            "score": 0.7632348772618212,
+            "source": "handbook://spring/transaction",
+            "is_target": false
+          },
+          {
+            "score": 0.7618264546869996,
+            "source": "company://career-ai/about",
+            "is_target": false
+          },
+          {
+            "score": 0.761769188743903,
+            "source": "handbook://jvm/troubleshooting",
+            "is_target": false
+          },
+          {
+            "score": 0.7616101995527915,
+            "source": "handbook://jvm/memory-and-gc",
+            "is_target": false
+          },
+          {
+            "score": 0.7615029833629012,
+            "source": "handbook://redis/persistence-and-ha",
+            "is_target": false
+          },
+          {
+            "score": 0.7613283128244105,
+            "source": "jd://career-ai/sdet",
+            "is_target": false
+          },
+          {
+            "score": 0.7612566904081104,
+            "source": "handbook://network/http-and-https",
+            "is_target": false
+          },
+          {
+            "score": 0.7607995443764566,
+            "source": "handbook://jvm/memory-and-gc",
+            "is_target": false
+          },
+          {
+            "score": 0.7606255471037946,
+            "source": "handbook://redis/persistence-and-ha",
+            "is_target": false
+          },
+          {
+            "score": 0.7604801622912883,
+            "source": "resume://project/log-platform",
+            "is_target": false
+          },
+          {
+            "score": 0.7604502922496308,
+            "source": "handbook://network/http-and-https",
+            "is_target": false
+          },
+          {
+            "score": 0.7599605874879733,
+            "source": "jd://career-ai/bigdata-engineer",
+            "is_target": false
+          },
+          {
+            "score": 0.7594400480121475,
+            "source": "handbook://jvm/troubleshooting",
+            "is_target": false
+          },
+          {
+            "score": 0.7592828864996929,
+            "source": "company://career-ai/engineering-culture",
+            "is_target": false
+          },
+          {
+            "score": 0.7592654154047322,
+            "source": "resume://project/seckill",
+            "is_target": false
+          },
+          {
+            "score": 0.7589523365152462,
+            "source": "company://career-ai/interview-process",
+            "is_target": false
+          },
+          {
+            "score": 0.7584230945492462,
+            "source": "handbook://kafka/reliability-and-idempotence",
+            "is_target": false
+          },
+          {
+            "score": 0.7578818869654703,
+            "source": "resume://project/order-middle-cache",
+            "is_target": false
+          },
+          {
+            "score": 0.7578406553103424,
+            "source": "jd://career-ai/java-backend-senior",
+            "is_target": false
+          },
+          {
+            "score": 0.7566892471520751,
+            "source": "handbook://architecture/cache-consistency",
+            "is_target": false
+          },
+          {
+            "score": 0.7552765012063392,
+            "source": "handbook://mysql/isolation-and-lock",
+            "is_target": false
+          },
+          {
+            "score": 0.7547516665915597,
+            "source": "resume://project/order-middle-cache",
+            "is_target": false
+          },
+          {
+            "score": 0.7537564603164152,
+            "source": "handbook://kafka/reliability-and-idempotence",
+            "is_target": false
+          },
+          {
+            "score": 0.7527644231038336,
+            "source": "resume://project/payment-gateway",
+            "is_target": false
+          }
+        ],
+        "geometry": {
+          "total": 32,
+          "targets": 0,
+          "noise": 32,
+          "top1": 0.766315,
+          "target_floor": null,
+          "noise_ceiling": 0.766315,
+          "window": null,
+          "separable": false,
+          "feasible_alpha": null
+        },
+        "absolute": [
+          {
+            "min_score": 0.83,
+            "hits": 0,
+            "targets_kept": 0,
+            "noise_kept": 0
+          },
+          {
+            "min_score": 0.8,
+            "hits": 0,
+            "targets_kept": 0,
+            "noise_kept": 0
+          },
+          {
+            "min_score": 0.78,
+            "hits": 0,
+            "targets_kept": 0,
+            "noise_kept": 0
+          },
+          {
+            "min_score": 0.77,
+            "hits": 0,
+            "targets_kept": 0,
+            "noise_kept": 0
+          },
+          {
+            "min_score": 0.76,
+            "hits": 19,
+            "targets_kept": 0,
+            "noise_kept": 19
+          },
+          {
+            "min_score": 0.75,
+            "hits": 32,
+            "targets_kept": 0,
+            "noise_kept": 32
+          },
+          {
+            "min_score": 0.7,
+            "hits": 32,
+            "targets_kept": 0,
+            "noise_kept": 32
+          }
+        ],
+        "alpha": [
+          {
+            "alpha": 1.0,
+            "threshold": 0.766315,
+            "min_score": 0.7663152759786335,
+            "hits": 1,
+            "targets_kept": 0,
+            "noise_kept": 1
+          },
+          {
+            "alpha": 0.9999,
+            "threshold": 0.766239,
+            "min_score": 0.7662386444510356,
+            "hits": 1,
+            "targets_kept": 0,
+            "noise_kept": 1
+          },
+          {
+            "alpha": 0.9995,
+            "threshold": 0.765932,
+            "min_score": 0.7659321183406442,
+            "hits": 2,
+            "targets_kept": 0,
+            "noise_kept": 2
+          },
+          {
+            "alpha": 0.999,
+            "threshold": 0.765549,
+            "min_score": 0.7655489607026549,
+            "hits": 2,
+            "targets_kept": 0,
+            "noise_kept": 2
+          },
+          {
+            "alpha": 0.998,
+            "threshold": 0.764783,
+            "min_score": 0.7647826454266762,
+            "hits": 4,
+            "targets_kept": 0,
+            "noise_kept": 4
+          },
+          {
+            "alpha": 0.997,
+            "threshold": 0.764016,
+            "min_score": 0.7640163301506976,
+            "hits": 6,
+            "targets_kept": 0,
+            "noise_kept": 6
+          },
+          {
+            "alpha": 0.996,
+            "threshold": 0.76325,
+            "min_score": 0.7632500148747189,
+            "hits": 8,
+            "targets_kept": 0,
+            "noise_kept": 8
+          },
+          {
+            "alpha": 0.995,
+            "threshold": 0.762484,
+            "min_score": 0.7624836995987403,
+            "hits": 9,
+            "targets_kept": 0,
+            "noise_kept": 9
+          },
+          {
+            "alpha": 0.99,
+            "threshold": 0.758652,
+            "min_score": 0.7586521232188471,
+            "hits": 24,
+            "targets_kept": 0,
+            "noise_kept": 24
+          },
+          {
+            "alpha": 0.985,
+            "threshold": 0.754821,
+            "min_score": 0.7548205468389539,
+            "hits": 29,
+            "targets_kept": 0,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.98,
+            "threshold": 0.750989,
+            "min_score": 0.7509889704590608,
+            "hits": 32,
+            "targets_kept": 0,
+            "noise_kept": 32
+          },
+          {
+            "alpha": 0.97,
+            "threshold": 0.743326,
+            "min_score": 0.7433258176992744,
+            "hits": 32,
+            "targets_kept": 0,
+            "noise_kept": 32
+          },
+          {
+            "alpha": 0.96,
+            "threshold": 0.735663,
+            "min_score": 0.7356626649394881,
+            "hits": 32,
+            "targets_kept": 0,
+            "noise_kept": 32
+          },
+          {
+            "alpha": 0.95,
+            "threshold": 0.728,
+            "min_score": 0.7279995121797017,
+            "hits": 32,
+            "targets_kept": 0,
+            "noise_kept": 32
+          },
+          {
+            "alpha": 0.94,
+            "threshold": 0.720336,
+            "min_score": 0.7203363594199155,
+            "hits": 32,
+            "targets_kept": 0,
+            "noise_kept": 32
+          },
+          {
+            "alpha": 0.92,
+            "threshold": 0.70501,
+            "min_score": 0.7050100539003428,
+            "hits": 32,
+            "targets_kept": 0,
+            "noise_kept": 32
+          },
+          {
+            "alpha": 0.9,
+            "threshold": 0.689684,
+            "min_score": 0.6896837483807702,
+            "hits": 32,
+            "targets_kept": 0,
+            "noise_kept": 32
+          }
+        ]
+      },
+      "MySQL": {
+        "query": "MySQL",
+        "landscape": [
+          {
+            "score": 0.7700276507504282,
+            "source": "handbook://mysql/index",
+            "is_target": true
+          },
+          {
+            "score": 0.769813278374766,
+            "source": "handbook://mysql/index",
+            "is_target": true
+          },
+          {
+            "score": 0.7681748802001115,
+            "source": "handbook://spring/transaction",
+            "is_target": false
+          },
+          {
+            "score": 0.7677747171837543,
+            "source": "handbook://redis/data-structures",
+            "is_target": false
+          },
+          {
+            "score": 0.765769709847797,
+            "source": "handbook://mysql/isolation-and-lock",
+            "is_target": true
+          },
+          {
+            "score": 0.7650914032966497,
+            "source": "handbook://redis/persistence-and-ha",
+            "is_target": false
+          },
+          {
+            "score": 0.763997343957175,
+            "source": "handbook://spring/transaction",
+            "is_target": false
+          },
+          {
+            "score": 0.7636903112310612,
+            "source": "resume://project/log-platform",
+            "is_target": false
+          },
+          {
+            "score": 0.7636078924392289,
+            "source": "handbook://java/concurrency",
+            "is_target": false
+          },
+          {
+            "score": 0.7635420007110089,
+            "source": "handbook://redis/persistence-and-ha",
+            "is_target": false
+          },
+          {
+            "score": 0.7629440717890369,
+            "source": "handbook://spring/auto-configuration",
+            "is_target": false
+          },
+          {
+            "score": 0.7627989999454797,
+            "source": "handbook://java/concurrency",
+            "is_target": false
+          },
+          {
+            "score": 0.7627737263779092,
+            "source": "handbook://architecture/cache-consistency",
+            "is_target": false
+          },
+          {
+            "score": 0.7623292013134242,
+            "source": "handbook://jvm/troubleshooting",
+            "is_target": false
+          },
+          {
+            "score": 0.7623027559167705,
+            "source": "handbook://network/http-and-https",
+            "is_target": false
+          },
+          {
+            "score": 0.7622849163296335,
+            "source": "handbook://jvm/memory-and-gc",
+            "is_target": false
+          },
+          {
+            "score": 0.7620675819926053,
+            "source": "handbook://spring/auto-configuration",
+            "is_target": false
+          },
+          {
+            "score": 0.7614387906971953,
+            "source": "handbook://jvm/memory-and-gc",
+            "is_target": false
+          },
+          {
+            "score": 0.7610585325860849,
+            "source": "company://career-ai/about",
+            "is_target": false
+          },
+          {
+            "score": 0.7609456155436418,
+            "source": "handbook://kafka/reliability-and-idempotence",
+            "is_target": false
+          },
+          {
+            "score": 0.7606763324561767,
+            "source": "jd://career-ai/bigdata-engineer",
+            "is_target": false
+          },
+          {
+            "score": 0.7605495198298097,
+            "source": "handbook://network/http-and-https",
+            "is_target": false
+          },
+          {
+            "score": 0.7599845499166521,
+            "source": "resume://project/order-middle-cache",
+            "is_target": false
+          },
+          {
+            "score": 0.7595546998174856,
+            "source": "resume://project/seckill",
+            "is_target": false
+          },
+          {
+            "score": 0.7592589598980416,
+            "source": "jd://career-ai/java-backend-senior",
+            "is_target": false
+          },
+          {
+            "score": 0.7591503204869621,
+            "source": "resume://project/order-middle-cache",
+            "is_target": false
+          },
+          {
+            "score": 0.7585362234091197,
+            "source": "company://career-ai/engineering-culture",
+            "is_target": false
+          },
+          {
+            "score": 0.7582579296430493,
+            "source": "jd://career-ai/sdet",
+            "is_target": false
+          },
+          {
+            "score": 0.7567691957593371,
+            "source": "handbook://jvm/troubleshooting",
+            "is_target": false
+          },
+          {
+            "score": 0.7567552998880229,
+            "source": "handbook://kafka/reliability-and-idempotence",
+            "is_target": false
+          },
+          {
+            "score": 0.7557930961354444,
+            "source": "company://career-ai/interview-process",
+            "is_target": false
+          },
+          {
+            "score": 0.755510260100731,
+            "source": "resume://project/payment-gateway",
+            "is_target": false
+          }
+        ],
+        "geometry": {
+          "total": 32,
+          "targets": 3,
+          "noise": 29,
+          "top1": 0.770028,
+          "target_floor": 0.76577,
+          "noise_ceiling": 0.768175,
+          "window": -0.002405,
+          "separable": false,
+          "feasible_alpha": null
+        },
+        "absolute": [
+          {
+            "min_score": 0.83,
+            "hits": 0,
+            "targets_kept": 0,
+            "noise_kept": 0
+          },
+          {
+            "min_score": 0.8,
+            "hits": 0,
+            "targets_kept": 0,
+            "noise_kept": 0
+          },
+          {
+            "min_score": 0.78,
+            "hits": 0,
+            "targets_kept": 0,
+            "noise_kept": 0
+          },
+          {
+            "min_score": 0.77,
+            "hits": 1,
+            "targets_kept": 1,
+            "noise_kept": 0
+          },
+          {
+            "min_score": 0.76,
+            "hits": 22,
+            "targets_kept": 3,
+            "noise_kept": 19
+          },
+          {
+            "min_score": 0.75,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "min_score": 0.7,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          }
+        ],
+        "alpha": [
+          {
+            "alpha": 1.0,
+            "threshold": 0.770028,
+            "min_score": 0.7700276507504282,
+            "hits": 1,
+            "targets_kept": 1,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.9999,
+            "threshold": 0.769951,
+            "min_score": 0.7699506479853532,
+            "hits": 1,
+            "targets_kept": 1,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.9995,
+            "threshold": 0.769643,
+            "min_score": 0.7696426369250531,
+            "hits": 2,
+            "targets_kept": 2,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.999,
+            "threshold": 0.769258,
+            "min_score": 0.7692576230996778,
+            "hits": 2,
+            "targets_kept": 2,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.998,
+            "threshold": 0.768488,
+            "min_score": 0.7684875954489274,
+            "hits": 2,
+            "targets_kept": 2,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.997,
+            "threshold": 0.767718,
+            "min_score": 0.7677175677981769,
+            "hits": 4,
+            "targets_kept": 2,
+            "noise_kept": 2
+          },
+          {
+            "alpha": 0.996,
+            "threshold": 0.766948,
+            "min_score": 0.7669475401474265,
+            "hits": 4,
+            "targets_kept": 2,
+            "noise_kept": 2
+          },
+          {
+            "alpha": 0.995,
+            "threshold": 0.766178,
+            "min_score": 0.7661775124966761,
+            "hits": 4,
+            "targets_kept": 2,
+            "noise_kept": 2
+          },
+          {
+            "alpha": 0.99,
+            "threshold": 0.762327,
+            "min_score": 0.762327374242924,
+            "hits": 14,
+            "targets_kept": 3,
+            "noise_kept": 11
+          },
+          {
+            "alpha": 0.985,
+            "threshold": 0.758477,
+            "min_score": 0.7584772359891718,
+            "hits": 27,
+            "targets_kept": 3,
+            "noise_kept": 24
+          },
+          {
+            "alpha": 0.98,
+            "threshold": 0.754627,
+            "min_score": 0.7546270977354197,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.97,
+            "threshold": 0.746927,
+            "min_score": 0.7469268212279153,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.96,
+            "threshold": 0.739227,
+            "min_score": 0.739226544720411,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.95,
+            "threshold": 0.731526,
+            "min_score": 0.7315262682129068,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.94,
+            "threshold": 0.723826,
+            "min_score": 0.7238259917054025,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.92,
+            "threshold": 0.708425,
+            "min_score": 0.708425438690394,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.9,
+            "threshold": 0.693025,
+            "min_score": 0.6930248856753854,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          }
+        ]
+      },
+      "Redis": {
+        "query": "Redis",
+        "landscape": [
+          {
+            "score": 0.7766436867652332,
+            "source": "handbook://redis/data-structures",
+            "is_target": true
+          },
+          {
+            "score": 0.7748108156588162,
+            "source": "handbook://redis/persistence-and-ha",
+            "is_target": true
+          },
+          {
+            "score": 0.7737323101243376,
+            "source": "handbook://redis/persistence-and-ha",
+            "is_target": true
+          },
+          {
+            "score": 0.7713978602715009,
+            "source": "handbook://mysql/index",
+            "is_target": false
+          },
+          {
+            "score": 0.7697119684975071,
+            "source": "handbook://spring/transaction",
+            "is_target": false
+          },
+          {
+            "score": 0.7693002893942246,
+            "source": "handbook://java/concurrency",
+            "is_target": false
+          },
+          {
+            "score": 0.7692536800706006,
+            "source": "handbook://mysql/index",
+            "is_target": false
+          },
+          {
+            "score": 0.7690141317896713,
+            "source": "handbook://jvm/troubleshooting",
+            "is_target": false
+          },
+          {
+            "score": 0.768500635525721,
+            "source": "handbook://spring/transaction",
+            "is_target": false
+          },
+          {
+            "score": 0.7684542663699525,
+            "source": "resume://project/seckill",
+            "is_target": false
+          },
+          {
+            "score": 0.7683001872782567,
+            "source": "handbook://java/concurrency",
+            "is_target": false
+          },
+          {
+            "score": 0.7682701659006895,
+            "source": "handbook://jvm/memory-and-gc",
+            "is_target": false
+          },
+          {
+            "score": 0.7676771150815489,
+            "source": "handbook://architecture/cache-consistency",
+            "is_target": false
+          },
+          {
+            "score": 0.767536893508864,
+            "source": "handbook://jvm/memory-and-gc",
+            "is_target": false
+          },
+          {
+            "score": 0.7660977376721396,
+            "source": "handbook://spring/auto-configuration",
+            "is_target": false
+          },
+          {
+            "score": 0.7659948199252569,
+            "source": "resume://project/order-middle-cache",
+            "is_target": false
+          },
+          {
+            "score": 0.7659631794704875,
+            "source": "handbook://spring/auto-configuration",
+            "is_target": false
+          },
+          {
+            "score": 0.7659443141321824,
+            "source": "resume://project/log-platform",
+            "is_target": false
+          },
+          {
+            "score": 0.7655165623136215,
+            "source": "handbook://network/http-and-https",
+            "is_target": false
+          },
+          {
+            "score": 0.7654448508518795,
+            "source": "handbook://kafka/reliability-and-idempotence",
+            "is_target": false
+          },
+          {
+            "score": 0.7652297347334265,
+            "source": "handbook://network/http-and-https",
+            "is_target": false
+          },
+          {
+            "score": 0.764488966272587,
+            "source": "resume://project/order-middle-cache",
+            "is_target": false
+          },
+          {
+            "score": 0.7642962917019612,
+            "source": "jd://career-ai/java-backend-senior",
+            "is_target": false
+          },
+          {
+            "score": 0.7638944408544485,
+            "source": "jd://career-ai/bigdata-engineer",
+            "is_target": false
+          },
+          {
+            "score": 0.7634768216323045,
+            "source": "handbook://kafka/reliability-and-idempotence",
+            "is_target": false
+          },
+          {
+            "score": 0.7631231185576552,
+            "source": "company://career-ai/about",
+            "is_target": false
+          },
+          {
+            "score": 0.7624385885142881,
+            "source": "jd://career-ai/sdet",
+            "is_target": false
+          },
+          {
+            "score": 0.7621912496615044,
+            "source": "resume://project/payment-gateway",
+            "is_target": false
+          },
+          {
+            "score": 0.7621726833602666,
+            "source": "handbook://jvm/troubleshooting",
+            "is_target": false
+          },
+          {
+            "score": 0.7612819740381521,
+            "source": "handbook://mysql/isolation-and-lock",
+            "is_target": false
+          },
+          {
+            "score": 0.7603716918194717,
+            "source": "company://career-ai/engineering-culture",
+            "is_target": false
+          },
+          {
+            "score": 0.7589204952730375,
+            "source": "company://career-ai/interview-process",
+            "is_target": false
+          }
+        ],
+        "geometry": {
+          "total": 32,
+          "targets": 3,
+          "noise": 29,
+          "top1": 0.776644,
+          "target_floor": 0.773732,
+          "noise_ceiling": 0.771398,
+          "window": 0.002334,
+          "separable": true,
+          "feasible_alpha": {
+            "lo_exclusive": 0.9932455171101932,
+            "hi_inclusive": 0.996251335470167,
+            "midpoint": 0.99474842629018,
+            "lo_display": 0.993246,
+            "hi_display": 0.996251,
+            "midpoint_display": 0.994748
+          }
+        },
+        "absolute": [
+          {
+            "min_score": 0.83,
+            "hits": 0,
+            "targets_kept": 0,
+            "noise_kept": 0
+          },
+          {
+            "min_score": 0.8,
+            "hits": 0,
+            "targets_kept": 0,
+            "noise_kept": 0
+          },
+          {
+            "min_score": 0.78,
+            "hits": 0,
+            "targets_kept": 0,
+            "noise_kept": 0
+          },
+          {
+            "min_score": 0.77,
+            "hits": 4,
+            "targets_kept": 3,
+            "noise_kept": 1
+          },
+          {
+            "min_score": 0.76,
+            "hits": 31,
+            "targets_kept": 3,
+            "noise_kept": 28
+          },
+          {
+            "min_score": 0.75,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "min_score": 0.7,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          }
+        ],
+        "alpha": [
+          {
+            "alpha": 1.0,
+            "threshold": 0.776644,
+            "min_score": 0.7766436867652332,
+            "hits": 1,
+            "targets_kept": 1,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.9999,
+            "threshold": 0.776566,
+            "min_score": 0.7765660223965567,
+            "hits": 1,
+            "targets_kept": 1,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.9995,
+            "threshold": 0.776255,
+            "min_score": 0.7762553649218507,
+            "hits": 1,
+            "targets_kept": 1,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.999,
+            "threshold": 0.775867,
+            "min_score": 0.775867043078468,
+            "hits": 1,
+            "targets_kept": 1,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.998,
+            "threshold": 0.77509,
+            "min_score": 0.7750903993917028,
+            "hits": 1,
+            "targets_kept": 1,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.997,
+            "threshold": 0.774314,
+            "min_score": 0.7743137557049375,
+            "hits": 2,
+            "targets_kept": 2,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.996,
+            "threshold": 0.773537,
+            "min_score": 0.7735371120181723,
+            "hits": 3,
+            "targets_kept": 3,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.995,
+            "threshold": 0.77276,
+            "min_score": 0.772760468331407,
+            "hits": 3,
+            "targets_kept": 3,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.99,
+            "threshold": 0.768877,
+            "min_score": 0.7688772498975809,
+            "hits": 8,
+            "targets_kept": 3,
+            "noise_kept": 5
+          },
+          {
+            "alpha": 0.985,
+            "threshold": 0.764994,
+            "min_score": 0.7649940314637547,
+            "hits": 21,
+            "targets_kept": 3,
+            "noise_kept": 18
+          },
+          {
+            "alpha": 0.98,
+            "threshold": 0.761111,
+            "min_score": 0.7611108130299286,
+            "hits": 30,
+            "targets_kept": 3,
+            "noise_kept": 27
+          },
+          {
+            "alpha": 0.97,
+            "threshold": 0.753344,
+            "min_score": 0.7533443761622762,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.96,
+            "threshold": 0.745578,
+            "min_score": 0.7455779392946239,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.95,
+            "threshold": 0.737812,
+            "min_score": 0.7378115024269715,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.94,
+            "threshold": 0.730045,
+            "min_score": 0.7300450655593191,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.92,
+            "threshold": 0.714512,
+            "min_score": 0.7145121918240146,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.9,
+            "threshold": 0.698979,
+            "min_score": 0.6989793180887099,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          }
+        ]
+      }
+    },
+    "query_forms": {
+      "topic_phrase": {
+        "template": "关于{topic}的核心知识点",
+        "query": "关于MySQL的核心知识点",
+        "landscape": [
+          {
+            "score": 0.8480637041975851,
+            "source": "handbook://mysql/index",
+            "is_target": true
+          },
+          {
+            "score": 0.8474750236260029,
+            "source": "handbook://mysql/index",
+            "is_target": true
+          },
+          {
+            "score": 0.8462523870777112,
+            "source": "handbook://spring/transaction",
+            "is_target": false
+          },
+          {
+            "score": 0.8452254771387833,
+            "source": "handbook://redis/data-structures",
+            "is_target": false
+          },
+          {
+            "score": 0.8440545614299008,
+            "source": "handbook://java/concurrency",
+            "is_target": false
+          },
+          {
+            "score": 0.8438025343448453,
+            "source": "handbook://java/concurrency",
+            "is_target": false
+          },
+          {
+            "score": 0.8426468772617991,
+            "source": "handbook://redis/persistence-and-ha",
+            "is_target": false
+          },
+          {
+            "score": 0.8413994294075877,
+            "source": "handbook://jvm/memory-and-gc",
+            "is_target": false
+          },
+          {
+            "score": 0.8412836398580099,
+            "source": "handbook://spring/transaction",
+            "is_target": false
+          },
+          {
+            "score": 0.8410518084575512,
+            "source": "handbook://redis/persistence-and-ha",
+            "is_target": false
+          },
+          {
+            "score": 0.8401491153020553,
+            "source": "handbook://mysql/isolation-and-lock",
+            "is_target": true
+          },
+          {
+            "score": 0.8396614989538607,
+            "source": "handbook://network/http-and-https",
+            "is_target": false
+          },
+          {
+            "score": 0.8392396619093442,
+            "source": "handbook://jvm/memory-and-gc",
+            "is_target": false
+          },
+          {
+            "score": 0.8390635866440462,
+            "source": "handbook://kafka/reliability-and-idempotence",
+            "is_target": false
+          },
+          {
+            "score": 0.8390467427596264,
+            "source": "handbook://jvm/troubleshooting",
+            "is_target": false
+          },
+          {
+            "score": 0.8386812683104925,
+            "source": "resume://project/seckill",
+            "is_target": false
+          },
+          {
+            "score": 0.8381086662081851,
+            "source": "handbook://architecture/cache-consistency",
+            "is_target": false
+          },
+          {
+            "score": 0.8379237657628487,
+            "source": "handbook://spring/auto-configuration",
+            "is_target": false
+          },
+          {
+            "score": 0.8373801206692593,
+            "source": "resume://project/order-middle-cache",
+            "is_target": false
+          },
+          {
+            "score": 0.8371984975673183,
+            "source": "handbook://kafka/reliability-and-idempotence",
+            "is_target": false
+          },
+          {
+            "score": 0.8370316722744175,
+            "source": "resume://project/log-platform",
+            "is_target": false
+          },
+          {
+            "score": 0.8362761679751634,
+            "source": "handbook://network/http-and-https",
+            "is_target": false
+          },
+          {
+            "score": 0.8355695065708706,
+            "source": "jd://career-ai/bigdata-engineer",
+            "is_target": false
+          },
+          {
+            "score": 0.8353600942982363,
+            "source": "handbook://spring/auto-configuration",
+            "is_target": false
+          },
+          {
+            "score": 0.834783433238729,
+            "source": "resume://project/order-middle-cache",
+            "is_target": false
+          },
+          {
+            "score": 0.8345420703628084,
+            "source": "jd://career-ai/java-backend-senior",
+            "is_target": false
+          },
+          {
+            "score": 0.8340128208986315,
+            "source": "handbook://jvm/troubleshooting",
+            "is_target": false
+          },
+          {
+            "score": 0.833533787770125,
+            "source": "company://career-ai/about",
+            "is_target": false
+          },
+          {
+            "score": 0.833162261612191,
+            "source": "jd://career-ai/sdet",
+            "is_target": false
+          },
+          {
+            "score": 0.8330283731442959,
+            "source": "resume://project/payment-gateway",
+            "is_target": false
+          },
+          {
+            "score": 0.8308170360862323,
+            "source": "company://career-ai/engineering-culture",
+            "is_target": false
+          },
+          {
+            "score": 0.8307693192029375,
+            "source": "company://career-ai/interview-process",
+            "is_target": false
+          }
+        ],
+        "geometry": {
+          "total": 32,
+          "targets": 3,
+          "noise": 29,
+          "top1": 0.848064,
+          "target_floor": 0.840149,
+          "noise_ceiling": 0.846252,
+          "window": -0.006103,
+          "separable": false,
+          "feasible_alpha": null
+        },
+        "absolute": [
+          {
+            "min_score": 0.83,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "min_score": 0.8,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "min_score": 0.78,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "min_score": 0.77,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "min_score": 0.76,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "min_score": 0.75,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "min_score": 0.7,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          }
+        ],
+        "alpha": [
+          {
+            "alpha": 1.0,
+            "threshold": 0.848064,
+            "min_score": 0.8480637041975851,
+            "hits": 1,
+            "targets_kept": 1,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.9999,
+            "threshold": 0.847979,
+            "min_score": 0.8479788978271654,
+            "hits": 1,
+            "targets_kept": 1,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.9995,
+            "threshold": 0.84764,
+            "min_score": 0.8476396723454864,
+            "hits": 1,
+            "targets_kept": 1,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.999,
+            "threshold": 0.847216,
+            "min_score": 0.8472156404933876,
+            "hits": 2,
+            "targets_kept": 2,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.998,
+            "threshold": 0.846368,
+            "min_score": 0.84636757678919,
+            "hits": 2,
+            "targets_kept": 2,
+            "noise_kept": 0
+          },
+          {
+            "alpha": 0.997,
+            "threshold": 0.84552,
+            "min_score": 0.8455195130849924,
+            "hits": 3,
+            "targets_kept": 2,
+            "noise_kept": 1
+          },
+          {
+            "alpha": 0.996,
+            "threshold": 0.844671,
+            "min_score": 0.8446714493807947,
+            "hits": 4,
+            "targets_kept": 2,
+            "noise_kept": 2
+          },
+          {
+            "alpha": 0.995,
+            "threshold": 0.843823,
+            "min_score": 0.8438233856765972,
+            "hits": 5,
+            "targets_kept": 2,
+            "noise_kept": 3
+          },
+          {
+            "alpha": 0.99,
+            "threshold": 0.839583,
+            "min_score": 0.8395830671556093,
+            "hits": 12,
+            "targets_kept": 3,
+            "noise_kept": 9
+          },
+          {
+            "alpha": 0.985,
+            "threshold": 0.835343,
+            "min_score": 0.8353427486346213,
+            "hits": 24,
+            "targets_kept": 3,
+            "noise_kept": 21
+          },
+          {
+            "alpha": 0.98,
+            "threshold": 0.831102,
+            "min_score": 0.8311024301136334,
+            "hits": 30,
+            "targets_kept": 3,
+            "noise_kept": 27
+          },
+          {
+            "alpha": 0.97,
+            "threshold": 0.822622,
+            "min_score": 0.8226217930716576,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.96,
+            "threshold": 0.814141,
+            "min_score": 0.8141411560296817,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.95,
+            "threshold": 0.805661,
+            "min_score": 0.8056605189877059,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.94,
+            "threshold": 0.79718,
+            "min_score": 0.79717988194573,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.92,
+            "threshold": 0.780219,
+            "min_score": 0.7802186078617783,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.9,
+            "threshold": 0.763257,
+            "min_score": 0.7632573337778267,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          }
+        ]
+      },
+      "job_plus_topic": {
+        "template": "{job} {topic}",
+        "query": "后端开发工程师 MySQL",
+        "landscape": [
+          {
+            "score": 0.8396482288505515,
+            "source": "jd://career-ai/java-backend-senior",
+            "is_target": false
+          },
+          {
+            "score": 0.8380471494689776,
+            "source": "jd://career-ai/bigdata-engineer",
+            "is_target": false
+          },
+          {
+            "score": 0.8377232332707006,
+            "source": "handbook://spring/transaction",
+            "is_target": false
+          },
+          {
+            "score": 0.8374112451248039,
+            "source": "jd://career-ai/sdet",
+            "is_target": false
+          },
+          {
+            "score": 0.837355954532659,
+            "source": "handbook://redis/data-structures",
+            "is_target": false
+          },
+          {
+            "score": 0.83700209535378,
+            "source": "handbook://mysql/index",
+            "is_target": true
+          },
+          {
+            "score": 0.8351076124997775,
+            "source": "handbook://mysql/index",
+            "is_target": true
+          },
+          {
+            "score": 0.8350653029667028,
+            "source": "handbook://redis/persistence-and-ha",
+            "is_target": false
+          },
+          {
+            "score": 0.8348016673367378,
+            "source": "company://career-ai/about",
+            "is_target": false
+          },
+          {
+            "score": 0.834587877364736,
+            "source": "handbook://java/concurrency",
+            "is_target": false
+          },
+          {
+            "score": 0.8343679012345443,
+            "source": "handbook://spring/transaction",
+            "is_target": false
+          },
+          {
+            "score": 0.8341257265667872,
+            "source": "resume://project/log-platform",
+            "is_target": false
+          },
+          {
+            "score": 0.8338168821099738,
+            "source": "handbook://redis/persistence-and-ha",
+            "is_target": false
+          },
+          {
+            "score": 0.8335520674827369,
+            "source": "resume://project/seckill",
+            "is_target": false
+          },
+          {
+            "score": 0.8331214070645516,
+            "source": "handbook://jvm/troubleshooting",
+            "is_target": false
+          },
+          {
+            "score": 0.8330870419736405,
+            "source": "handbook://java/concurrency",
+            "is_target": false
+          },
+          {
+            "score": 0.8315248563315863,
+            "source": "handbook://jvm/memory-and-gc",
+            "is_target": false
+          },
+          {
+            "score": 0.8311563961686602,
+            "source": "company://career-ai/engineering-culture",
+            "is_target": false
+          },
+          {
+            "score": 0.8311095524403103,
+            "source": "handbook://kafka/reliability-and-idempotence",
+            "is_target": false
+          },
+          {
+            "score": 0.8306859090381582,
+            "source": "handbook://architecture/cache-consistency",
+            "is_target": false
+          },
+          {
+            "score": 0.8306010235344277,
+            "source": "handbook://jvm/memory-and-gc",
+            "is_target": false
+          },
+          {
+            "score": 0.8304909089644851,
+            "source": "resume://project/order-middle-cache",
+            "is_target": false
+          },
+          {
+            "score": 0.8304356228109153,
+            "source": "handbook://mysql/isolation-and-lock",
+            "is_target": true
+          },
+          {
+            "score": 0.8301540870250433,
+            "source": "resume://project/order-middle-cache",
+            "is_target": false
+          },
+          {
+            "score": 0.8298502199267499,
+            "source": "handbook://spring/auto-configuration",
+            "is_target": false
+          },
+          {
+            "score": 0.8295566712495845,
+            "source": "handbook://kafka/reliability-and-idempotence",
+            "is_target": false
+          },
+          {
+            "score": 0.8295224142233766,
+            "source": "handbook://network/http-and-https",
+            "is_target": false
+          },
+          {
+            "score": 0.8290217917361512,
+            "source": "company://career-ai/interview-process",
+            "is_target": false
+          },
+          {
+            "score": 0.8288325893054104,
+            "source": "handbook://spring/auto-configuration",
+            "is_target": false
+          },
+          {
+            "score": 0.8282447660036402,
+            "source": "handbook://network/http-and-https",
+            "is_target": false
+          },
+          {
+            "score": 0.8281891930148556,
+            "source": "handbook://jvm/troubleshooting",
+            "is_target": false
+          },
+          {
+            "score": 0.8273753677864228,
+            "source": "resume://project/payment-gateway",
+            "is_target": false
+          }
+        ],
+        "geometry": {
+          "total": 32,
+          "targets": 3,
+          "noise": 29,
+          "top1": 0.839648,
+          "target_floor": 0.830436,
+          "noise_ceiling": 0.839648,
+          "window": -0.009213,
+          "separable": false,
+          "feasible_alpha": null
+        },
+        "absolute": [
+          {
+            "min_score": 0.83,
+            "hits": 24,
+            "targets_kept": 3,
+            "noise_kept": 21
+          },
+          {
+            "min_score": 0.8,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "min_score": 0.78,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "min_score": 0.77,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "min_score": 0.76,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "min_score": 0.75,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "min_score": 0.7,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          }
+        ],
+        "alpha": [
+          {
+            "alpha": 1.0,
+            "threshold": 0.839648,
+            "min_score": 0.8396482288505515,
+            "hits": 1,
+            "targets_kept": 0,
+            "noise_kept": 1
+          },
+          {
+            "alpha": 0.9999,
+            "threshold": 0.839564,
+            "min_score": 0.8395642640276664,
+            "hits": 1,
+            "targets_kept": 0,
+            "noise_kept": 1
+          },
+          {
+            "alpha": 0.9995,
+            "threshold": 0.839228,
+            "min_score": 0.8392284047361263,
+            "hits": 1,
+            "targets_kept": 0,
+            "noise_kept": 1
+          },
+          {
+            "alpha": 0.999,
+            "threshold": 0.838809,
+            "min_score": 0.8388085806217009,
+            "hits": 1,
+            "targets_kept": 0,
+            "noise_kept": 1
+          },
+          {
+            "alpha": 0.998,
+            "threshold": 0.837969,
+            "min_score": 0.8379689323928503,
+            "hits": 2,
+            "targets_kept": 0,
+            "noise_kept": 2
+          },
+          {
+            "alpha": 0.997,
+            "threshold": 0.837129,
+            "min_score": 0.8371292841639998,
+            "hits": 5,
+            "targets_kept": 0,
+            "noise_kept": 5
+          },
+          {
+            "alpha": 0.996,
+            "threshold": 0.83629,
+            "min_score": 0.8362896359351493,
+            "hits": 6,
+            "targets_kept": 1,
+            "noise_kept": 5
+          },
+          {
+            "alpha": 0.995,
+            "threshold": 0.83545,
+            "min_score": 0.8354499877062987,
+            "hits": 6,
+            "targets_kept": 1,
+            "noise_kept": 5
+          },
+          {
+            "alpha": 0.99,
+            "threshold": 0.831252,
+            "min_score": 0.8312517465620459,
+            "hits": 17,
+            "targets_kept": 2,
+            "noise_kept": 15
+          },
+          {
+            "alpha": 0.985,
+            "threshold": 0.827054,
+            "min_score": 0.8270535054177932,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.98,
+            "threshold": 0.822855,
+            "min_score": 0.8228552642735404,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.97,
+            "threshold": 0.814459,
+            "min_score": 0.8144587819850349,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.96,
+            "threshold": 0.806062,
+            "min_score": 0.8060622996965293,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.95,
+            "threshold": 0.797666,
+            "min_score": 0.7976658174080239,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.94,
+            "threshold": 0.789269,
+            "min_score": 0.7892693351195184,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.92,
+            "threshold": 0.772476,
+            "min_score": 0.7724763705425074,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          },
+          {
+            "alpha": 0.9,
+            "threshold": 0.755683,
+            "min_score": 0.7556834059654963,
+            "hits": 32,
+            "targets_kept": 3,
+            "noise_kept": 29
+          }
+        ]
+      }
+    }
+  },
+  "long_query": [
+    {
+      "scenario_id": "s1-mysql-index-mid",
+      "topic": "MySQL 索引",
+      "landscape": [
+        {
+          "score": 0.836726,
+          "source": "handbook://mysql/index",
+          "is_target": true
+        },
+        {
+          "score": 0.836154,
+          "source": "handbook://mysql/index",
+          "is_target": true
+        },
+        {
+          "score": 0.829756,
+          "source": "handbook://redis/data-structures",
+          "is_target": false
+        },
+        {
+          "score": 0.828749,
+          "source": "handbook://spring/transaction",
+          "is_target": false
+        },
+        {
+          "score": 0.824641,
+          "source": "handbook://mysql/isolation-and-lock",
+          "is_target": false
+        },
+        {
+          "score": 0.824578,
+          "source": "handbook://spring/transaction",
+          "is_target": false
+        },
+        {
+          "score": 0.824468,
+          "source": "handbook://redis/persistence-and-ha",
+          "is_target": false
+        },
+        {
+          "score": 0.823771,
+          "source": "handbook://jvm/memory-and-gc",
+          "is_target": false
+        },
+        {
+          "score": 0.823716,
+          "source": "resume://project/log-platform",
+          "is_target": false
+        },
+        {
+          "score": 0.823231,
+          "source": "handbook://redis/persistence-and-ha",
+          "is_target": false
+        },
+        {
+          "score": 0.823229,
+          "source": "handbook://java/concurrency",
+          "is_target": false
+        },
+        {
+          "score": 0.82187,
+          "source": "handbook://jvm/troubleshooting",
+          "is_target": false
+        },
+        {
+          "score": 0.821838,
+          "source": "handbook://network/http-and-https",
+          "is_target": false
+        },
+        {
+          "score": 0.821592,
+          "source": "resume://project/order-middle-cache",
+          "is_target": false
+        },
+        {
+          "score": 0.821346,
+          "source": "handbook://architecture/cache-consistency",
+          "is_target": false
+        },
+        {
+          "score": 0.8212,
+          "source": "handbook://jvm/memory-and-gc",
+          "is_target": false
+        },
+        {
+          "score": 0.821099,
+          "source": "jd://career-ai/bigdata-engineer",
+          "is_target": false
+        },
+        {
+          "score": 0.820793,
+          "source": "handbook://kafka/reliability-and-idempotence",
+          "is_target": false
+        },
+        {
+          "score": 0.820463,
+          "source": "handbook://java/concurrency",
+          "is_target": false
+        },
+        {
+          "score": 0.82004,
+          "source": "resume://project/seckill",
+          "is_target": false
+        },
+        {
+          "score": 0.819916,
+          "source": "handbook://kafka/reliability-and-idempotence",
+          "is_target": false
+        },
+        {
+          "score": 0.819731,
+          "source": "jd://career-ai/java-backend-senior",
+          "is_target": false
+        },
+        {
+          "score": 0.819597,
+          "source": "handbook://spring/auto-configuration",
+          "is_target": false
+        },
+        {
+          "score": 0.819333,
+          "source": "resume://project/order-middle-cache",
+          "is_target": false
+        },
+        {
+          "score": 0.819217,
+          "source": "handbook://network/http-and-https",
+          "is_target": false
+        },
+        {
+          "score": 0.818964,
+          "source": "handbook://jvm/troubleshooting",
+          "is_target": false
+        },
+        {
+          "score": 0.818823,
+          "source": "company://career-ai/about",
+          "is_target": false
+        },
+        {
+          "score": 0.818177,
+          "source": "jd://career-ai/sdet",
+          "is_target": false
+        },
+        {
+          "score": 0.817803,
+          "source": "handbook://spring/auto-configuration",
+          "is_target": false
+        },
+        {
+          "score": 0.817691,
+          "source": "resume://project/payment-gateway",
+          "is_target": false
+        },
+        {
+          "score": 0.81769,
+          "source": "company://career-ai/engineering-culture",
+          "is_target": false
+        },
+        {
+          "score": 0.813112,
+          "source": "company://career-ai/interview-process",
+          "is_target": false
+        }
+      ],
+      "geometry": {
+        "total": 32,
+        "targets": 2,
+        "noise": 30,
+        "top1": 0.836726,
+        "target_floor": 0.836154,
+        "noise_ceiling": 0.829756,
+        "window": 0.006398,
+        "separable": true,
+        "feasible_alpha": {
+          "lo_exclusive": 0.9916699134483691,
+          "hi_inclusive": 0.9993163831409565,
+          "midpoint": 0.9954931482946627,
+          "lo_display": 0.99167,
+          "hi_display": 0.999316,
+          "midpoint_display": 0.995493
+        }
+      },
+      "absolute": [
+        {
+          "min_score": 0.83,
+          "hits": 2,
+          "targets_kept": 2,
+          "noise_kept": 0
+        },
+        {
+          "min_score": 0.8,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "min_score": 0.78,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "min_score": 0.77,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "min_score": 0.76,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "min_score": 0.75,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "min_score": 0.7,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        }
+      ],
+      "alpha": [
+        {
+          "alpha": 1.0,
+          "threshold": 0.836726,
+          "min_score": 0.836726,
+          "hits": 1,
+          "targets_kept": 1,
+          "noise_kept": 0
+        },
+        {
+          "alpha": 0.9999,
+          "threshold": 0.836642,
+          "min_score": 0.8366423274,
+          "hits": 1,
+          "targets_kept": 1,
+          "noise_kept": 0
+        },
+        {
+          "alpha": 0.9995,
+          "threshold": 0.836308,
+          "min_score": 0.836307637,
+          "hits": 1,
+          "targets_kept": 1,
+          "noise_kept": 0
+        },
+        {
+          "alpha": 0.999,
+          "threshold": 0.835889,
+          "min_score": 0.835889274,
+          "hits": 2,
+          "targets_kept": 2,
+          "noise_kept": 0
+        },
+        {
+          "alpha": 0.998,
+          "threshold": 0.835053,
+          "min_score": 0.835052548,
+          "hits": 2,
+          "targets_kept": 2,
+          "noise_kept": 0
+        },
+        {
+          "alpha": 0.997,
+          "threshold": 0.834216,
+          "min_score": 0.834215822,
+          "hits": 2,
+          "targets_kept": 2,
+          "noise_kept": 0
+        },
+        {
+          "alpha": 0.996,
+          "threshold": 0.833379,
+          "min_score": 0.8333790959999999,
+          "hits": 2,
+          "targets_kept": 2,
+          "noise_kept": 0
+        },
+        {
+          "alpha": 0.995,
+          "threshold": 0.832542,
+          "min_score": 0.83254237,
+          "hits": 2,
+          "targets_kept": 2,
+          "noise_kept": 0
+        },
+        {
+          "alpha": 0.99,
+          "threshold": 0.828359,
+          "min_score": 0.82835874,
+          "hits": 4,
+          "targets_kept": 2,
+          "noise_kept": 2
+        },
+        {
+          "alpha": 0.985,
+          "threshold": 0.824175,
+          "min_score": 0.82417511,
+          "hits": 7,
+          "targets_kept": 2,
+          "noise_kept": 5
+        },
+        {
+          "alpha": 0.98,
+          "threshold": 0.819991,
+          "min_score": 0.81999148,
+          "hits": 20,
+          "targets_kept": 2,
+          "noise_kept": 18
+        },
+        {
+          "alpha": 0.97,
+          "threshold": 0.811624,
+          "min_score": 0.8116242199999999,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "alpha": 0.96,
+          "threshold": 0.803257,
+          "min_score": 0.8032569599999999,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "alpha": 0.95,
+          "threshold": 0.79489,
+          "min_score": 0.7948896999999999,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "alpha": 0.94,
+          "threshold": 0.786522,
+          "min_score": 0.7865224399999999,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "alpha": 0.92,
+          "threshold": 0.769788,
+          "min_score": 0.76978792,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "alpha": 0.9,
+          "threshold": 0.753053,
+          "min_score": 0.7530534,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        }
+      ]
+    },
+    {
+      "scenario_id": "s2-spring-boot-senior",
+      "topic": "Spring Boot 自动配置",
+      "landscape": [
+        {
+          "score": 0.847096,
+          "source": "handbook://spring/auto-configuration",
+          "is_target": true
+        },
+        {
+          "score": 0.844136,
+          "source": "handbook://spring/auto-configuration",
+          "is_target": true
+        },
+        {
+          "score": 0.837734,
+          "source": "handbook://spring/transaction",
+          "is_target": false
+        },
+        {
+          "score": 0.837574,
+          "source": "handbook://spring/transaction",
+          "is_target": false
+        },
+        {
+          "score": 0.833127,
+          "source": "handbook://jvm/troubleshooting",
+          "is_target": false
+        },
+        {
+          "score": 0.832797,
+          "source": "handbook://java/concurrency",
+          "is_target": false
+        },
+        {
+          "score": 0.831499,
+          "source": "handbook://java/concurrency",
+          "is_target": false
+        },
+        {
+          "score": 0.831193,
+          "source": "handbook://redis/data-structures",
+          "is_target": false
+        },
+        {
+          "score": 0.830665,
+          "source": "handbook://redis/persistence-and-ha",
+          "is_target": false
+        },
+        {
+          "score": 0.830266,
+          "source": "handbook://mysql/index",
+          "is_target": false
+        },
+        {
+          "score": 0.829997,
+          "source": "resume://project/seckill",
+          "is_target": false
+        },
+        {
+          "score": 0.829913,
+          "source": "handbook://redis/persistence-and-ha",
+          "is_target": false
+        },
+        {
+          "score": 0.82985,
+          "source": "jd://career-ai/java-backend-senior",
+          "is_target": false
+        },
+        {
+          "score": 0.829792,
+          "source": "handbook://jvm/memory-and-gc",
+          "is_target": false
+        },
+        {
+          "score": 0.829417,
+          "source": "handbook://jvm/memory-and-gc",
+          "is_target": false
+        },
+        {
+          "score": 0.829256,
+          "source": "company://career-ai/about",
+          "is_target": false
+        },
+        {
+          "score": 0.828625,
+          "source": "handbook://mysql/index",
+          "is_target": false
+        },
+        {
+          "score": 0.82845,
+          "source": "handbook://kafka/reliability-and-idempotence",
+          "is_target": false
+        },
+        {
+          "score": 0.827962,
+          "source": "handbook://jvm/troubleshooting",
+          "is_target": false
+        },
+        {
+          "score": 0.827746,
+          "source": "company://career-ai/engineering-culture",
+          "is_target": false
+        },
+        {
+          "score": 0.827577,
+          "source": "handbook://network/http-and-https",
+          "is_target": false
+        },
+        {
+          "score": 0.826893,
+          "source": "jd://career-ai/sdet",
+          "is_target": false
+        },
+        {
+          "score": 0.826835,
+          "source": "handbook://network/http-and-https",
+          "is_target": false
+        },
+        {
+          "score": 0.826548,
+          "source": "handbook://architecture/cache-consistency",
+          "is_target": false
+        },
+        {
+          "score": 0.826543,
+          "source": "resume://project/log-platform",
+          "is_target": false
+        },
+        {
+          "score": 0.825976,
+          "source": "resume://project/order-middle-cache",
+          "is_target": false
+        },
+        {
+          "score": 0.825441,
+          "source": "jd://career-ai/bigdata-engineer",
+          "is_target": false
+        },
+        {
+          "score": 0.824186,
+          "source": "handbook://kafka/reliability-and-idempotence",
+          "is_target": false
+        },
+        {
+          "score": 0.823575,
+          "source": "resume://project/order-middle-cache",
+          "is_target": false
+        },
+        {
+          "score": 0.8226,
+          "source": "resume://project/payment-gateway",
+          "is_target": false
+        },
+        {
+          "score": 0.822386,
+          "source": "company://career-ai/interview-process",
+          "is_target": false
+        },
+        {
+          "score": 0.819889,
+          "source": "handbook://mysql/isolation-and-lock",
+          "is_target": false
+        }
+      ],
+      "geometry": {
+        "total": 32,
+        "targets": 2,
+        "noise": 30,
+        "top1": 0.847096,
+        "target_floor": 0.844136,
+        "noise_ceiling": 0.837734,
+        "window": 0.006402,
+        "separable": true,
+        "feasible_alpha": {
+          "lo_exclusive": 0.9889481239434492,
+          "hi_inclusive": 0.9965057089161087,
+          "midpoint": 0.992726916429779,
+          "lo_display": 0.988948,
+          "hi_display": 0.996506,
+          "midpoint_display": 0.992727
+        }
+      },
+      "absolute": [
+        {
+          "min_score": 0.83,
+          "hits": 10,
+          "targets_kept": 2,
+          "noise_kept": 8
+        },
+        {
+          "min_score": 0.8,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "min_score": 0.78,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "min_score": 0.77,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "min_score": 0.76,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "min_score": 0.75,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "min_score": 0.7,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        }
+      ],
+      "alpha": [
+        {
+          "alpha": 1.0,
+          "threshold": 0.847096,
+          "min_score": 0.847096,
+          "hits": 1,
+          "targets_kept": 1,
+          "noise_kept": 0
+        },
+        {
+          "alpha": 0.9999,
+          "threshold": 0.847011,
+          "min_score": 0.8470112904,
+          "hits": 1,
+          "targets_kept": 1,
+          "noise_kept": 0
+        },
+        {
+          "alpha": 0.9995,
+          "threshold": 0.846672,
+          "min_score": 0.846672452,
+          "hits": 1,
+          "targets_kept": 1,
+          "noise_kept": 0
+        },
+        {
+          "alpha": 0.999,
+          "threshold": 0.846249,
+          "min_score": 0.846248904,
+          "hits": 1,
+          "targets_kept": 1,
+          "noise_kept": 0
+        },
+        {
+          "alpha": 0.998,
+          "threshold": 0.845402,
+          "min_score": 0.845401808,
+          "hits": 1,
+          "targets_kept": 1,
+          "noise_kept": 0
+        },
+        {
+          "alpha": 0.997,
+          "threshold": 0.844555,
+          "min_score": 0.844554712,
+          "hits": 1,
+          "targets_kept": 1,
+          "noise_kept": 0
+        },
+        {
+          "alpha": 0.996,
+          "threshold": 0.843708,
+          "min_score": 0.843707616,
+          "hits": 2,
+          "targets_kept": 2,
+          "noise_kept": 0
+        },
+        {
+          "alpha": 0.995,
+          "threshold": 0.842861,
+          "min_score": 0.84286052,
+          "hits": 2,
+          "targets_kept": 2,
+          "noise_kept": 0
+        },
+        {
+          "alpha": 0.99,
+          "threshold": 0.838625,
+          "min_score": 0.8386250399999999,
+          "hits": 2,
+          "targets_kept": 2,
+          "noise_kept": 0
+        },
+        {
+          "alpha": 0.985,
+          "threshold": 0.83439,
+          "min_score": 0.83438956,
+          "hits": 4,
+          "targets_kept": 2,
+          "noise_kept": 2
+        },
+        {
+          "alpha": 0.98,
+          "threshold": 0.830154,
+          "min_score": 0.8301540799999999,
+          "hits": 10,
+          "targets_kept": 2,
+          "noise_kept": 8
+        },
+        {
+          "alpha": 0.97,
+          "threshold": 0.821683,
+          "min_score": 0.82168312,
+          "hits": 31,
+          "targets_kept": 2,
+          "noise_kept": 29
+        },
+        {
+          "alpha": 0.96,
+          "threshold": 0.813212,
+          "min_score": 0.81321216,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "alpha": 0.95,
+          "threshold": 0.804741,
+          "min_score": 0.8047411999999999,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "alpha": 0.94,
+          "threshold": 0.79627,
+          "min_score": 0.7962702399999999,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "alpha": 0.92,
+          "threshold": 0.779328,
+          "min_score": 0.77932832,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        },
+        {
+          "alpha": 0.9,
+          "threshold": 0.762386,
+          "min_score": 0.7623864,
+          "hits": 32,
+          "targets_kept": 2,
+          "noise_kept": 30
+        }
+      ]
+    },
+    {
+      "scenario_id": "s3-cache-consistency-senior",
+      "topic": "分布式缓存一致性",
+      "landscape": [
+        {
+          "score": 0.835889,
+          "source": "handbook://redis/persistence-and-ha",
+          "is_target": false
+        },
+        {
+          "score": 0.835134,
+          "source": "handbook://java/concurrency",
+          "is_target": false
+        },
+        {
+          "score": 0.834541,
+          "source": "handbook://kafka/reliability-and-idempotence",
+          "is_target": false
+        },
+        {
+          "score": 0.834201,
+          "source": "handbook://redis/persistence-and-ha",
+          "is_target": false
+        },
+        {
+          "score": 0.834132,
+          "source": "handbook://redis/data-structures",
+          "is_target": false
+        },
+        {
+          "score": 0.83315,
+          "source": "handbook://architecture/cache-consistency",
+          "is_target": true
+        },
+        {
+          "score": 0.833147,
+          "source": "handbook://spring/transaction",
+          "is_target": false
+        },
+        {
+          "score": 0.832732,
+          "source": "handbook://mysql/index",
+          "is_target": false
+        },
+        {
+          "score": 0.8321,
+          "source": "handbook://mysql/index",
+          "is_target": false
+        },
+        {
+          "score": 0.83168,
+          "source": "handbook://kafka/reliability-and-idempotence",
+          "is_target": false
+        },
+        {
+          "score": 0.831591,
+          "source": "resume://project/seckill",
+          "is_target": false
+        },
+        {
+          "score": 0.830608,
+          "source": "handbook://java/concurrency",
+          "is_target": false
+        },
+        {
+          "score": 0.830496,
+          "source": "handbook://jvm/memory-and-gc",
+          "is_target": false
+        },
+        {
+          "score": 0.82983,
+          "source": "handbook://network/http-and-https",
+          "is_target": false
+        },
+        {
+          "score": 0.829523,
+          "source": "handbook://jvm/troubleshooting",
+          "is_target": false
+        },
+        {
+          "score": 0.829321,
+          "source": "resume://project/order-middle-cache",
+          "is_target": false
+        },
+        {
+          "score": 0.829187,
+          "source": "handbook://jvm/memory-and-gc",
+          "is_target": false
+        },
+        {
+          "score": 0.829059,
+          "source": "handbook://spring/transaction",
+          "is_target": false
+        },
+        {
+          "score": 0.828757,
+          "source": "handbook://network/http-and-https",
+          "is_target": false
+        },
+        {
+          "score": 0.828421,
+          "source": "resume://project/log-platform",
+          "is_target": false
+        },
+        {
+          "score": 0.828168,
+          "source": "resume://project/order-middle-cache",
+          "is_target": false
+        },
+        {
+          "score": 0.827734,
+          "source": "handbook://spring/auto-configuration",
+          "is_target": false
+        },
+        {
+          "score": 0.827365,
+          "source": "resume://project/payment-gateway",
+          "is_target": false
+        },
+        {
+          "score": 0.827243,
+          "source": "handbook://spring/auto-configuration",
+          "is_target": false
+        },
+        {
+          "score": 0.825532,
+          "source": "jd://career-ai/bigdata-engineer",
+          "is_target": false
+        },
+        {
+          "score": 0.825214,
+          "source": "handbook://mysql/isolation-and-lock",
+          "is_target": false
+        },
+        {
+          "score": 0.825117,
+          "source": "jd://career-ai/java-backend-senior",
+          "is_target": false
+        },
+        {
+          "score": 0.823735,
+          "source": "jd://career-ai/sdet",
+          "is_target": false
+        },
+        {
+          "score": 0.822293,
+          "source": "handbook://jvm/troubleshooting",
+          "is_target": false
+        },
+        {
+          "score": 0.821749,
+          "source": "company://career-ai/about",
+          "is_target": false
+        },
+        {
+          "score": 0.820652,
+          "source": "company://career-ai/engineering-culture",
+          "is_target": false
+        },
+        {
+          "score": 0.817763,
+          "source": "company://career-ai/interview-process",
+          "is_target": false
+        }
+      ],
+      "geometry": {
+        "total": 32,
+        "targets": 1,
+        "noise": 31,
+        "top1": 0.835889,
+        "target_floor": 0.83315,
+        "noise_ceiling": 0.835889,
+        "window": -0.002739,
+        "separable": false,
+        "feasible_alpha": null
+      },
+      "absolute": [
+        {
+          "min_score": 0.83,
+          "hits": 13,
+          "targets_kept": 1,
+          "noise_kept": 12
+        },
+        {
+          "min_score": 0.8,
+          "hits": 32,
+          "targets_kept": 1,
+          "noise_kept": 31
+        },
+        {
+          "min_score": 0.78,
+          "hits": 32,
+          "targets_kept": 1,
+          "noise_kept": 31
+        },
+        {
+          "min_score": 0.77,
+          "hits": 32,
+          "targets_kept": 1,
+          "noise_kept": 31
+        },
+        {
+          "min_score": 0.76,
+          "hits": 32,
+          "targets_kept": 1,
+          "noise_kept": 31
+        },
+        {
+          "min_score": 0.75,
+          "hits": 32,
+          "targets_kept": 1,
+          "noise_kept": 31
+        },
+        {
+          "min_score": 0.7,
+          "hits": 32,
+          "targets_kept": 1,
+          "noise_kept": 31
+        }
+      ],
+      "alpha": [
+        {
+          "alpha": 1.0,
+          "threshold": 0.835889,
+          "min_score": 0.835889,
+          "hits": 1,
+          "targets_kept": 0,
+          "noise_kept": 1
+        },
+        {
+          "alpha": 0.9999,
+          "threshold": 0.835805,
+          "min_score": 0.8358054111,
+          "hits": 1,
+          "targets_kept": 0,
+          "noise_kept": 1
+        },
+        {
+          "alpha": 0.9995,
+          "threshold": 0.835471,
+          "min_score": 0.8354710555,
+          "hits": 1,
+          "targets_kept": 0,
+          "noise_kept": 1
+        },
+        {
+          "alpha": 0.999,
+          "threshold": 0.835053,
+          "min_score": 0.835053111,
+          "hits": 2,
+          "targets_kept": 0,
+          "noise_kept": 2
+        },
+        {
+          "alpha": 0.998,
+          "threshold": 0.834217,
+          "min_score": 0.834217222,
+          "hits": 3,
+          "targets_kept": 0,
+          "noise_kept": 3
+        },
+        {
+          "alpha": 0.997,
+          "threshold": 0.833381,
+          "min_score": 0.833381333,
+          "hits": 5,
+          "targets_kept": 0,
+          "noise_kept": 5
+        },
+        {
+          "alpha": 0.996,
+          "threshold": 0.832545,
+          "min_score": 0.832545444,
+          "hits": 8,
+          "targets_kept": 1,
+          "noise_kept": 7
+        },
+        {
+          "alpha": 0.995,
+          "threshold": 0.83171,
+          "min_score": 0.831709555,
+          "hits": 9,
+          "targets_kept": 1,
+          "noise_kept": 8
+        },
+        {
+          "alpha": 0.99,
+          "threshold": 0.82753,
+          "min_score": 0.82753011,
+          "hits": 22,
+          "targets_kept": 1,
+          "noise_kept": 21
+        },
+        {
+          "alpha": 0.985,
+          "threshold": 0.823351,
+          "min_score": 0.823350665,
+          "hits": 28,
+          "targets_kept": 1,
+          "noise_kept": 27
+        },
+        {
+          "alpha": 0.98,
+          "threshold": 0.819171,
+          "min_score": 0.81917122,
+          "hits": 31,
+          "targets_kept": 1,
+          "noise_kept": 30
+        },
+        {
+          "alpha": 0.97,
+          "threshold": 0.810812,
+          "min_score": 0.81081233,
+          "hits": 32,
+          "targets_kept": 1,
+          "noise_kept": 31
+        },
+        {
+          "alpha": 0.96,
+          "threshold": 0.802453,
+          "min_score": 0.80245344,
+          "hits": 32,
+          "targets_kept": 1,
+          "noise_kept": 31
+        },
+        {
+          "alpha": 0.95,
+          "threshold": 0.794095,
+          "min_score": 0.79409455,
+          "hits": 32,
+          "targets_kept": 1,
+          "noise_kept": 31
+        },
+        {
+          "alpha": 0.94,
+          "threshold": 0.785736,
+          "min_score": 0.78573566,
+          "hits": 32,
+          "targets_kept": 1,
+          "noise_kept": 31
+        },
+        {
+          "alpha": 0.92,
+          "threshold": 0.769018,
+          "min_score": 0.76901788,
+          "hits": 32,
+          "targets_kept": 1,
+          "noise_kept": 31
+        },
+        {
+          "alpha": 0.9,
+          "threshold": 0.7523,
+          "min_score": 0.7523001,
+          "hits": 32,
+          "targets_kept": 1,
+          "noise_kept": 31
+        }
+      ]
+    }
+  ],
+  "combined_alpha": {
+    "scenarios": [
+      "short::Redis",
+      "s1-mysql-index-mid",
+      "s2-spring-boot-senior"
+    ],
+    "lo_exclusive": 0.9932455171101932,
+    "hi_inclusive": 0.996251335470167,
+    "midpoint": 0.99474842629018,
+    "lo_display": 0.993246,
+    "hi_display": 0.996251,
+    "recommended_display": 0.994748
+  },
+  "elapsed_seconds": 16.94
+}

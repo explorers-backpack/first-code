@@ -17,6 +17,9 @@ cryptography>=41.0.0
 python-dotenv>=1.0.0
 websocket-client>=1.6.0     # 讯飞 Spark X1 WebSocket 调用（main.py SparkAPI）
 requests>=2.28.0            # 仅 backend/test_spark_*.py 调试脚本使用
+httpx>=0.27.0               # 真实 Embedding Provider 的异步 HTTP 客户端
+                            # （services/embedding_provider.py 内**延迟导入**，默认离线占位实现不需要它）；
+                            # 同时供 backend/tests/ 使用
 
 # ---- 测试依赖（backend/tests/ 下的自检脚本）----
 # 说明：测试统一使用 **SQLite 内存库**（sqlite+aiosqlite:///:memory:）做进程内隔离，
@@ -24,4 +27,12 @@ requests>=2.28.0            # 仅 backend/test_spark_*.py 调试脚本使用
 # 正式运行路径（database.py）只使用 MySQL，且缺少 DATABASE_URL 时直接报错、无任何回退。
 # 若需以 MySQL 校验测试，请自行设置 DATABASE_URL 后另行运行。
 aiosqlite>=0.19.0
-httpx>=0.27.0
+
+# ---- 可选：真实 ANN 向量后端（services/vector_store_chroma.py）----
+# 只有把 VECTOR_STORE 设为 chroma 时才需要；默认后端 vector_store_sql 不需要它。
+# 该模块内是**函数体延迟导入**，因此不装也能跑默认链路（缺 DATABASE_URL 也能 import）。
+# 选它的理由：嵌入式（无服务端、无独立端口）、内置真实 HNSW ANN、持久化到本地目录、
+# 元数据过滤下推到索引层；Windows 有 cp39-abi3 轮子，不需要本机编译 C++。
+# 代价：会带进一批传递依赖（onnxruntime / grpcio / kubernetes / tokenizers …），
+# 所以它是**可选**的，而不是默认路径。
+chromadb>=1.5.9

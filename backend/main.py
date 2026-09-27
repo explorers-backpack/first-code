@@ -73,6 +73,7 @@ from services.job_matching import keyword_match  # noqa: E402
 
 # ---- 路由：AI 模拟面试模块（独立分层，见 api/interview.py）----
 from api.interview import router as interview_router  # noqa: E402
+from api.knowledge import router as knowledge_router  # noqa: E402
 
 
 # ============================================================
@@ -365,6 +366,17 @@ async def cors_exception_handler(request: Request, exc: Exception):
 # 此处仅做挂载。
 # 前缀为 /api/interview，与既有路由（/api/chat、/api/resume/* 等）互不影响。
 app.include_router(interview_router)
+
+
+# ============================================================
+# 路由挂载：知识库模块
+# ============================================================
+# 独立分层实现（api/knowledge.py 路由 + services/knowledge_document_service.py
+# 文档读写 + services/knowledge_import_pipeline.py 切片/向量化/落库
+# + services/knowledge_maintenance.py 删除与索引重建 + schemas/knowledge.py），
+# 此处仅做挂载。
+# 前缀为 /api/knowledge：读接口需登录，写接口（导入 / 删除 / 重建）仅 admin。
+app.include_router(knowledge_router)
 
 
 # ============================================================

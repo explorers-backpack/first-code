@@ -1,0 +1,2897 @@
+{
+  "name": "rag-config-injection",
+  "version": 1,
+  "purpose": "验证「RAG 检索默认参数（RAG_TOP_K / RAG_MIN_SCORE）的配置注入」在真实语料与真实出题流程上确实生效，且不改变默认行为。",
+  "scope": "只驱动公开接口（build_vector_retriever / generate_next_question）；不修改任何生产代码、不改基准文件。",
+  "injection_point": {
+    "env_vars": [
+      "RAG_TOP_K",
+      "RAG_MIN_SCORE"
+    ],
+    "resolver": "services.knowledge_rag.resolve_retriever_defaults",
+    "assembler": "services.knowledge_rag.build_vector_retriever",
+    "merge_rule": "最终参数 = { **环境变量默认值, **调用方显式传入 }",
+    "production_path": "interview_core.resolve_retriever(db, None, True) -> knowledge_rag.build_vector_retriever(db)",
+    "note": "本运行器全程**不传** retriever_kwargs，只靠环境变量——这正是「生产默认路径」的行为。"
+  },
+  "part_a_query_level": {
+    "corpus": {
+      "documents": 16,
+      "chunks_in_store": 16
+    },
+    "arms": {
+      "env_unset": "不配 RAG_*（生产默认：top_k=5 / min_score=None）",
+      "env_min_score_0.25": "RAG_MIN_SCORE=0.25（用户指定的对比档）",
+      "env_min_score_calibrated": "RAG_MIN_SCORE=<该 query 的标定阈值>",
+      "env_query_declared": "RAG_TOP_K=<该 query 声明> + RAG_MIN_SCORE=<该 query 标定>"
+    },
+    "rows": [
+      {
+        "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+        "arm": "env_unset",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "红黑树",
+          "负载因子"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.19,
+        "effective_top_k": 5,
+        "effective_min_score": null,
+        "chunk_count": 5,
+        "scores": [
+          0.3898578784595568,
+          0.10198341204735069,
+          0.07753407204140506,
+          0.06255113291419874,
+          0.05453234541448247
+        ],
+        "sources": [
+          "handbook://java/hashmap",
+          "handbook://redis/cache-problems",
+          "handbook://jvm/memory-and-gc",
+          "resume://project/order-middle-cache",
+          "resume://project/payment-gateway"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 4478,
+        "prompt_delta_chars": 2052
+      },
+      {
+        "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+        "arm": "env_min_score_0.25",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "红黑树",
+          "负载因子"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.19,
+        "effective_top_k": 5,
+        "effective_min_score": 0.25,
+        "chunk_count": 1,
+        "scores": [
+          0.3898578784595568
+        ],
+        "sources": [
+          "handbook://java/hashmap"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 2919,
+        "prompt_delta_chars": 493
+      },
+      {
+        "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+        "arm": "env_min_score_calibrated",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "红黑树",
+          "负载因子"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.19,
+        "effective_top_k": 5,
+        "effective_min_score": 0.19,
+        "chunk_count": 1,
+        "scores": [
+          0.3898578784595568
+        ],
+        "sources": [
+          "handbook://java/hashmap"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 2919,
+        "prompt_delta_chars": 493
+      },
+      {
+        "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+        "arm": "env_query_declared",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "红黑树",
+          "负载因子"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.19,
+        "effective_top_k": 3,
+        "effective_min_score": 0.19,
+        "chunk_count": 1,
+        "scores": [
+          0.3898578784595568
+        ],
+        "sources": [
+          "handbook://java/hashmap"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 2919,
+        "prompt_delta_chars": 493
+      },
+      {
+        "query": "Java 线程池的核心参数和拒绝策略",
+        "arm": "env_unset",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "拒绝策略",
+          "核心线程数"
+        ],
+        "query_declared_top_k": 1,
+        "query_declared_min_score": 0.23,
+        "effective_top_k": 5,
+        "effective_min_score": null,
+        "chunk_count": 5,
+        "scores": [
+          0.4786245852387709,
+          0.12550074222957622,
+          0.12043663197215837,
+          0.10234676514280033,
+          0.09005476995526394
+        ],
+        "sources": [
+          "handbook://java/concurrency",
+          "jd://career-ai/java-backend-senior",
+          "handbook://mysql/isolation",
+          "handbook://java/hashmap",
+          "jd://career-ai/bigdata-engineer"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 4398,
+        "prompt_delta_chars": 1972
+      },
+      {
+        "query": "Java 线程池的核心参数和拒绝策略",
+        "arm": "env_min_score_0.25",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "拒绝策略",
+          "核心线程数"
+        ],
+        "query_declared_top_k": 1,
+        "query_declared_min_score": 0.23,
+        "effective_top_k": 5,
+        "effective_min_score": 0.25,
+        "chunk_count": 1,
+        "scores": [
+          0.4786245852387709
+        ],
+        "sources": [
+          "handbook://java/concurrency"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 2961,
+        "prompt_delta_chars": 535
+      },
+      {
+        "query": "Java 线程池的核心参数和拒绝策略",
+        "arm": "env_min_score_calibrated",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "拒绝策略",
+          "核心线程数"
+        ],
+        "query_declared_top_k": 1,
+        "query_declared_min_score": 0.23,
+        "effective_top_k": 5,
+        "effective_min_score": 0.23,
+        "chunk_count": 1,
+        "scores": [
+          0.4786245852387709
+        ],
+        "sources": [
+          "handbook://java/concurrency"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 2961,
+        "prompt_delta_chars": 535
+      },
+      {
+        "query": "Java 线程池的核心参数和拒绝策略",
+        "arm": "env_query_declared",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "拒绝策略",
+          "核心线程数"
+        ],
+        "query_declared_top_k": 1,
+        "query_declared_min_score": 0.23,
+        "effective_top_k": 1,
+        "effective_min_score": 0.23,
+        "chunk_count": 1,
+        "scores": [
+          0.4786245852387709
+        ],
+        "sources": [
+          "handbook://java/concurrency"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 2961,
+        "prompt_delta_chars": 535
+      },
+      {
+        "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+        "arm": "env_unset",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "穿透",
+          "击穿",
+          "雪崩"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.12,
+        "effective_top_k": 5,
+        "effective_min_score": null,
+        "chunk_count": 5,
+        "scores": [
+          0.2458159765968893,
+          0.15913098741604195,
+          0.14145628802893456,
+          0.11590011139293852,
+          0.09882384840881367
+        ],
+        "sources": [
+          "handbook://redis/cache-problems",
+          "handbook://network/http",
+          "resume://project/order-middle-cache",
+          "resume://project/seckill",
+          "resume://project/payment-gateway"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 4451,
+        "prompt_delta_chars": 2025
+      },
+      {
+        "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+        "arm": "env_min_score_0.25",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "穿透",
+          "击穿",
+          "雪崩"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.12,
+        "effective_top_k": 5,
+        "effective_min_score": 0.25,
+        "chunk_count": 0,
+        "scores": [],
+        "sources": [],
+        "top1_category": null,
+        "top1_category_ok": false,
+        "top1_keywords_ok": false,
+        "prompt_template": "question",
+        "prompt_chars": 2426,
+        "prompt_delta_chars": 0
+      },
+      {
+        "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+        "arm": "env_min_score_calibrated",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "穿透",
+          "击穿",
+          "雪崩"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.12,
+        "effective_top_k": 5,
+        "effective_min_score": 0.12,
+        "chunk_count": 3,
+        "scores": [
+          0.2458159765968893,
+          0.15913098741604195,
+          0.14145628802893456
+        ],
+        "sources": [
+          "handbook://redis/cache-problems",
+          "handbook://network/http",
+          "resume://project/order-middle-cache"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3654,
+        "prompt_delta_chars": 1228
+      },
+      {
+        "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+        "arm": "env_query_declared",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "穿透",
+          "击穿",
+          "雪崩"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.12,
+        "effective_top_k": 3,
+        "effective_min_score": 0.12,
+        "chunk_count": 3,
+        "scores": [
+          0.2458159765968893,
+          0.15913098741604195,
+          0.14145628802893456
+        ],
+        "sources": [
+          "handbook://redis/cache-problems",
+          "handbook://network/http",
+          "resume://project/order-middle-cache"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3654,
+        "prompt_delta_chars": 1228
+      },
+      {
+        "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+        "arm": "env_unset",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "RDB",
+          "AOF",
+          "appendfsync"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.12,
+        "effective_top_k": 5,
+        "effective_min_score": null,
+        "chunk_count": 5,
+        "scores": [
+          0.2525381361380526,
+          0.14581926965295566,
+          0.11958961484030967,
+          0.09248043889897663,
+          0.09207338730881488
+        ],
+        "sources": [
+          "handbook://redis/persistence",
+          "handbook://mysql/isolation",
+          "handbook://java/hashmap",
+          "handbook://jvm/memory-and-gc",
+          "jd://career-ai/bigdata-engineer"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 4367,
+        "prompt_delta_chars": 1941
+      },
+      {
+        "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+        "arm": "env_min_score_0.25",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "RDB",
+          "AOF",
+          "appendfsync"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.12,
+        "effective_top_k": 5,
+        "effective_min_score": 0.25,
+        "chunk_count": 1,
+        "scores": [
+          0.2525381361380526
+        ],
+        "sources": [
+          "handbook://redis/persistence"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 2878,
+        "prompt_delta_chars": 452
+      },
+      {
+        "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+        "arm": "env_min_score_calibrated",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "RDB",
+          "AOF",
+          "appendfsync"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.12,
+        "effective_top_k": 5,
+        "effective_min_score": 0.12,
+        "chunk_count": 2,
+        "scores": [
+          0.2525381361380526,
+          0.14581926965295566
+        ],
+        "sources": [
+          "handbook://redis/persistence",
+          "handbook://mysql/isolation"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3236,
+        "prompt_delta_chars": 810
+      },
+      {
+        "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+        "arm": "env_query_declared",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "RDB",
+          "AOF",
+          "appendfsync"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.12,
+        "effective_top_k": 3,
+        "effective_min_score": 0.12,
+        "chunk_count": 2,
+        "scores": [
+          0.2525381361380526,
+          0.14581926965295566
+        ],
+        "sources": [
+          "handbook://redis/persistence",
+          "handbook://mysql/isolation"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3236,
+        "prompt_delta_chars": 810
+      },
+      {
+        "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "arm": "env_unset",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "EXPLAIN",
+          "覆盖索引"
+        ],
+        "query_declared_top_k": 5,
+        "query_declared_min_score": 0.09,
+        "effective_top_k": 5,
+        "effective_min_score": null,
+        "chunk_count": 5,
+        "scores": [
+          0.18843715532962013,
+          0.09446315179780784,
+          0.09199165326047419,
+          0.0684436003119127,
+          0.06475103337403433
+        ],
+        "sources": [
+          "handbook://mysql/index",
+          "jd://career-ai/java-backend-senior",
+          "jd://career-ai/bigdata-engineer",
+          "handbook://network/http",
+          "handbook://mysql/isolation"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 4398,
+        "prompt_delta_chars": 1972
+      },
+      {
+        "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "arm": "env_min_score_0.25",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "EXPLAIN",
+          "覆盖索引"
+        ],
+        "query_declared_top_k": 5,
+        "query_declared_min_score": 0.09,
+        "effective_top_k": 5,
+        "effective_min_score": 0.25,
+        "chunk_count": 0,
+        "scores": [],
+        "sources": [],
+        "top1_category": null,
+        "top1_category_ok": false,
+        "top1_keywords_ok": false,
+        "prompt_template": "question",
+        "prompt_chars": 2426,
+        "prompt_delta_chars": 0
+      },
+      {
+        "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "arm": "env_min_score_calibrated",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "EXPLAIN",
+          "覆盖索引"
+        ],
+        "query_declared_top_k": 5,
+        "query_declared_min_score": 0.09,
+        "effective_top_k": 5,
+        "effective_min_score": 0.09,
+        "chunk_count": 3,
+        "scores": [
+          0.18843715532962013,
+          0.09446315179780784,
+          0.09199165326047419
+        ],
+        "sources": [
+          "handbook://mysql/index",
+          "jd://career-ai/java-backend-senior",
+          "jd://career-ai/bigdata-engineer"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3662,
+        "prompt_delta_chars": 1236
+      },
+      {
+        "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "arm": "env_query_declared",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "EXPLAIN",
+          "覆盖索引"
+        ],
+        "query_declared_top_k": 5,
+        "query_declared_min_score": 0.09,
+        "effective_top_k": 5,
+        "effective_min_score": 0.09,
+        "chunk_count": 3,
+        "scores": [
+          0.18843715532962013,
+          0.09446315179780784,
+          0.09199165326047419
+        ],
+        "sources": [
+          "handbook://mysql/index",
+          "jd://career-ai/java-backend-senior",
+          "jd://career-ai/bigdata-engineer"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3662,
+        "prompt_delta_chars": 1236
+      },
+      {
+        "query": "MySQL 的可重复读隔离级别和间隙锁",
+        "arm": "env_unset",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "可重复读",
+          "间隙锁"
+        ],
+        "query_declared_top_k": 1,
+        "query_declared_min_score": 0.2,
+        "effective_top_k": 5,
+        "effective_min_score": null,
+        "chunk_count": 5,
+        "scores": [
+          0.4056812866430596,
+          0.17173785778784112,
+          0.13327849749579598,
+          0.10806572394631674,
+          0.0753778361444409
+        ],
+        "sources": [
+          "handbook://mysql/isolation",
+          "jd://career-ai/java-backend-senior",
+          "handbook://kafka/reliability",
+          "jd://career-ai/bigdata-engineer",
+          "handbook://network/http"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 4450,
+        "prompt_delta_chars": 2024
+      },
+      {
+        "query": "MySQL 的可重复读隔离级别和间隙锁",
+        "arm": "env_min_score_0.25",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "可重复读",
+          "间隙锁"
+        ],
+        "query_declared_top_k": 1,
+        "query_declared_min_score": 0.2,
+        "effective_top_k": 5,
+        "effective_min_score": 0.25,
+        "chunk_count": 1,
+        "scores": [
+          0.4056812866430596
+        ],
+        "sources": [
+          "handbook://mysql/isolation"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 2908,
+        "prompt_delta_chars": 482
+      },
+      {
+        "query": "MySQL 的可重复读隔离级别和间隙锁",
+        "arm": "env_min_score_calibrated",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "可重复读",
+          "间隙锁"
+        ],
+        "query_declared_top_k": 1,
+        "query_declared_min_score": 0.2,
+        "effective_top_k": 5,
+        "effective_min_score": 0.2,
+        "chunk_count": 1,
+        "scores": [
+          0.4056812866430596
+        ],
+        "sources": [
+          "handbook://mysql/isolation"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 2908,
+        "prompt_delta_chars": 482
+      },
+      {
+        "query": "MySQL 的可重复读隔离级别和间隙锁",
+        "arm": "env_query_declared",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "可重复读",
+          "间隙锁"
+        ],
+        "query_declared_top_k": 1,
+        "query_declared_min_score": 0.2,
+        "effective_top_k": 1,
+        "effective_min_score": 0.2,
+        "chunk_count": 1,
+        "scores": [
+          0.4056812866430596
+        ],
+        "sources": [
+          "handbook://mysql/isolation"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 2908,
+        "prompt_delta_chars": 482
+      },
+      {
+        "query": "JVM 垃圾回收算法和常见收集器",
+        "arm": "env_unset",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "可达性分析",
+          "收集器"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.14,
+        "effective_top_k": 5,
+        "effective_min_score": null,
+        "chunk_count": 5,
+        "scores": [
+          0.29324641512099353,
+          0.12093595856020053,
+          0.09135139987044212,
+          0.06782818363629779,
+          0.0444231837097046
+        ],
+        "sources": [
+          "handbook://jvm/memory-and-gc",
+          "handbook://kafka/reliability",
+          "handbook://mysql/isolation",
+          "handbook://spring/transaction",
+          "jd://career-ai/java-backend-senior"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 4551,
+        "prompt_delta_chars": 2125
+      },
+      {
+        "query": "JVM 垃圾回收算法和常见收集器",
+        "arm": "env_min_score_0.25",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "可达性分析",
+          "收集器"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.14,
+        "effective_top_k": 5,
+        "effective_min_score": 0.25,
+        "chunk_count": 1,
+        "scores": [
+          0.29324641512099353
+        ],
+        "sources": [
+          "handbook://jvm/memory-and-gc"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 2976,
+        "prompt_delta_chars": 550
+      },
+      {
+        "query": "JVM 垃圾回收算法和常见收集器",
+        "arm": "env_min_score_calibrated",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "可达性分析",
+          "收集器"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.14,
+        "effective_top_k": 5,
+        "effective_min_score": 0.14,
+        "chunk_count": 1,
+        "scores": [
+          0.29324641512099353
+        ],
+        "sources": [
+          "handbook://jvm/memory-and-gc"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 2976,
+        "prompt_delta_chars": 550
+      },
+      {
+        "query": "JVM 垃圾回收算法和常见收集器",
+        "arm": "env_query_declared",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "可达性分析",
+          "收集器"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.14,
+        "effective_top_k": 3,
+        "effective_min_score": 0.14,
+        "chunk_count": 1,
+        "scores": [
+          0.29324641512099353
+        ],
+        "sources": [
+          "handbook://jvm/memory-and-gc"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 2976,
+        "prompt_delta_chars": 550
+      },
+      {
+        "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+        "arm": "env_unset",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "REQUIRES_NEW",
+          "NESTED",
+          "保存点"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.17,
+        "effective_top_k": 5,
+        "effective_min_score": null,
+        "chunk_count": 5,
+        "scores": [
+          0.3482698178549329,
+          0.2319458086422002,
+          0.1695044603103275,
+          0.16483267673842686,
+          0.16333635810871328
+        ],
+        "sources": [
+          "handbook://spring/transaction",
+          "resume://project/order-middle-cache",
+          "handbook://network/http",
+          "handbook://network/https",
+          "handbook://mysql/index"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 4450,
+        "prompt_delta_chars": 2024
+      },
+      {
+        "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+        "arm": "env_min_score_0.25",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "REQUIRES_NEW",
+          "NESTED",
+          "保存点"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.17,
+        "effective_top_k": 5,
+        "effective_min_score": 0.25,
+        "chunk_count": 1,
+        "scores": [
+          0.3482698178549329
+        ],
+        "sources": [
+          "handbook://spring/transaction"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 2939,
+        "prompt_delta_chars": 513
+      },
+      {
+        "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+        "arm": "env_min_score_calibrated",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "REQUIRES_NEW",
+          "NESTED",
+          "保存点"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.17,
+        "effective_top_k": 5,
+        "effective_min_score": 0.17,
+        "chunk_count": 2,
+        "scores": [
+          0.3482698178549329,
+          0.2319458086422002
+        ],
+        "sources": [
+          "handbook://spring/transaction",
+          "resume://project/order-middle-cache"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3357,
+        "prompt_delta_chars": 931
+      },
+      {
+        "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+        "arm": "env_query_declared",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "REQUIRES_NEW",
+          "NESTED",
+          "保存点"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.17,
+        "effective_top_k": 3,
+        "effective_min_score": 0.17,
+        "chunk_count": 2,
+        "scores": [
+          0.3482698178549329,
+          0.2319458086422002
+        ],
+        "sources": [
+          "handbook://spring/transaction",
+          "resume://project/order-middle-cache"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3357,
+        "prompt_delta_chars": 931
+      },
+      {
+        "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+        "arm": "env_unset",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "幂等",
+          "位移提交"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.17,
+        "effective_top_k": 5,
+        "effective_min_score": null,
+        "chunk_count": 5,
+        "scores": [
+          0.34352977188917566,
+          0.11681818473544502,
+          0.09519014050432062,
+          0.08786364769756365,
+          0.06857254813237415
+        ],
+        "sources": [
+          "handbook://kafka/reliability",
+          "handbook://java/concurrency",
+          "resume://project/payment-gateway",
+          "resume://project/seckill",
+          "handbook://network/http"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 4590,
+        "prompt_delta_chars": 2164
+      },
+      {
+        "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+        "arm": "env_min_score_0.25",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "幂等",
+          "位移提交"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.17,
+        "effective_top_k": 5,
+        "effective_min_score": 0.25,
+        "chunk_count": 1,
+        "scores": [
+          0.34352977188917566
+        ],
+        "sources": [
+          "handbook://kafka/reliability"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3004,
+        "prompt_delta_chars": 578
+      },
+      {
+        "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+        "arm": "env_min_score_calibrated",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "幂等",
+          "位移提交"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.17,
+        "effective_top_k": 5,
+        "effective_min_score": 0.17,
+        "chunk_count": 1,
+        "scores": [
+          0.34352977188917566
+        ],
+        "sources": [
+          "handbook://kafka/reliability"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3004,
+        "prompt_delta_chars": 578
+      },
+      {
+        "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+        "arm": "env_query_declared",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "幂等",
+          "位移提交"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.17,
+        "effective_top_k": 3,
+        "effective_min_score": 0.17,
+        "chunk_count": 1,
+        "scores": [
+          0.34352977188917566
+        ],
+        "sources": [
+          "handbook://kafka/reliability"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3004,
+        "prompt_delta_chars": 578
+      },
+      {
+        "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+        "arm": "env_unset",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "ClientHello",
+          "证书链",
+          "会话密钥"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.11,
+        "effective_top_k": 5,
+        "effective_min_score": null,
+        "chunk_count": 5,
+        "scores": [
+          0.23568791411226836,
+          0.13665914371885046,
+          0.10039273363859967,
+          0.07703661358927046,
+          0.05230701979864824
+        ],
+        "sources": [
+          "handbook://network/https",
+          "handbook://spring/transaction",
+          "handbook://mysql/isolation",
+          "handbook://java/concurrency",
+          "jd://career-ai/java-backend-senior"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 4395,
+        "prompt_delta_chars": 1969
+      },
+      {
+        "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+        "arm": "env_min_score_0.25",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "ClientHello",
+          "证书链",
+          "会话密钥"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.11,
+        "effective_top_k": 5,
+        "effective_min_score": 0.25,
+        "chunk_count": 0,
+        "scores": [],
+        "sources": [],
+        "top1_category": null,
+        "top1_category_ok": false,
+        "top1_keywords_ok": false,
+        "prompt_template": "question",
+        "prompt_chars": 2426,
+        "prompt_delta_chars": 0
+      },
+      {
+        "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+        "arm": "env_min_score_calibrated",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "ClientHello",
+          "证书链",
+          "会话密钥"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.11,
+        "effective_top_k": 5,
+        "effective_min_score": 0.11,
+        "chunk_count": 2,
+        "scores": [
+          0.23568791411226836,
+          0.13665914371885046
+        ],
+        "sources": [
+          "handbook://network/https",
+          "handbook://spring/transaction"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3252,
+        "prompt_delta_chars": 826
+      },
+      {
+        "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+        "arm": "env_query_declared",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "ClientHello",
+          "证书链",
+          "会话密钥"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.11,
+        "effective_top_k": 3,
+        "effective_min_score": 0.11,
+        "chunk_count": 2,
+        "scores": [
+          0.23568791411226836,
+          0.13665914371885046
+        ],
+        "sources": [
+          "handbook://network/https",
+          "handbook://spring/transaction"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3252,
+        "prompt_delta_chars": 826
+      },
+      {
+        "query": "HTTP 的强缓存和协商缓存有什么区别",
+        "arm": "env_unset",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "强缓存",
+          "协商缓存",
+          "ETag"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.21,
+        "effective_top_k": 5,
+        "effective_min_score": null,
+        "chunk_count": 5,
+        "scores": [
+          0.42699324622671986,
+          0.30899874755199314,
+          0.2671027396298781,
+          0.14021363680319482,
+          0.13821894809301777
+        ],
+        "sources": [
+          "handbook://network/http",
+          "handbook://redis/cache-problems",
+          "resume://project/order-middle-cache",
+          "handbook://redis/persistence",
+          "resume://project/seckill"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 4372,
+        "prompt_delta_chars": 1946
+      },
+      {
+        "query": "HTTP 的强缓存和协商缓存有什么区别",
+        "arm": "env_min_score_0.25",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "强缓存",
+          "协商缓存",
+          "ETag"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.21,
+        "effective_top_k": 5,
+        "effective_min_score": 0.25,
+        "chunk_count": 3,
+        "scores": [
+          0.42699324622671986,
+          0.30899874755199314,
+          0.2671027396298781
+        ],
+        "sources": [
+          "handbook://network/http",
+          "handbook://redis/cache-problems",
+          "resume://project/order-middle-cache"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3654,
+        "prompt_delta_chars": 1228
+      },
+      {
+        "query": "HTTP 的强缓存和协商缓存有什么区别",
+        "arm": "env_min_score_calibrated",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "强缓存",
+          "协商缓存",
+          "ETag"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.21,
+        "effective_top_k": 5,
+        "effective_min_score": 0.21,
+        "chunk_count": 3,
+        "scores": [
+          0.42699324622671986,
+          0.30899874755199314,
+          0.2671027396298781
+        ],
+        "sources": [
+          "handbook://network/http",
+          "handbook://redis/cache-problems",
+          "resume://project/order-middle-cache"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3654,
+        "prompt_delta_chars": 1228
+      },
+      {
+        "query": "HTTP 的强缓存和协商缓存有什么区别",
+        "arm": "env_query_declared",
+        "expected_category": "technical",
+        "expected_keywords": [
+          "强缓存",
+          "协商缓存",
+          "ETag"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.21,
+        "effective_top_k": 3,
+        "effective_min_score": 0.21,
+        "chunk_count": 3,
+        "scores": [
+          0.42699324622671986,
+          0.30899874755199314,
+          0.2671027396298781
+        ],
+        "sources": [
+          "handbook://network/http",
+          "handbook://redis/cache-problems",
+          "resume://project/order-middle-cache"
+        ],
+        "top1_category": "technical",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3654,
+        "prompt_delta_chars": 1228
+      },
+      {
+        "query": "Java 后端工程师的岗位职责和任职要求",
+        "arm": "env_unset",
+        "expected_category": "job",
+        "expected_keywords": [
+          "岗位职责",
+          "任职要求",
+          "交易链路"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.16,
+        "effective_top_k": 5,
+        "effective_min_score": null,
+        "chunk_count": 5,
+        "scores": [
+          0.3260604928938463,
+          0.23396915553966652,
+          0.10037244076773096,
+          0.09781105315169675,
+          0.09170924775834718
+        ],
+        "sources": [
+          "jd://career-ai/java-backend-senior",
+          "jd://career-ai/bigdata-engineer",
+          "resume://project/seckill",
+          "handbook://redis/cache-problems",
+          "handbook://spring/transaction"
+        ],
+        "top1_category": "job",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 4347,
+        "prompt_delta_chars": 1921
+      },
+      {
+        "query": "Java 后端工程师的岗位职责和任职要求",
+        "arm": "env_min_score_0.25",
+        "expected_category": "job",
+        "expected_keywords": [
+          "岗位职责",
+          "任职要求",
+          "交易链路"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.16,
+        "effective_top_k": 5,
+        "effective_min_score": 0.25,
+        "chunk_count": 1,
+        "scores": [
+          0.3260604928938463
+        ],
+        "sources": [
+          "jd://career-ai/java-backend-senior"
+        ],
+        "top1_category": "job",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 2924,
+        "prompt_delta_chars": 498
+      },
+      {
+        "query": "Java 后端工程师的岗位职责和任职要求",
+        "arm": "env_min_score_calibrated",
+        "expected_category": "job",
+        "expected_keywords": [
+          "岗位职责",
+          "任职要求",
+          "交易链路"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.16,
+        "effective_top_k": 5,
+        "effective_min_score": 0.16,
+        "chunk_count": 2,
+        "scores": [
+          0.3260604928938463,
+          0.23396915553966652
+        ],
+        "sources": [
+          "jd://career-ai/java-backend-senior",
+          "jd://career-ai/bigdata-engineer"
+        ],
+        "top1_category": "job",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3260,
+        "prompt_delta_chars": 834
+      },
+      {
+        "query": "Java 后端工程师的岗位职责和任职要求",
+        "arm": "env_query_declared",
+        "expected_category": "job",
+        "expected_keywords": [
+          "岗位职责",
+          "任职要求",
+          "交易链路"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.16,
+        "effective_top_k": 3,
+        "effective_min_score": 0.16,
+        "chunk_count": 2,
+        "scores": [
+          0.3260604928938463,
+          0.23396915553966652
+        ],
+        "sources": [
+          "jd://career-ai/java-backend-senior",
+          "jd://career-ai/bigdata-engineer"
+        ],
+        "top1_category": "job",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3260,
+        "prompt_delta_chars": 834
+      },
+      {
+        "query": "大数据开发工程师需要熟悉哪些计算引擎",
+        "arm": "env_unset",
+        "expected_category": "job",
+        "expected_keywords": [
+          "计算引擎",
+          "Hive"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.15,
+        "effective_top_k": 5,
+        "effective_min_score": null,
+        "chunk_count": 5,
+        "scores": [
+          0.3191274459456938,
+          0.21811287829456505,
+          0.16837874094498143,
+          0.10701462561817372,
+          0.10397504898200728
+        ],
+        "sources": [
+          "jd://career-ai/bigdata-engineer",
+          "jd://career-ai/java-backend-senior",
+          "handbook://mysql/index",
+          "handbook://redis/cache-problems",
+          "handbook://redis/persistence"
+        ],
+        "top1_category": "job",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 4298,
+        "prompt_delta_chars": 1872
+      },
+      {
+        "query": "大数据开发工程师需要熟悉哪些计算引擎",
+        "arm": "env_min_score_0.25",
+        "expected_category": "job",
+        "expected_keywords": [
+          "计算引擎",
+          "Hive"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.15,
+        "effective_top_k": 5,
+        "effective_min_score": 0.25,
+        "chunk_count": 1,
+        "scores": [
+          0.3191274459456938
+        ],
+        "sources": [
+          "jd://career-ai/bigdata-engineer"
+        ],
+        "top1_category": "job",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 2886,
+        "prompt_delta_chars": 460
+      },
+      {
+        "query": "大数据开发工程师需要熟悉哪些计算引擎",
+        "arm": "env_min_score_calibrated",
+        "expected_category": "job",
+        "expected_keywords": [
+          "计算引擎",
+          "Hive"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.15,
+        "effective_top_k": 5,
+        "effective_min_score": 0.15,
+        "chunk_count": 3,
+        "scores": [
+          0.3191274459456938,
+          0.21811287829456505,
+          0.16837874094498143
+        ],
+        "sources": [
+          "jd://career-ai/bigdata-engineer",
+          "jd://career-ai/java-backend-senior",
+          "handbook://mysql/index"
+        ],
+        "top1_category": "job",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3662,
+        "prompt_delta_chars": 1236
+      },
+      {
+        "query": "大数据开发工程师需要熟悉哪些计算引擎",
+        "arm": "env_query_declared",
+        "expected_category": "job",
+        "expected_keywords": [
+          "计算引擎",
+          "Hive"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.15,
+        "effective_top_k": 3,
+        "effective_min_score": 0.15,
+        "chunk_count": 3,
+        "scores": [
+          0.3191274459456938,
+          0.21811287829456505,
+          0.16837874094498143
+        ],
+        "sources": [
+          "jd://career-ai/bigdata-engineer",
+          "jd://career-ai/java-backend-senior",
+          "handbook://mysql/index"
+        ],
+        "top1_category": "job",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3662,
+        "prompt_delta_chars": 1236
+      },
+      {
+        "query": "订单中台的缓存击穿是怎么治理的",
+        "arm": "env_unset",
+        "expected_category": "project",
+        "expected_keywords": [
+          "订单中台",
+          "逻辑过期"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.14,
+        "effective_top_k": 5,
+        "effective_min_score": null,
+        "chunk_count": 5,
+        "scores": [
+          0.28596729388445097,
+          0.278017949292091,
+          0.19809847238241424,
+          0.16931045539672382,
+          0.13655643306164006
+        ],
+        "sources": [
+          "resume://project/order-middle-cache",
+          "handbook://redis/cache-problems",
+          "handbook://network/http",
+          "jd://career-ai/bigdata-engineer",
+          "handbook://java/hashmap"
+        ],
+        "top1_category": "project",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 4359,
+        "prompt_delta_chars": 1933
+      },
+      {
+        "query": "订单中台的缓存击穿是怎么治理的",
+        "arm": "env_min_score_0.25",
+        "expected_category": "project",
+        "expected_keywords": [
+          "订单中台",
+          "逻辑过期"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.14,
+        "effective_top_k": 5,
+        "effective_min_score": 0.25,
+        "chunk_count": 2,
+        "scores": [
+          0.28596729388445097,
+          0.278017949292091
+        ],
+        "sources": [
+          "resume://project/order-middle-cache",
+          "handbook://redis/cache-problems"
+        ],
+        "top1_category": "project",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3276,
+        "prompt_delta_chars": 850
+      },
+      {
+        "query": "订单中台的缓存击穿是怎么治理的",
+        "arm": "env_min_score_calibrated",
+        "expected_category": "project",
+        "expected_keywords": [
+          "订单中台",
+          "逻辑过期"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.14,
+        "effective_top_k": 5,
+        "effective_min_score": 0.14,
+        "chunk_count": 4,
+        "scores": [
+          0.28596729388445097,
+          0.278017949292091,
+          0.19809847238241424,
+          0.16931045539672382
+        ],
+        "sources": [
+          "resume://project/order-middle-cache",
+          "handbook://redis/cache-problems",
+          "handbook://network/http",
+          "jd://career-ai/bigdata-engineer"
+        ],
+        "top1_category": "project",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3990,
+        "prompt_delta_chars": 1564
+      },
+      {
+        "query": "订单中台的缓存击穿是怎么治理的",
+        "arm": "env_query_declared",
+        "expected_category": "project",
+        "expected_keywords": [
+          "订单中台",
+          "逻辑过期"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.14,
+        "effective_top_k": 3,
+        "effective_min_score": 0.14,
+        "chunk_count": 3,
+        "scores": [
+          0.28596729388445097,
+          0.278017949292091,
+          0.19809847238241424
+        ],
+        "sources": [
+          "resume://project/order-middle-cache",
+          "handbook://redis/cache-problems",
+          "handbook://network/http"
+        ],
+        "top1_category": "project",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3654,
+        "prompt_delta_chars": 1228
+      },
+      {
+        "query": "支付网关怎么做到幂等和日终对账",
+        "arm": "env_unset",
+        "expected_category": "project",
+        "expected_keywords": [
+          "支付网关",
+          "对账",
+          "唯一索引"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.1,
+        "effective_top_k": 5,
+        "effective_min_score": null,
+        "chunk_count": 5,
+        "scores": [
+          0.20217792265417858,
+          0.13177297660794246,
+          0.1171369350254158,
+          0.10663823359494566,
+          0.09666800257398865
+        ],
+        "sources": [
+          "resume://project/payment-gateway",
+          "handbook://network/http",
+          "resume://project/order-middle-cache",
+          "resume://project/seckill",
+          "handbook://java/concurrency"
+        ],
+        "top1_category": "project",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 4554,
+        "prompt_delta_chars": 2128
+      },
+      {
+        "query": "支付网关怎么做到幂等和日终对账",
+        "arm": "env_min_score_0.25",
+        "expected_category": "project",
+        "expected_keywords": [
+          "支付网关",
+          "对账",
+          "唯一索引"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.1,
+        "effective_top_k": 5,
+        "effective_min_score": 0.25,
+        "chunk_count": 0,
+        "scores": [],
+        "sources": [],
+        "top1_category": null,
+        "top1_category_ok": false,
+        "top1_keywords_ok": false,
+        "prompt_template": "question",
+        "prompt_chars": 2426,
+        "prompt_delta_chars": 0
+      },
+      {
+        "query": "支付网关怎么做到幂等和日终对账",
+        "arm": "env_min_score_calibrated",
+        "expected_category": "project",
+        "expected_keywords": [
+          "支付网关",
+          "对账",
+          "唯一索引"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.1,
+        "effective_top_k": 5,
+        "effective_min_score": 0.1,
+        "chunk_count": 4,
+        "scores": [
+          0.20217792265417858,
+          0.13177297660794246,
+          0.1171369350254158,
+          0.10663823359494566
+        ],
+        "sources": [
+          "resume://project/payment-gateway",
+          "handbook://network/http",
+          "resume://project/order-middle-cache",
+          "resume://project/seckill"
+        ],
+        "top1_category": "project",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 4143,
+        "prompt_delta_chars": 1717
+      },
+      {
+        "query": "支付网关怎么做到幂等和日终对账",
+        "arm": "env_query_declared",
+        "expected_category": "project",
+        "expected_keywords": [
+          "支付网关",
+          "对账",
+          "唯一索引"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.1,
+        "effective_top_k": 3,
+        "effective_min_score": 0.1,
+        "chunk_count": 3,
+        "scores": [
+          0.20217792265417858,
+          0.13177297660794246,
+          0.1171369350254158
+        ],
+        "sources": [
+          "resume://project/payment-gateway",
+          "handbook://network/http",
+          "resume://project/order-middle-cache"
+        ],
+        "top1_category": "project",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3753,
+        "prompt_delta_chars": 1327
+      },
+      {
+        "query": "秒杀系统怎么做限流和降级",
+        "arm": "env_unset",
+        "expected_category": "project",
+        "expected_keywords": [
+          "令牌桶限流",
+          "降级预案"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.05,
+        "effective_top_k": 5,
+        "effective_min_score": null,
+        "chunk_count": 5,
+        "scores": [
+          0.11839287208668638,
+          0.10168427515684002,
+          0.05938196213132835,
+          0.047231575898903956,
+          0.017887271881442963
+        ],
+        "sources": [
+          "resume://project/seckill",
+          "resume://project/order-middle-cache",
+          "resume://project/payment-gateway",
+          "jd://career-ai/java-backend-senior",
+          "handbook://java/concurrency"
+        ],
+        "top1_category": "project",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 4550,
+        "prompt_delta_chars": 2124
+      },
+      {
+        "query": "秒杀系统怎么做限流和降级",
+        "arm": "env_min_score_0.25",
+        "expected_category": "project",
+        "expected_keywords": [
+          "令牌桶限流",
+          "降级预案"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.05,
+        "effective_top_k": 5,
+        "effective_min_score": 0.25,
+        "chunk_count": 0,
+        "scores": [],
+        "sources": [],
+        "top1_category": null,
+        "top1_category_ok": false,
+        "top1_keywords_ok": false,
+        "prompt_template": "question",
+        "prompt_chars": 2426,
+        "prompt_delta_chars": 0
+      },
+      {
+        "query": "秒杀系统怎么做限流和降级",
+        "arm": "env_min_score_calibrated",
+        "expected_category": "project",
+        "expected_keywords": [
+          "令牌桶限流",
+          "降级预案"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.05,
+        "effective_top_k": 5,
+        "effective_min_score": 0.05,
+        "chunk_count": 3,
+        "scores": [
+          0.11839287208668638,
+          0.10168427515684002,
+          0.05938196213132835
+        ],
+        "sources": [
+          "resume://project/seckill",
+          "resume://project/order-middle-cache",
+          "resume://project/payment-gateway"
+        ],
+        "top1_category": "project",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3765,
+        "prompt_delta_chars": 1339
+      },
+      {
+        "query": "秒杀系统怎么做限流和降级",
+        "arm": "env_query_declared",
+        "expected_category": "project",
+        "expected_keywords": [
+          "令牌桶限流",
+          "降级预案"
+        ],
+        "query_declared_top_k": 3,
+        "query_declared_min_score": 0.05,
+        "effective_top_k": 3,
+        "effective_min_score": 0.05,
+        "chunk_count": 3,
+        "scores": [
+          0.11839287208668638,
+          0.10168427515684002,
+          0.05938196213132835
+        ],
+        "sources": [
+          "resume://project/seckill",
+          "resume://project/order-middle-cache",
+          "resume://project/payment-gateway"
+        ],
+        "top1_category": "project",
+        "top1_category_ok": true,
+        "top1_keywords_ok": true,
+        "prompt_template": "question_knowledge",
+        "prompt_chars": 3765,
+        "prompt_delta_chars": 1339
+      }
+    ],
+    "summary": {
+      "per_arm": {
+        "env_unset": {
+          "label": "不配 RAG_*（生产默认：top_k=5 / min_score=None）",
+          "total_chunks": 80,
+          "mean_chunks": 5.0,
+          "queries_with_zero_chunks": 0,
+          "top1_category_ok": 16,
+          "top1_keywords_ok": 16,
+          "total_prompt_delta_chars": 32192,
+          "effective_top_k_values": [
+            5
+          ],
+          "effective_min_score_values": [
+            null
+          ]
+        },
+        "env_min_score_0.25": {
+          "label": "RAG_MIN_SCORE=0.25（用户指定的对比档）",
+          "total_chunks": 14,
+          "mean_chunks": 0.875,
+          "queries_with_zero_chunks": 5,
+          "top1_category_ok": 11,
+          "top1_keywords_ok": 11,
+          "total_prompt_delta_chars": 6639,
+          "effective_top_k_values": [
+            5
+          ],
+          "effective_min_score_values": [
+            0.25
+          ]
+        },
+        "env_min_score_calibrated": {
+          "label": "RAG_MIN_SCORE=<该 query 的标定阈值>",
+          "total_chunks": 36,
+          "mean_chunks": 2.25,
+          "queries_with_zero_chunks": 0,
+          "top1_category_ok": 16,
+          "top1_keywords_ok": 16,
+          "total_prompt_delta_chars": 15587,
+          "effective_top_k_values": [
+            5
+          ],
+          "effective_min_score_values": [
+            0.05,
+            0.09,
+            0.1,
+            0.11,
+            0.12,
+            0.14,
+            0.15,
+            0.16,
+            0.17,
+            0.19,
+            0.2,
+            0.21,
+            0.23
+          ]
+        },
+        "env_query_declared": {
+          "label": "RAG_TOP_K=<该 query 声明> + RAG_MIN_SCORE=<该 query 标定>",
+          "total_chunks": 34,
+          "mean_chunks": 2.125,
+          "queries_with_zero_chunks": 0,
+          "top1_category_ok": 16,
+          "top1_keywords_ok": 16,
+          "total_prompt_delta_chars": 14861,
+          "effective_top_k_values": [
+            1,
+            3,
+            5
+          ],
+          "effective_min_score_values": [
+            0.05,
+            0.09,
+            0.1,
+            0.11,
+            0.12,
+            0.14,
+            0.15,
+            0.16,
+            0.17,
+            0.19,
+            0.2,
+            0.21,
+            0.23
+          ]
+        }
+      },
+      "queries": 16
+    },
+    "findings": [
+      {
+        "name": "RAG_MIN_SCORE=0.25 在这 16 篇语料上是否过度过滤",
+        "over_filtered": true,
+        "detail": "0.25 ⇒ 5/16 条 query 零命中；top-1 分类正确率 11/16（默认档 16/16）"
+      },
+      {
+        "name": "按该 query 标定阈值是否保持检索质量",
+        "quality_preserved": true,
+        "detail": "标定档 top-1 分类正确 16/16、零命中 0；默认档 16/16"
+      },
+      {
+        "name": "阈值是否真的缩短了注入的 Prompt",
+        "prompt_shorter": true,
+        "detail": "标定档增量 +15587 字 vs 默认档 +32192 字"
+      }
+    ],
+    "prompt_baseline": {
+      "scenario_id": "s1-mysql-index-mid",
+      "note": "Part A 的 Prompt 增量以该场景的 variables 为固定基线，只有 knowledge_context 随 query/档位变化，因此差值只反映检索。",
+      "base_prompt_chars": 2426
+    }
+  },
+  "part_b_end_to_end": {
+    "arms": {
+      "rag_off": "use_rag=False（对照：完全不接 RAG）",
+      "rag_on_env_unset": "use_rag=True，不设 RAG_*（生产默认）",
+      "rag_on_env_min_score_0.25": "use_rag=True，RAG_MIN_SCORE=0.25",
+      "rag_on_env_declared": "use_rag=True，RAG_MIN_SCORE=<场景声明阈值>"
+    },
+    "scenarios": [
+      {
+        "scenario_id": "s1-mysql-index-mid",
+        "label": "后端开发工程师 · MySQL 索引 · 中级 · 项目阶段",
+        "declared_retrieval": {
+          "query_topic": "MySQL 索引",
+          "top_k": 5,
+          "min_score": 0.25,
+          "expected_hit_sources": [
+            "handbook://mysql/index"
+          ],
+          "expected_chunk_count": 2,
+          "expected_excluded_sources": [
+            "handbook://spring/auto-configuration",
+            "handbook://redis/persistence-and-ha",
+            "handbook://jvm/memory-and-gc"
+          ]
+        },
+        "chunks_in_store": 32,
+        "arms": {
+          "rag_off": {
+            "arm": "rag_off",
+            "label": "use_rag=False（对照：完全不接 RAG）",
+            "use_rag": false,
+            "retriever_kwargs_passed": null,
+            "env": {},
+            "ok": true,
+            "question_no": 1,
+            "warnings": [],
+            "error": null,
+            "retriever_class": null,
+            "effective_top_k": null,
+            "effective_min_score": null,
+            "query": "MySQL 索引",
+            "chunk_count": 0,
+            "scores": [],
+            "sources": [],
+            "prompt_template": "question",
+            "prompt_chars": 2426,
+            "prompt_has_knowledge_block": false,
+            "agent_calls": 1,
+            "spark_calls": 1,
+            "question": "你在订单中台做过 MySQL 索引优化，请具体说明当时是怎么定位到需要新建索引的，以及最终为什么选择了这个索引而不是其它方案？",
+            "question_chars": 63
+          },
+          "rag_on_env_unset": {
+            "arm": "rag_on_env_unset",
+            "label": "use_rag=True，不设 RAG_*（生产默认）",
+            "use_rag": true,
+            "retriever_kwargs_passed": null,
+            "env": {},
+            "ok": true,
+            "question_no": 1,
+            "warnings": [],
+            "error": null,
+            "retriever_class": "VectorKnowledgeRetriever",
+            "effective_top_k": 5,
+            "effective_min_score": null,
+            "query": "MySQL 索引",
+            "chunk_count": 5,
+            "scores": [
+              0.5476094267474777,
+              0.37796447300922753,
+              0.15653209603896637,
+              0.13452328700008886,
+              0.12547140330712397
+            ],
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index",
+              "handbook://spring/auto-configuration",
+              "resume://project/log-platform",
+              "handbook://redis/persistence-and-ha"
+            ],
+            "prompt_template": "question_knowledge",
+            "prompt_chars": 4433,
+            "prompt_has_knowledge_block": true,
+            "agent_calls": 1,
+            "spark_calls": 1,
+            "question": "你在订单中台做过 MySQL 索引优化，请具体说明当时是怎么定位到需要新建索引的，以及最终为什么选择了这个索引而不是其它方案？",
+            "question_chars": 63
+          },
+          "rag_on_env_min_score_0.25": {
+            "arm": "rag_on_env_min_score_0.25",
+            "label": "use_rag=True，RAG_MIN_SCORE=0.25",
+            "use_rag": true,
+            "retriever_kwargs_passed": null,
+            "env": {
+              "RAG_MIN_SCORE": "0.25"
+            },
+            "ok": true,
+            "question_no": 1,
+            "warnings": [],
+            "error": null,
+            "retriever_class": "VectorKnowledgeRetriever",
+            "effective_top_k": 5,
+            "effective_min_score": 0.25,
+            "query": "MySQL 索引",
+            "chunk_count": 2,
+            "scores": [
+              0.5476094267474777,
+              0.37796447300922753
+            ],
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "prompt_template": "question_knowledge",
+            "prompt_chars": 3207,
+            "prompt_has_knowledge_block": true,
+            "agent_calls": 1,
+            "spark_calls": 1,
+            "question": "你在订单中台做过 MySQL 索引优化，请具体说明当时是怎么定位到需要新建索引的，以及最终为什么选择了这个索引而不是其它方案？",
+            "question_chars": 63
+          },
+          "rag_on_env_declared": {
+            "arm": "rag_on_env_declared",
+            "label": "use_rag=True，RAG_MIN_SCORE=<场景声明阈值>",
+            "use_rag": true,
+            "retriever_kwargs_passed": null,
+            "env": {
+              "RAG_MIN_SCORE": "0.25"
+            },
+            "ok": true,
+            "question_no": 1,
+            "warnings": [],
+            "error": null,
+            "retriever_class": "VectorKnowledgeRetriever",
+            "effective_top_k": 5,
+            "effective_min_score": 0.25,
+            "query": "MySQL 索引",
+            "chunk_count": 2,
+            "scores": [
+              0.5476094267474777,
+              0.37796447300922753
+            ],
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "prompt_template": "question_knowledge",
+            "prompt_chars": 3207,
+            "prompt_has_knowledge_block": true,
+            "agent_calls": 1,
+            "spark_calls": 1,
+            "question": "你在订单中台做过 MySQL 索引优化，请具体说明当时是怎么定位到需要新建索引的，以及最终为什么选择了这个索引而不是其它方案？",
+            "question_chars": 63
+          }
+        },
+        "checks": [
+          {
+            "name": "rag_off：不注入知识、无参考知识小节",
+            "ok": true,
+            "detail": "n=0 tmpl=question"
+          },
+          {
+            "name": "rag_on_env_unset：走默认口径（top_k=5 / min_score=None）",
+            "ok": true,
+            "detail": "top_k=5 min_score=None n=5"
+          },
+          {
+            "name": "★ 环境变量真的被组装器读到了（env_min_score_0.25 ⇒ 检索器 min_score=0.25）",
+            "ok": true,
+            "detail": "0.25"
+          },
+          {
+            "name": "★ RAG_MIN_SCORE=<场景声明阈值> ⇒ 注入条数 == expected_chunk_count",
+            "ok": true,
+            "detail": "n=2 expected=2"
+          },
+          {
+            "name": "  └ 且声明档的 Prompt 比默认档短（阈值真的省了 Prompt）",
+            "ok": true,
+            "detail": "3207 < 4433"
+          },
+          {
+            "name": "每一档都只调用一次 Agent / 一次大模型",
+            "ok": true,
+            "detail": "{'rag_off': (1, 1), 'rag_on_env_unset': (1, 1), 'rag_on_env_min_score_0.25': (1, 1), 'rag_on_env_declared': (1, 1)}"
+          },
+          {
+            "name": "每一档出题都成功（ok=True）且无 warning",
+            "ok": true,
+            "detail": "{'rag_off': (True, []), 'rag_on_env_unset': (True, []), 'rag_on_env_min_score_0.25': (True, []), 'rag_on_env_declared': (True, [])}"
+          }
+        ],
+        "findings": [
+          {
+            "name": "0.25 档与「该场景声明阈值」档是否等价",
+            "equivalent": true,
+            "detail": "RAG_MIN_SCORE=0.25 -> 2 条；声明阈值 0.25 -> 2 条（期望 2 条）"
+          },
+          {
+            "name": "0.25 档是否把噪声放进了 knowledge_context",
+            "noise_injected": false,
+            "detail": "条数 2 vs 期望 2；Prompt 3207 字 vs 默认档 4433 字"
+          }
+        ],
+        "all_checks_passed": true
+      },
+      {
+        "scenario_id": "s2-spring-boot-senior",
+        "label": "后端开发工程师（Java）· Spring Boot 自动配置 · 高级 · 技术阶段",
+        "declared_retrieval": {
+          "query_topic": "Spring Boot 自动配置",
+          "top_k": 5,
+          "min_score": 0.25,
+          "expected_hit_sources": [
+            "handbook://spring/auto-configuration"
+          ],
+          "expected_chunk_count": 2,
+          "expected_excluded_sources": [
+            "handbook://spring/transaction",
+            "handbook://mysql/index",
+            "handbook://java/concurrency"
+          ]
+        },
+        "chunks_in_store": 32,
+        "arms": {
+          "rag_off": {
+            "arm": "rag_off",
+            "label": "use_rag=False（对照：完全不接 RAG）",
+            "use_rag": false,
+            "retriever_kwargs_passed": null,
+            "env": {},
+            "ok": true,
+            "question_no": 1,
+            "warnings": [],
+            "error": null,
+            "retriever_class": null,
+            "effective_top_k": null,
+            "effective_min_score": null,
+            "query": "Spring Boot 自动配置",
+            "chunk_count": 0,
+            "scores": [],
+            "sources": [],
+            "prompt_template": "question",
+            "prompt_chars": 2457,
+            "prompt_has_knowledge_block": false,
+            "agent_calls": 1,
+            "spark_calls": 1,
+            "question": "请从条件装配与自动配置类的加载顺序角度，解释 Spring Boot 自动配置的生效过程，以及多模块下配置冲突通常如何排查？",
+            "question_chars": 62
+          },
+          "rag_on_env_unset": {
+            "arm": "rag_on_env_unset",
+            "label": "use_rag=True，不设 RAG_*（生产默认）",
+            "use_rag": true,
+            "retriever_kwargs_passed": null,
+            "env": {},
+            "ok": true,
+            "question_no": 1,
+            "warnings": [],
+            "error": null,
+            "retriever_class": "VectorKnowledgeRetriever",
+            "effective_top_k": 5,
+            "effective_min_score": null,
+            "query": "Spring Boot 自动配置",
+            "chunk_count": 5,
+            "scores": [
+              0.542934091091673,
+              0.33915287475109385,
+              0.1382118686237242,
+              0.12346308877860367,
+              0.1005037815259213
+            ],
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration",
+              "company://career-ai/about",
+              "handbook://network/http-and-https",
+              "handbook://spring/transaction"
+            ],
+            "prompt_template": "question_knowledge",
+            "prompt_chars": 4625,
+            "prompt_has_knowledge_block": true,
+            "agent_calls": 1,
+            "spark_calls": 1,
+            "question": "请从条件装配与自动配置类的加载顺序角度，解释 Spring Boot 自动配置的生效过程，以及多模块下配置冲突通常如何排查？",
+            "question_chars": 62
+          },
+          "rag_on_env_min_score_0.25": {
+            "arm": "rag_on_env_min_score_0.25",
+            "label": "use_rag=True，RAG_MIN_SCORE=0.25",
+            "use_rag": true,
+            "retriever_kwargs_passed": null,
+            "env": {
+              "RAG_MIN_SCORE": "0.25"
+            },
+            "ok": true,
+            "question_no": 1,
+            "warnings": [],
+            "error": null,
+            "retriever_class": "VectorKnowledgeRetriever",
+            "effective_top_k": 5,
+            "effective_min_score": 0.25,
+            "query": "Spring Boot 自动配置",
+            "chunk_count": 2,
+            "scores": [
+              0.542934091091673,
+              0.33915287475109385
+            ],
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "prompt_template": "question_knowledge",
+            "prompt_chars": 3574,
+            "prompt_has_knowledge_block": true,
+            "agent_calls": 1,
+            "spark_calls": 1,
+            "question": "请从条件装配与自动配置类的加载顺序角度，解释 Spring Boot 自动配置的生效过程，以及多模块下配置冲突通常如何排查？",
+            "question_chars": 62
+          },
+          "rag_on_env_declared": {
+            "arm": "rag_on_env_declared",
+            "label": "use_rag=True，RAG_MIN_SCORE=<场景声明阈值>",
+            "use_rag": true,
+            "retriever_kwargs_passed": null,
+            "env": {
+              "RAG_MIN_SCORE": "0.25"
+            },
+            "ok": true,
+            "question_no": 1,
+            "warnings": [],
+            "error": null,
+            "retriever_class": "VectorKnowledgeRetriever",
+            "effective_top_k": 5,
+            "effective_min_score": 0.25,
+            "query": "Spring Boot 自动配置",
+            "chunk_count": 2,
+            "scores": [
+              0.542934091091673,
+              0.33915287475109385
+            ],
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "prompt_template": "question_knowledge",
+            "prompt_chars": 3574,
+            "prompt_has_knowledge_block": true,
+            "agent_calls": 1,
+            "spark_calls": 1,
+            "question": "请从条件装配与自动配置类的加载顺序角度，解释 Spring Boot 自动配置的生效过程，以及多模块下配置冲突通常如何排查？",
+            "question_chars": 62
+          }
+        },
+        "checks": [
+          {
+            "name": "rag_off：不注入知识、无参考知识小节",
+            "ok": true,
+            "detail": "n=0 tmpl=question"
+          },
+          {
+            "name": "rag_on_env_unset：走默认口径（top_k=5 / min_score=None）",
+            "ok": true,
+            "detail": "top_k=5 min_score=None n=5"
+          },
+          {
+            "name": "★ 环境变量真的被组装器读到了（env_min_score_0.25 ⇒ 检索器 min_score=0.25）",
+            "ok": true,
+            "detail": "0.25"
+          },
+          {
+            "name": "★ RAG_MIN_SCORE=<场景声明阈值> ⇒ 注入条数 == expected_chunk_count",
+            "ok": true,
+            "detail": "n=2 expected=2"
+          },
+          {
+            "name": "  └ 且声明档的 Prompt 比默认档短（阈值真的省了 Prompt）",
+            "ok": true,
+            "detail": "3574 < 4625"
+          },
+          {
+            "name": "每一档都只调用一次 Agent / 一次大模型",
+            "ok": true,
+            "detail": "{'rag_off': (1, 1), 'rag_on_env_unset': (1, 1), 'rag_on_env_min_score_0.25': (1, 1), 'rag_on_env_declared': (1, 1)}"
+          },
+          {
+            "name": "每一档出题都成功（ok=True）且无 warning",
+            "ok": true,
+            "detail": "{'rag_off': (True, []), 'rag_on_env_unset': (True, []), 'rag_on_env_min_score_0.25': (True, []), 'rag_on_env_declared': (True, [])}"
+          }
+        ],
+        "findings": [
+          {
+            "name": "0.25 档与「该场景声明阈值」档是否等价",
+            "equivalent": true,
+            "detail": "RAG_MIN_SCORE=0.25 -> 2 条；声明阈值 0.25 -> 2 条（期望 2 条）"
+          },
+          {
+            "name": "0.25 档是否把噪声放进了 knowledge_context",
+            "noise_injected": false,
+            "detail": "条数 2 vs 期望 2；Prompt 3574 字 vs 默认档 4625 字"
+          }
+        ],
+        "all_checks_passed": true
+      },
+      {
+        "scenario_id": "s3-cache-consistency-senior",
+        "label": "后端架构师 · 分布式缓存一致性 · 高级 · 场景阶段",
+        "declared_retrieval": {
+          "query_topic": "分布式缓存一致性",
+          "top_k": 5,
+          "min_score": 0.4,
+          "expected_hit_sources": [
+            "handbook://architecture/cache-consistency"
+          ],
+          "expected_chunk_count": 1,
+          "expected_excluded_sources": [
+            "handbook://redis/persistence-and-ha",
+            "handbook://mysql/index",
+            "handbook://redis/data-structures"
+          ]
+        },
+        "chunks_in_store": 32,
+        "arms": {
+          "rag_off": {
+            "arm": "rag_off",
+            "label": "use_rag=False（对照：完全不接 RAG）",
+            "use_rag": false,
+            "retriever_kwargs_passed": null,
+            "env": {},
+            "ok": true,
+            "question_no": 1,
+            "warnings": [],
+            "error": null,
+            "retriever_class": null,
+            "effective_top_k": null,
+            "effective_min_score": null,
+            "query": "分布式缓存一致性",
+            "chunk_count": 0,
+            "scores": [],
+            "sources": [],
+            "prompt_template": "question",
+            "prompt_chars": 2449,
+            "prompt_has_knowledge_block": false,
+            "agent_calls": 1,
+            "spark_calls": 1,
+            "question": "假设订单中台的缓存与数据库出现了持续不一致，你会按什么顺序排查，又如何在延迟双删与版本号方案之间做取舍？",
+            "question_chars": 52
+          },
+          "rag_on_env_unset": {
+            "arm": "rag_on_env_unset",
+            "label": "use_rag=True，不设 RAG_*（生产默认）",
+            "use_rag": true,
+            "retriever_kwargs_passed": null,
+            "env": {},
+            "ok": true,
+            "question_no": 1,
+            "warnings": [],
+            "error": null,
+            "retriever_class": "VectorKnowledgeRetriever",
+            "effective_top_k": 5,
+            "effective_min_score": null,
+            "query": "分布式缓存一致性",
+            "chunk_count": 5,
+            "scores": [
+              0.4239815085282628,
+              0.3607709853146894,
+              0.30612961627280444,
+              0.25135148715187255,
+              0.24902912254587597
+            ],
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache",
+              "handbook://redis/data-structures",
+              "resume://project/payment-gateway",
+              "resume://project/order-middle-cache"
+            ],
+            "prompt_template": "question_knowledge",
+            "prompt_chars": 4752,
+            "prompt_has_knowledge_block": true,
+            "agent_calls": 1,
+            "spark_calls": 1,
+            "question": "假设订单中台的缓存与数据库出现了持续不一致，你会按什么顺序排查，又如何在延迟双删与版本号方案之间做取舍？",
+            "question_chars": 52
+          },
+          "rag_on_env_min_score_0.25": {
+            "arm": "rag_on_env_min_score_0.25",
+            "label": "use_rag=True，RAG_MIN_SCORE=0.25",
+            "use_rag": true,
+            "retriever_kwargs_passed": null,
+            "env": {
+              "RAG_MIN_SCORE": "0.25"
+            },
+            "ok": true,
+            "question_no": 1,
+            "warnings": [],
+            "error": null,
+            "retriever_class": "VectorKnowledgeRetriever",
+            "effective_top_k": 5,
+            "effective_min_score": 0.25,
+            "query": "分布式缓存一致性",
+            "chunk_count": 4,
+            "scores": [
+              0.4239815085282628,
+              0.3607709853146894,
+              0.30612961627280444,
+              0.25135148715187255
+            ],
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache",
+              "handbook://redis/data-structures",
+              "resume://project/payment-gateway"
+            ],
+            "prompt_template": "question_knowledge",
+            "prompt_chars": 4547,
+            "prompt_has_knowledge_block": true,
+            "agent_calls": 1,
+            "spark_calls": 1,
+            "question": "假设订单中台的缓存与数据库出现了持续不一致，你会按什么顺序排查，又如何在延迟双删与版本号方案之间做取舍？",
+            "question_chars": 52
+          },
+          "rag_on_env_declared": {
+            "arm": "rag_on_env_declared",
+            "label": "use_rag=True，RAG_MIN_SCORE=<场景声明阈值>",
+            "use_rag": true,
+            "retriever_kwargs_passed": null,
+            "env": {
+              "RAG_MIN_SCORE": "0.4"
+            },
+            "ok": true,
+            "question_no": 1,
+            "warnings": [],
+            "error": null,
+            "retriever_class": "VectorKnowledgeRetriever",
+            "effective_top_k": 5,
+            "effective_min_score": 0.4,
+            "query": "分布式缓存一致性",
+            "chunk_count": 1,
+            "scores": [
+              0.4239815085282628
+            ],
+            "sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "prompt_template": "question_knowledge",
+            "prompt_chars": 3071,
+            "prompt_has_knowledge_block": true,
+            "agent_calls": 1,
+            "spark_calls": 1,
+            "question": "假设订单中台的缓存与数据库出现了持续不一致，你会按什么顺序排查，又如何在延迟双删与版本号方案之间做取舍？",
+            "question_chars": 52
+          }
+        },
+        "checks": [
+          {
+            "name": "rag_off：不注入知识、无参考知识小节",
+            "ok": true,
+            "detail": "n=0 tmpl=question"
+          },
+          {
+            "name": "rag_on_env_unset：走默认口径（top_k=5 / min_score=None）",
+            "ok": true,
+            "detail": "top_k=5 min_score=None n=5"
+          },
+          {
+            "name": "★ 环境变量真的被组装器读到了（env_min_score_0.25 ⇒ 检索器 min_score=0.25）",
+            "ok": true,
+            "detail": "0.25"
+          },
+          {
+            "name": "★ RAG_MIN_SCORE=<场景声明阈值> ⇒ 注入条数 == expected_chunk_count",
+            "ok": true,
+            "detail": "n=1 expected=1"
+          },
+          {
+            "name": "  └ 且声明档的 Prompt 比默认档短（阈值真的省了 Prompt）",
+            "ok": true,
+            "detail": "3071 < 4752"
+          },
+          {
+            "name": "每一档都只调用一次 Agent / 一次大模型",
+            "ok": true,
+            "detail": "{'rag_off': (1, 1), 'rag_on_env_unset': (1, 1), 'rag_on_env_min_score_0.25': (1, 1), 'rag_on_env_declared': (1, 1)}"
+          },
+          {
+            "name": "每一档出题都成功（ok=True）且无 warning",
+            "ok": true,
+            "detail": "{'rag_off': (True, []), 'rag_on_env_unset': (True, []), 'rag_on_env_min_score_0.25': (True, []), 'rag_on_env_declared': (True, [])}"
+          }
+        ],
+        "findings": [
+          {
+            "name": "0.25 档与「该场景声明阈值」档是否等价",
+            "equivalent": false,
+            "detail": "RAG_MIN_SCORE=0.25 -> 4 条；声明阈值 0.4 -> 1 条（期望 1 条）"
+          },
+          {
+            "name": "0.25 档是否把噪声放进了 knowledge_context",
+            "noise_injected": true,
+            "detail": "条数 4 vs 期望 1；Prompt 4547 字 vs 默认档 4752 字"
+          }
+        ],
+        "all_checks_passed": true
+      }
+    ],
+    "aggregate": {
+      "total_scenarios": 3,
+      "per_arm": {
+        "rag_off": {
+          "label": "use_rag=False（对照：完全不接 RAG）",
+          "total_chunks": 0,
+          "total_prompt_chars": 7332,
+          "total_agent_calls": 3,
+          "all_ok": true,
+          "prompt_chars_vs_unset": -6478
+        },
+        "rag_on_env_unset": {
+          "label": "use_rag=True，不设 RAG_*（生产默认）",
+          "total_chunks": 15,
+          "total_prompt_chars": 13810,
+          "total_agent_calls": 3,
+          "all_ok": true,
+          "prompt_chars_vs_unset": 0
+        },
+        "rag_on_env_min_score_0.25": {
+          "label": "use_rag=True，RAG_MIN_SCORE=0.25",
+          "total_chunks": 8,
+          "total_prompt_chars": 11328,
+          "total_agent_calls": 3,
+          "all_ok": true,
+          "prompt_chars_vs_unset": -2482
+        },
+        "rag_on_env_declared": {
+          "label": "use_rag=True，RAG_MIN_SCORE=<场景声明阈值>",
+          "total_chunks": 5,
+          "total_prompt_chars": 9852,
+          "total_agent_calls": 3,
+          "all_ok": true,
+          "prompt_chars_vs_unset": -3958
+        }
+      },
+      "checks": [
+        {
+          "name": "★ 全部场景的 checks 都通过",
+          "ok": true
+        },
+        {
+          "name": "★ 声明档 Prompt 合计严格短于默认档",
+          "ok": true,
+          "detail": "9852 < 13810"
+        },
+        {
+          "name": "★ 注入条数合计：默认档 → 声明档 必须严格减少",
+          "ok": true,
+          "detail": "5 < 15"
+        }
+      ]
+    }
+  },
+  "cross_checks": {
+    "with_r2_explicit_kwargs_path": {
+      "source": "rag_min_score_calibration.json",
+      "note": "环境变量注入路径 与 显式 retriever_kwargs 透传路径 必须逐场景逐字节相同。",
+      "rows": [
+        {
+          "scenario_id": "s1-mysql-index-mid",
+          "arm": "rag_off",
+          "r2_arm": "rag_off",
+          "ok": true,
+          "env_path": {
+            "chunk_count": 0,
+            "prompt_chars": 2426,
+            "effective_min_score": null,
+            "prompt_template": "question"
+          },
+          "r2_kwargs_path": {
+            "chunk_count": 0,
+            "prompt_chars": 2426,
+            "effective_min_score": null,
+            "prompt_template": "question"
+          },
+          "detail": ""
+        },
+        {
+          "scenario_id": "s1-mysql-index-mid",
+          "arm": "rag_on_env_unset",
+          "r2_arm": "rag_on_no_threshold",
+          "ok": true,
+          "env_path": {
+            "chunk_count": 5,
+            "prompt_chars": 4433,
+            "effective_min_score": null,
+            "prompt_template": "question_knowledge"
+          },
+          "r2_kwargs_path": {
+            "chunk_count": 5,
+            "prompt_chars": 4433,
+            "effective_min_score": null,
+            "prompt_template": "question_knowledge"
+          },
+          "detail": ""
+        },
+        {
+          "scenario_id": "s1-mysql-index-mid",
+          "arm": "rag_on_env_declared",
+          "r2_arm": "rag_on_declared",
+          "ok": true,
+          "env_path": {
+            "chunk_count": 2,
+            "prompt_chars": 3207,
+            "effective_min_score": 0.25,
+            "prompt_template": "question_knowledge"
+          },
+          "r2_kwargs_path": {
+            "chunk_count": 2,
+            "prompt_chars": 3207,
+            "effective_min_score": 0.25,
+            "prompt_template": "question_knowledge"
+          },
+          "detail": ""
+        },
+        {
+          "scenario_id": "s2-spring-boot-senior",
+          "arm": "rag_off",
+          "r2_arm": "rag_off",
+          "ok": true,
+          "env_path": {
+            "chunk_count": 0,
+            "prompt_chars": 2457,
+            "effective_min_score": null,
+            "prompt_template": "question"
+          },
+          "r2_kwargs_path": {
+            "chunk_count": 0,
+            "prompt_chars": 2457,
+            "effective_min_score": null,
+            "prompt_template": "question"
+          },
+          "detail": ""
+        },
+        {
+          "scenario_id": "s2-spring-boot-senior",
+          "arm": "rag_on_env_unset",
+          "r2_arm": "rag_on_no_threshold",
+          "ok": true,
+          "env_path": {
+            "chunk_count": 5,
+            "prompt_chars": 4625,
+            "effective_min_score": null,
+            "prompt_template": "question_knowledge"
+          },
+          "r2_kwargs_path": {
+            "chunk_count": 5,
+            "prompt_chars": 4625,
+            "effective_min_score": null,
+            "prompt_template": "question_knowledge"
+          },
+          "detail": ""
+        },
+        {
+          "scenario_id": "s2-spring-boot-senior",
+          "arm": "rag_on_env_declared",
+          "r2_arm": "rag_on_declared",
+          "ok": true,
+          "env_path": {
+            "chunk_count": 2,
+            "prompt_chars": 3574,
+            "effective_min_score": 0.25,
+            "prompt_template": "question_knowledge"
+          },
+          "r2_kwargs_path": {
+            "chunk_count": 2,
+            "prompt_chars": 3574,
+            "effective_min_score": 0.25,
+            "prompt_template": "question_knowledge"
+          },
+          "detail": ""
+        },
+        {
+          "scenario_id": "s3-cache-consistency-senior",
+          "arm": "rag_off",
+          "r2_arm": "rag_off",
+          "ok": true,
+          "env_path": {
+            "chunk_count": 0,
+            "prompt_chars": 2449,
+            "effective_min_score": null,
+            "prompt_template": "question"
+          },
+          "r2_kwargs_path": {
+            "chunk_count": 0,
+            "prompt_chars": 2449,
+            "effective_min_score": null,
+            "prompt_template": "question"
+          },
+          "detail": ""
+        },
+        {
+          "scenario_id": "s3-cache-consistency-senior",
+          "arm": "rag_on_env_unset",
+          "r2_arm": "rag_on_no_threshold",
+          "ok": true,
+          "env_path": {
+            "chunk_count": 5,
+            "prompt_chars": 4752,
+            "effective_min_score": null,
+            "prompt_template": "question_knowledge"
+          },
+          "r2_kwargs_path": {
+            "chunk_count": 5,
+            "prompt_chars": 4752,
+            "effective_min_score": null,
+            "prompt_template": "question_knowledge"
+          },
+          "detail": ""
+        },
+        {
+          "scenario_id": "s3-cache-consistency-senior",
+          "arm": "rag_on_env_declared",
+          "r2_arm": "rag_on_declared",
+          "ok": true,
+          "env_path": {
+            "chunk_count": 1,
+            "prompt_chars": 3071,
+            "effective_min_score": 0.4,
+            "prompt_template": "question_knowledge"
+          },
+          "r2_kwargs_path": {
+            "chunk_count": 1,
+            "prompt_chars": 3071,
+            "effective_min_score": 0.4,
+            "prompt_template": "question_knowledge"
+          },
+          "detail": ""
+        }
+      ],
+      "all_ok": true
+    },
+    "with_rag_baseline": {
+      "source": "rag_baseline.json",
+      "note": "生产默认档（不设 RAG_*）的注入条数必须与既有 RAG 基准一致。",
+      "rows": [
+        {
+          "scenario_id": "s1-mysql-index-mid",
+          "ok": true,
+          "env_unset_chunk_count": 5,
+          "rag_baseline_retrieved_count": 5
+        },
+        {
+          "scenario_id": "s2-spring-boot-senior",
+          "ok": true,
+          "env_unset_chunk_count": 5,
+          "rag_baseline_retrieved_count": 5
+        },
+        {
+          "scenario_id": "s3-cache-consistency-senior",
+          "ok": true,
+          "env_unset_chunk_count": 5,
+          "rag_baseline_retrieved_count": 5
+        }
+      ],
+      "all_ok": true
+    }
+  },
+  "integrity": {
+    "ok": true,
+    "problems": []
+  }
+}

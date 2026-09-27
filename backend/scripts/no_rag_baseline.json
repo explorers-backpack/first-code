@@ -1,0 +1,388 @@
+{
+  "name": "interview-no-rag-baseline",
+  "version": 1,
+  "purpose": "建立「关闭 RAG」的 AI 面试问题生成基准结果，供后续与「开启 RAG」对照。只记录，不评价好坏。",
+  "scope": {
+    "evaluates_quality": false,
+    "modifies_code": false,
+    "arm": "rag_off",
+    "use_rag": false,
+    "retriever": null,
+    "knowledge_injected": false
+  },
+  "conditions": {
+    "fixed": [
+      "interview_plan",
+      "user_profile",
+      "difficulty",
+      "history_questions"
+    ],
+    "source": "backend/scripts/interview_eval_benchmark.json",
+    "prompt_template_key": "question",
+    "prompt_template_file": "prompts/interview/question.txt",
+    "template_files": {
+      "question": "prompts/interview/question.txt",
+      "question_knowledge": "prompts/interview/question_knowledge.txt"
+    },
+    "llm": {
+      "provider": "iflytek-spark",
+      "endpoint": "wss://spark-api.xf-yun.com/v1/x1",
+      "model": "x1（推理模型）",
+      "nondeterministic": true
+    },
+    "entry_point": "interview_core.generate_next_question(retriever=None, use_rag=False)"
+  },
+  "field_map": {
+    "question": "question",
+    "type": "question_type",
+    "difficulty": "difficulty",
+    "stage": "stage",
+    "reason": "reason"
+  },
+  "recorded_fields": [
+    "question",
+    "question_type",
+    "difficulty",
+    "stage",
+    "reason"
+  ],
+  "runs": [
+    {
+      "scenario_id": "s1-mysql-index-mid",
+      "label": "后端开发工程师 · MySQL 索引 · 中级 · 项目阶段",
+      "fixed_inputs": {
+        "interview_plan": {
+          "interview_type": "technical",
+          "difficulty": "mid",
+          "total_questions": 5,
+          "stages": [
+            {
+              "stage": "introduction",
+              "weight": 10,
+              "target_questions": 1
+            },
+            {
+              "stage": "resume",
+              "weight": 10,
+              "target_questions": 1
+            },
+            {
+              "stage": "technical",
+              "weight": 45,
+              "target_questions": 1
+            },
+            {
+              "stage": "project",
+              "weight": 25,
+              "target_questions": 1
+            },
+            {
+              "stage": "scenario",
+              "weight": 10,
+              "target_questions": 1
+            }
+          ],
+          "target_topics": [
+            "MySQL 索引",
+            "Spring Boot",
+            "性能优化",
+            "中台",
+            "MySQL",
+            "Python",
+            "Redis"
+          ],
+          "priority_topics": [
+            "MySQL 索引",
+            "Spring Boot",
+            "性能优化"
+          ],
+          "resume_focus_points": [
+            "订单中台"
+          ]
+        },
+        "user_profile": {
+          "job": {
+            "job_name": "后端开发工程师",
+            "description": "技能要求：MySQL 索引,Spring Boot；岗位职责：负责交易链路的后端服务开发与数据库性能优化"
+          },
+          "resume_summary": "4 年后端开发经验，负责订单中台与交易链路。\n项目名称：订单中台\n主导 MySQL 索引优化与慢查询治理，核心接口 QPS 提升 3 倍。\n技术栈：Python、MySQL、Redis、Spring Boot。"
+        },
+        "difficulty": "mid",
+        "history_questions": [
+          "请介绍一下你在订单中台负责的模块与主要产出。"
+        ],
+        "current_stage": "project"
+      },
+      "result": {
+        "question": "你在订单中台项目中主导了MySQL索引优化与慢查询治理，能否详细讲述一下在慢查询治理过程中，你是如何定位和分析慢查询的？具体采取了哪些优化措施？",
+        "question_type": "project",
+        "difficulty": "mid",
+        "stage": "project",
+        "reason": "当前阶段为project，需深入挖掘候选人在订单中台项目中的慢查询治理实践，补强简历中提及但尚未详细考察的薄弱知识点"
+      },
+      "full_result": {
+        "ok": true,
+        "question_no": 1,
+        "question": "你在订单中台项目中主导了MySQL索引优化与慢查询治理，能否详细讲述一下在慢查询治理过程中，你是如何定位和分析慢查询的？具体采取了哪些优化措施？",
+        "question_type": "project",
+        "topic": "MySQL慢查询治理",
+        "difficulty": "mid",
+        "expected_points": [
+          "慢查询定位方法",
+          "分析工具使用",
+          "索引优化策略",
+          "执行计划解读"
+        ],
+        "reason": "当前阶段为project，需深入挖掘候选人在订单中台项目中的慢查询治理实践，补强简历中提及但尚未详细考察的薄弱知识点",
+        "stage": "project",
+        "warnings": [],
+        "errors": [],
+        "error": null
+      },
+      "provenance": {
+        "ok": true,
+        "errors": [],
+        "warnings": [],
+        "error": null,
+        "question_no": 1,
+        "prompt_template": "question",
+        "prompt_chars": 2426,
+        "knowledge_context_passed": [],
+        "knowledge_context_is_empty": true,
+        "agent_calls": 1,
+        "signature_preserved": true,
+        "spark_calls_this_scenario": 1,
+        "elapsed_seconds": 12.19
+      }
+    },
+    {
+      "scenario_id": "s2-spring-boot-senior",
+      "label": "后端开发工程师（Java）· Spring Boot 自动配置 · 高级 · 技术阶段",
+      "fixed_inputs": {
+        "interview_plan": {
+          "interview_type": "technical",
+          "difficulty": "senior",
+          "total_questions": 5,
+          "stages": [
+            {
+              "stage": "introduction",
+              "weight": 10,
+              "target_questions": 1
+            },
+            {
+              "stage": "resume",
+              "weight": 10,
+              "target_questions": 1
+            },
+            {
+              "stage": "technical",
+              "weight": 45,
+              "target_questions": 1
+            },
+            {
+              "stage": "project",
+              "weight": 25,
+              "target_questions": 1
+            },
+            {
+              "stage": "scenario",
+              "weight": 10,
+              "target_questions": 1
+            }
+          ],
+          "target_topics": [
+            "Spring Boot 自动配置",
+            "MySQL",
+            "中台",
+            "Spring Boot",
+            "Java",
+            "Redis"
+          ],
+          "priority_topics": [
+            "MySQL",
+            "Spring Boot 自动配置"
+          ],
+          "resume_focus_points": [
+            "过订单中台",
+            "订单中台",
+            "统一了多模块"
+          ]
+        },
+        "user_profile": {
+          "job": {
+            "job_name": "后端开发工程师（Java）",
+            "description": "技能要求：Spring Boot 自动配置,MySQL；岗位职责：负责核心交易链路的后端服务设计与开发"
+          },
+          "resume_summary": "5 年后端开发经验，主导过订单中台重构。\n项目名称：订单中台\n主导 Spring Boot 自动配置与装配冲突排查，统一了多模块配置规范。\n技术栈：Java、Spring Boot、MySQL、Redis。"
+        },
+        "difficulty": "senior",
+        "history_questions": [
+          "请介绍一次你主导的架构重构，说明背景与你的决策依据。"
+        ],
+        "current_stage": "technical"
+      },
+      "result": {
+        "question": "在订单中台项目中，你曾处理过Spring Boot的装配冲突，请详细说明你是如何定位和解决这些冲突的？具体涉及到哪些自动配置类的调整？",
+        "question_type": "technical",
+        "difficulty": "senior",
+        "stage": "technical",
+        "reason": "补强薄弱知识点“装配冲突排查”，覆盖计划知识点“Spring Boot自动配置”，属于当前technical阶段。"
+      },
+      "full_result": {
+        "ok": true,
+        "question_no": 1,
+        "question": "在订单中台项目中，你曾处理过Spring Boot的装配冲突，请详细说明你是如何定位和解决这些冲突的？具体涉及到哪些自动配置类的调整？",
+        "question_type": "technical",
+        "topic": "Spring Boot装配冲突排查",
+        "difficulty": "senior",
+        "expected_points": [
+          "冲突定位方法",
+          "解决步骤",
+          "自动配置类调整",
+          "多模块配置统一"
+        ],
+        "reason": "补强薄弱知识点“装配冲突排查”，覆盖计划知识点“Spring Boot自动配置”，属于当前technical阶段。",
+        "stage": "technical",
+        "warnings": [],
+        "errors": [],
+        "error": null
+      },
+      "provenance": {
+        "ok": true,
+        "errors": [],
+        "warnings": [],
+        "error": null,
+        "question_no": 1,
+        "prompt_template": "question",
+        "prompt_chars": 2457,
+        "knowledge_context_passed": [],
+        "knowledge_context_is_empty": true,
+        "agent_calls": 1,
+        "signature_preserved": true,
+        "spark_calls_this_scenario": 1,
+        "elapsed_seconds": 14.68
+      }
+    },
+    {
+      "scenario_id": "s3-cache-consistency-senior",
+      "label": "后端架构师 · 分布式缓存一致性 · 高级 · 场景阶段",
+      "fixed_inputs": {
+        "interview_plan": {
+          "interview_type": "technical",
+          "difficulty": "senior",
+          "total_questions": 5,
+          "stages": [
+            {
+              "stage": "introduction",
+              "weight": 10,
+              "target_questions": 1
+            },
+            {
+              "stage": "resume",
+              "weight": 10,
+              "target_questions": 1
+            },
+            {
+              "stage": "technical",
+              "weight": 45,
+              "target_questions": 1
+            },
+            {
+              "stage": "project",
+              "weight": 25,
+              "target_questions": 1
+            },
+            {
+              "stage": "scenario",
+              "weight": 10,
+              "target_questions": 1
+            }
+          ],
+          "target_topics": [
+            "分布式缓存一致性",
+            "Redis",
+            "MySQL",
+            "架构设计",
+            "中台",
+            "分布式系统",
+            "Java",
+            "Kafka"
+          ],
+          "priority_topics": [
+            "Redis",
+            "MySQL",
+            "分布式缓存一致性",
+            "架构设计"
+          ],
+          "resume_focus_points": [
+            "订单中台"
+          ]
+        },
+        "user_profile": {
+          "job": {
+            "job_name": "后端架构师",
+            "description": "技能要求：分布式缓存一致性,Redis,MySQL；岗位职责：负责缓存与一致性方案的架构设计与技术评审"
+          },
+          "resume_summary": "8 年后端与架构经验，负责交易与缓存体系。\n项目名称：订单中台\n主导分布式缓存一致性方案（延迟双删 + 版本号），解决缓存与库不一致问题。\n技术栈：Java、Redis、MySQL、Kafka。"
+        },
+        "difficulty": "senior",
+        "history_questions": [
+          "请说明你在缓存体系上做过的最难的一次技术决策。"
+        ],
+        "current_stage": "scenario"
+      },
+      "result": {
+        "question": "在订单中台项目中，采用延迟双删+版本号解决缓存与库不一致问题时，若遇到极端高并发场景下仍出现短暂不一致的情况，你会如何从架构层面排查根因并设计优化方案？",
+        "question_type": "scenario",
+        "difficulty": "senior",
+        "stage": "scenario",
+        "reason": "当前为scenario阶段，需补强候选人简历中分布式缓存一致性的薄弱知识点，考察其架构取舍与边界场景处理能力。"
+      },
+      "full_result": {
+        "ok": true,
+        "question_no": 1,
+        "question": "在订单中台项目中，采用延迟双删+版本号解决缓存与库不一致问题时，若遇到极端高并发场景下仍出现短暂不一致的情况，你会如何从架构层面排查根因并设计优化方案？",
+        "question_type": "scenario",
+        "topic": "分布式缓存一致性",
+        "difficulty": "senior",
+        "expected_points": [
+          "延迟双删失效场景分析",
+          "版本号一致性兜底方案",
+          "极端并发缓存一致性保障",
+          "排查缓存不一致的方法",
+          "架构取舍"
+        ],
+        "reason": "当前为scenario阶段，需补强候选人简历中分布式缓存一致性的薄弱知识点，考察其架构取舍与边界场景处理能力。",
+        "stage": "scenario",
+        "warnings": [],
+        "errors": [],
+        "error": null
+      },
+      "provenance": {
+        "ok": true,
+        "errors": [],
+        "warnings": [],
+        "error": null,
+        "question_no": 1,
+        "prompt_template": "question",
+        "prompt_chars": 2449,
+        "knowledge_context_passed": [],
+        "knowledge_context_is_empty": true,
+        "agent_calls": 1,
+        "signature_preserved": true,
+        "spark_calls_this_scenario": 1,
+        "elapsed_seconds": 11.21
+      }
+    }
+  ],
+  "summary": {
+    "total": 3,
+    "ok": 3,
+    "failed": 0,
+    "spark_calls_total": 3,
+    "all_knowledge_empty": true,
+    "templates_used": [
+      "question"
+    ]
+  }
+}

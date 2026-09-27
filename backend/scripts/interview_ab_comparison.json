@@ -1,0 +1,643 @@
+{
+  "name": "interview-ab-comparison",
+  "version": 1,
+  "purpose": "把「无 RAG / 有 RAG」两组 AI 面试实验记录整理成结构化对比数据。只整理数据，**不评价质量**。",
+  "scope": {
+    "evaluates_quality": false,
+    "modifies_code": false,
+    "does_not_modify": [
+      "InterviewAgent",
+      "Retriever",
+      "Prompt 模板"
+    ],
+    "runs_new_experiments": false
+  },
+  "sources": {
+    "arm_rag_off": {
+      "file": "backend/scripts/no_rag_baseline.json",
+      "name": "interview-no-rag-baseline",
+      "version": 1
+    },
+    "arm_rag_on": {
+      "file": "backend/scripts/rag_baseline.json",
+      "name": "interview-rag-baseline",
+      "version": 1
+    },
+    "fixed_scenarios": {
+      "file": "backend/scripts/interview_eval_benchmark.json",
+      "name": "AI 面试问题生成 · 无 RAG vs 有 RAG 评估基准",
+      "version": 1
+    }
+  },
+  "arms": [
+    {
+      "id": "rag_off",
+      "label": "无 RAG",
+      "use_rag": false,
+      "prompt_template_key": "question",
+      "prompt_template_file": "prompts/interview/question.txt"
+    },
+    {
+      "id": "rag_on",
+      "label": "有 RAG",
+      "use_rag": true,
+      "prompt_template_key": "question_knowledge",
+      "prompt_template_file": "prompts/interview/question_knowledge.txt"
+    }
+  ],
+  "conditions": {
+    "fixed": [
+      "interview_session",
+      "interview_plan",
+      "resume",
+      "job",
+      "difficulty",
+      "history_questions"
+    ],
+    "the_only_change": "use_rag（False → True）；其余调用参数完全相同",
+    "llm": {
+      "provider": "iflytek-spark",
+      "endpoint": "wss://spark-api.xf-yun.com/v1/x1",
+      "model": "x1（推理模型）",
+      "nondeterministic": true
+    },
+    "llm_identical_across_arms": true,
+    "corpus": "backend/scripts/interview_knowledge.json"
+  },
+  "comparability": {
+    "checked": "每个场景：无 RAG 的 fixed_inputs == 有 RAG 的 input（键与值逐项相同）",
+    "per_scenario": {
+      "s1-mysql-index-mid": true,
+      "s2-spring-boot-senior": true,
+      "s3-cache-consistency-senior": true
+    },
+    "input_stored_once": "每个场景只存一份 input，两臂共用 ⇒ 结构上保证输入一致"
+  },
+  "schemas": {
+    "input": {
+      "interview_plan": "Planner（use_llm=False）产出的计划载荷，7 键",
+      "resume": "content=原始简历正文；summary_rendered=实际进 Prompt 的值",
+      "job": "job_name/skills/duty=原始岗位行；description_rendered=实际进 Prompt 的值",
+      "difficulty": "会话行声明的难度，同时是 Agent 的期望难度",
+      "history_questions": "context.asked_questions（用于查重）",
+      "current_stage": "context.current_stage（固定条件之一，非用户五项但同属固定输入）"
+    },
+    "rag": {
+      "enabled": "本臂是否注入检索知识",
+      "corpus_chunks_in_store": "仅 enabled=true 时存在：向量库里可检索的切片总数",
+      "retrieved_chunks": "仅 enabled=true 时存在：Retriever 实际返回的片段（紧凑形状）",
+      "retrieved_chunks[].content_preview": "正文前 120 字；全文见 rag_baseline.json"
+    },
+    "output": {
+      "question": "见 field_map / 评价字段说明",
+      "question_type": "见 field_map / 评价字段说明",
+      "difficulty": "见 field_map / 评价字段说明",
+      "stage": "见 field_map / 评价字段说明",
+      "reason": "见 field_map / 评价字段说明"
+    }
+  },
+  "field_map": {
+    "type": "question_type"
+  },
+  "output_fields": [
+    "question",
+    "question_type",
+    "difficulty",
+    "stage",
+    "reason"
+  ],
+  "scenarios": [
+    {
+      "scenario_id": "s1-mysql-index-mid",
+      "label": "后端开发工程师 · MySQL 索引 · 中级 · 项目阶段",
+      "input": {
+        "interview_plan": {
+          "interview_type": "technical",
+          "difficulty": "mid",
+          "total_questions": 5,
+          "stages": [
+            {
+              "stage": "introduction",
+              "weight": 10,
+              "target_questions": 1
+            },
+            {
+              "stage": "resume",
+              "weight": 10,
+              "target_questions": 1
+            },
+            {
+              "stage": "technical",
+              "weight": 45,
+              "target_questions": 1
+            },
+            {
+              "stage": "project",
+              "weight": 25,
+              "target_questions": 1
+            },
+            {
+              "stage": "scenario",
+              "weight": 10,
+              "target_questions": 1
+            }
+          ],
+          "target_topics": [
+            "MySQL 索引",
+            "Spring Boot",
+            "性能优化",
+            "中台",
+            "MySQL",
+            "Python",
+            "Redis"
+          ],
+          "priority_topics": [
+            "MySQL 索引",
+            "Spring Boot",
+            "性能优化"
+          ],
+          "resume_focus_points": [
+            "订单中台"
+          ]
+        },
+        "resume": {
+          "content": "4 年后端开发经验，负责订单中台与交易链路。\n项目名称：订单中台\n主导 MySQL 索引优化与慢查询治理，核心接口 QPS 提升 3 倍。\n技术栈：Python、MySQL、Redis、Spring Boot。",
+          "content_chars": 105,
+          "summary_rendered": "4 年后端开发经验，负责订单中台与交易链路。\n项目名称：订单中台\n主导 MySQL 索引优化与慢查询治理，核心接口 QPS 提升 3 倍。\n技术栈：Python、MySQL、Redis、Spring Boot。",
+          "summary_rendered_chars": 105,
+          "note": "summary_rendered 是**实际渲染进 Prompt** 的值（Agent 侧上限 1200 字）；content 是原始简历正文"
+        },
+        "job": {
+          "job_name": "后端开发工程师",
+          "skills": "MySQL 索引,Spring Boot",
+          "duty": "负责交易链路的后端服务开发与数据库性能优化",
+          "description_rendered": "技能要求：MySQL 索引,Spring Boot；岗位职责：负责交易链路的后端服务开发与数据库性能优化",
+          "note": "description_rendered 是**实际渲染进 Prompt** 的值（= 技能要求：{skills}；岗位职责：{duty}）"
+        },
+        "difficulty": "mid",
+        "history_questions": [
+          "请介绍一下你在订单中台负责的模块与主要产出。"
+        ],
+        "current_stage": "project"
+      },
+      "input_identical_across_arms": true,
+      "arms": {
+        "rag_off": {
+          "rag": {
+            "enabled": false,
+            "prompt_template_key": "question",
+            "knowledge_injected": false
+          },
+          "output": {
+            "question": "你在订单中台项目中主导了MySQL索引优化与慢查询治理，能否详细讲述一下在慢查询治理过程中，你是如何定位和分析慢查询的？具体采取了哪些优化措施？",
+            "question_type": "project",
+            "difficulty": "mid",
+            "stage": "project",
+            "reason": "当前阶段为project，需深入挖掘候选人在订单中台项目中的慢查询治理实践，补强简历中提及但尚未详细考察的薄弱知识点"
+          }
+        },
+        "rag_on": {
+          "rag": {
+            "enabled": true,
+            "corpus_chunks_in_store": 32,
+            "retrieved_chunks": [
+              {
+                "rank": 0,
+                "score": 0.5476094267474777,
+                "source": "handbook://mysql/index",
+                "document_id": 6,
+                "chunk_id": 8,
+                "content_chars": 335,
+                "content_preview": "InnoDB 使用 B+ 树作为索引结构。相比 B 树，B+ 树的非叶子节点只存键值不存数据，因此单页能容纳更多键、树高更低，一次查找通常只需要三到四次磁盘 IO；同时叶子节点用双向链表串联，天然支持范围扫描。\n\n聚簇索引的叶子节点存放整行"
+              },
+              {
+                "rank": 1,
+                "score": 0.37796447300922753,
+                "source": "handbook://mysql/index",
+                "document_id": 6,
+                "chunk_id": 9,
+                "content_chars": 262,
+                "content_preview": ", c) 上执行 where a = 1 and b > 2 and c = 3，c 用不到索引。因此联合索引的列顺序应当把等值条件放前面、范围条件放后面。\n\n用 EXPLAIN 判断索引是否生效，重点看三个字段：type 表示访问类型，从"
+              },
+              {
+                "rank": 2,
+                "score": 0.15653209603896637,
+                "source": "handbook://spring/auto-configuration",
+                "document_id": 4,
+                "chunk_id": 5,
+                "content_chars": 463,
+                "content_preview": "，得到一个候选配置类列表，再经过去重、排除（@EnableAutoConfiguration 的 exclude 属性）与条件过滤，最终决定哪些配置类生效。\n\n条件过滤靠 @Conditional 系列注解完成。最常用的几个：@Condit"
+              },
+              {
+                "rank": 3,
+                "score": 0.13452328700008886,
+                "source": "resume://project/log-platform",
+                "document_id": 21,
+                "chunk_id": 31,
+                "content_chars": 446,
+                "content_preview": "背景：公司早期用 ELK 做日志检索，随着服务数量增长，日志量涨到每天约两 TB，Elasticsearch 集群频繁出现写入拒绝，查询一个大范围时间窗口经常超时，运维成本也很高。\n\n重构思路是先降量、再换引擎。降量方面：统一日志格式，把非"
+              },
+              {
+                "rank": 4,
+                "score": 0.12547140330712397,
+                "source": "handbook://redis/persistence-and-ha",
+                "document_id": 9,
+                "chunk_id": 13,
+                "content_chars": 193,
+                "content_preview": "上增加了自动故障转移：多个哨兵通过类 Raft 协议选出领导者，由它把一个从节点提升为新主，并通知客户端。哨兵集群至少需要三个节点，且应部署在奇数台机器上。\n\nRedis Cluster 解决的是容量与写扩展：把数据按 16384 个哈希槽"
+              }
+            ],
+            "retrieved_count": 5,
+            "retriever": {
+              "class": "VectorKnowledgeRetriever",
+              "source_name": "vector",
+              "model_name": "hash-local",
+              "top_k": 5,
+              "min_score": null,
+              "dedup": true
+            },
+            "query_topic": "MySQL 索引",
+            "knowledge_context_chars": 1981,
+            "knowledge_context_lines": 5,
+            "knowledge_injected": true,
+            "prompt_template_key": "question_knowledge",
+            "chunks_full_text_in": {
+              "file": "backend/scripts/rag_baseline.json",
+              "path": "runs[scenario_id=s1-mysql-index-mid].rag.retrieved_chunks"
+            }
+          },
+          "output": {
+            "question": "在订单中台项目中，你主导了慢查询治理工作，能否详细描述一个典型的慢查询场景，以及你如何通过MySQL索引优化解决该问题，最后如何验证优化效果？",
+            "question_type": "project",
+            "difficulty": "mid",
+            "stage": "project",
+            "reason": "当前处于项目阶段，针对候选人简历中的订单中台项目，补强弱查询治理知识点，考察MySQL索引优化的实际应用"
+          }
+        }
+      }
+    },
+    {
+      "scenario_id": "s2-spring-boot-senior",
+      "label": "后端开发工程师（Java）· Spring Boot 自动配置 · 高级 · 技术阶段",
+      "input": {
+        "interview_plan": {
+          "interview_type": "technical",
+          "difficulty": "senior",
+          "total_questions": 5,
+          "stages": [
+            {
+              "stage": "introduction",
+              "weight": 10,
+              "target_questions": 1
+            },
+            {
+              "stage": "resume",
+              "weight": 10,
+              "target_questions": 1
+            },
+            {
+              "stage": "technical",
+              "weight": 45,
+              "target_questions": 1
+            },
+            {
+              "stage": "project",
+              "weight": 25,
+              "target_questions": 1
+            },
+            {
+              "stage": "scenario",
+              "weight": 10,
+              "target_questions": 1
+            }
+          ],
+          "target_topics": [
+            "Spring Boot 自动配置",
+            "MySQL",
+            "中台",
+            "Spring Boot",
+            "Java",
+            "Redis"
+          ],
+          "priority_topics": [
+            "MySQL",
+            "Spring Boot 自动配置"
+          ],
+          "resume_focus_points": [
+            "过订单中台",
+            "订单中台",
+            "统一了多模块"
+          ]
+        },
+        "resume": {
+          "content": "5 年后端开发经验，主导过订单中台重构。\n项目名称：订单中台\n主导 Spring Boot 自动配置与装配冲突排查，统一了多模块配置规范。\n技术栈：Java、Spring Boot、MySQL、Redis。",
+          "content_chars": 103,
+          "summary_rendered": "5 年后端开发经验，主导过订单中台重构。\n项目名称：订单中台\n主导 Spring Boot 自动配置与装配冲突排查，统一了多模块配置规范。\n技术栈：Java、Spring Boot、MySQL、Redis。",
+          "summary_rendered_chars": 103,
+          "note": "summary_rendered 是**实际渲染进 Prompt** 的值（Agent 侧上限 1200 字）；content 是原始简历正文"
+        },
+        "job": {
+          "job_name": "后端开发工程师（Java）",
+          "skills": "Spring Boot 自动配置,MySQL",
+          "duty": "负责核心交易链路的后端服务设计与开发",
+          "description_rendered": "技能要求：Spring Boot 自动配置,MySQL；岗位职责：负责核心交易链路的后端服务设计与开发",
+          "note": "description_rendered 是**实际渲染进 Prompt** 的值（= 技能要求：{skills}；岗位职责：{duty}）"
+        },
+        "difficulty": "senior",
+        "history_questions": [
+          "请介绍一次你主导的架构重构，说明背景与你的决策依据。"
+        ],
+        "current_stage": "technical"
+      },
+      "input_identical_across_arms": true,
+      "arms": {
+        "rag_off": {
+          "rag": {
+            "enabled": false,
+            "prompt_template_key": "question",
+            "knowledge_injected": false
+          },
+          "output": {
+            "question": "在订单中台项目中，你曾处理过Spring Boot的装配冲突，请详细说明你是如何定位和解决这些冲突的？具体涉及到哪些自动配置类的调整？",
+            "question_type": "technical",
+            "difficulty": "senior",
+            "stage": "technical",
+            "reason": "补强薄弱知识点“装配冲突排查”，覆盖计划知识点“Spring Boot自动配置”，属于当前technical阶段。"
+          }
+        },
+        "rag_on": {
+          "rag": {
+            "enabled": true,
+            "corpus_chunks_in_store": 32,
+            "retrieved_chunks": [
+              {
+                "rank": 0,
+                "score": 0.542934091091673,
+                "source": "handbook://spring/auto-configuration",
+                "document_id": 4,
+                "chunk_id": 4,
+                "content_chars": 442,
+                "content_preview": "Spring Boot 的自动配置建立在三个注解之上：@SpringBootConfiguration 声明这是一个配置类，@EnableAutoConfiguration 开启自动配置，@ComponentScan 扫描当前包及子包。\n\n"
+              },
+              {
+                "rank": 1,
+                "score": 0.33915287475109385,
+                "source": "handbook://spring/auto-configuration",
+                "document_id": 4,
+                "chunk_id": 5,
+                "content_chars": 463,
+                "content_preview": "，得到一个候选配置类列表，再经过去重、排除（@EnableAutoConfiguration 的 exclude 属性）与条件过滤，最终决定哪些配置类生效。\n\n条件过滤靠 @Conditional 系列注解完成。最常用的几个：@Condit"
+              },
+              {
+                "rank": 2,
+                "score": 0.1382118686237242,
+                "source": "company://career-ai/about",
+                "document_id": 16,
+                "chunk_id": 25,
+                "content_chars": 399,
+                "content_preview": "我们是一家做在线教育与职业发展服务的公司，核心产品是面向求职者的智能求职助手，以及面向企业的招聘协同平台。\n\n业务线主要有三条：C 端求职工具（简历诊断、岗位匹配、模拟面试）、B 端招聘 SaaS（职位管理、候选人跟进、面试协同）、以及数据"
+              },
+              {
+                "rank": 3,
+                "score": 0.12346308877860367,
+                "source": "handbook://network/http-and-https",
+                "document_id": 15,
+                "chunk_id": 24,
+                "content_chars": 354,
+                "content_preview": "ne-Match，命中返回 304 且不带主体。ETag 比 Last-Modified 更精确，因为后者只能精确到秒，且文件内容未变时修改时间也可能变化。\n\nHTTPS 在 HTTP 与 TCP 之间加了 TLS 层，解决窃听、篡改与冒充"
+              },
+              {
+                "rank": 4,
+                "score": 0.1005037815259213,
+                "source": "handbook://spring/transaction",
+                "document_id": 5,
+                "chunk_id": 7,
+                "content_chars": 187,
+                "content_preview": "一是同类内部方法直接调用不走代理，@Transactional 会失效；二是事务方法里做远程调用或发消息，会长时间占用数据库连接，应当把外部调用挪到事务外。\n\n隔离级别方面，Spring 默认沿用数据库的默认级别，MySQL 的 InnoD"
+              }
+            ],
+            "retrieved_count": 5,
+            "retriever": {
+              "class": "VectorKnowledgeRetriever",
+              "source_name": "vector",
+              "model_name": "hash-local",
+              "top_k": 5,
+              "min_score": null,
+              "dedup": true
+            },
+            "query_topic": "Spring Boot 自动配置",
+            "knowledge_context_chars": 2142,
+            "knowledge_context_lines": 5,
+            "knowledge_injected": true,
+            "prompt_template_key": "question_knowledge",
+            "chunks_full_text_in": {
+              "file": "backend/scripts/rag_baseline.json",
+              "path": "runs[scenario_id=s2-spring-boot-senior].rag.retrieved_chunks"
+            }
+          },
+          "output": {
+            "question": "在订单中台多模块配置规范统一过程中，你遇到过哪些典型的Bean装配冲突场景？请结合Spring Boot自动配置机制，说明如何通过条件过滤、优先级控制等手段解决这类问题，并分析过度依赖自动配置可能引发的架构风险。",
+            "question_type": "technical",
+            "difficulty": "senior",
+            "stage": "technical",
+            "reason": "针对候选人简历中「主导Spring Boot自动配置与装配冲突排查」的薄弱知识点，考察其对自动配置底层机制的理解深度及架构层面的风险控制能力"
+          }
+        }
+      }
+    },
+    {
+      "scenario_id": "s3-cache-consistency-senior",
+      "label": "后端架构师 · 分布式缓存一致性 · 高级 · 场景阶段",
+      "input": {
+        "interview_plan": {
+          "interview_type": "technical",
+          "difficulty": "senior",
+          "total_questions": 5,
+          "stages": [
+            {
+              "stage": "introduction",
+              "weight": 10,
+              "target_questions": 1
+            },
+            {
+              "stage": "resume",
+              "weight": 10,
+              "target_questions": 1
+            },
+            {
+              "stage": "technical",
+              "weight": 45,
+              "target_questions": 1
+            },
+            {
+              "stage": "project",
+              "weight": 25,
+              "target_questions": 1
+            },
+            {
+              "stage": "scenario",
+              "weight": 10,
+              "target_questions": 1
+            }
+          ],
+          "target_topics": [
+            "分布式缓存一致性",
+            "Redis",
+            "MySQL",
+            "架构设计",
+            "中台",
+            "分布式系统",
+            "Java",
+            "Kafka"
+          ],
+          "priority_topics": [
+            "Redis",
+            "MySQL",
+            "分布式缓存一致性",
+            "架构设计"
+          ],
+          "resume_focus_points": [
+            "订单中台"
+          ]
+        },
+        "resume": {
+          "content": "8 年后端与架构经验，负责交易与缓存体系。\n项目名称：订单中台\n主导分布式缓存一致性方案（延迟双删 + 版本号），解决缓存与库不一致问题。\n技术栈：Java、Redis、MySQL、Kafka。",
+          "content_chars": 97,
+          "summary_rendered": "8 年后端与架构经验，负责交易与缓存体系。\n项目名称：订单中台\n主导分布式缓存一致性方案（延迟双删 + 版本号），解决缓存与库不一致问题。\n技术栈：Java、Redis、MySQL、Kafka。",
+          "summary_rendered_chars": 97,
+          "note": "summary_rendered 是**实际渲染进 Prompt** 的值（Agent 侧上限 1200 字）；content 是原始简历正文"
+        },
+        "job": {
+          "job_name": "后端架构师",
+          "skills": "分布式缓存一致性,Redis,MySQL",
+          "duty": "负责缓存与一致性方案的架构设计与技术评审",
+          "description_rendered": "技能要求：分布式缓存一致性,Redis,MySQL；岗位职责：负责缓存与一致性方案的架构设计与技术评审",
+          "note": "description_rendered 是**实际渲染进 Prompt** 的值（= 技能要求：{skills}；岗位职责：{duty}）"
+        },
+        "difficulty": "senior",
+        "history_questions": [
+          "请说明你在缓存体系上做过的最难的一次技术决策。"
+        ],
+        "current_stage": "scenario"
+      },
+      "input_identical_across_arms": true,
+      "arms": {
+        "rag_off": {
+          "rag": {
+            "enabled": false,
+            "prompt_template_key": "question",
+            "knowledge_injected": false
+          },
+          "output": {
+            "question": "在订单中台项目中，采用延迟双删+版本号解决缓存与库不一致问题时，若遇到极端高并发场景下仍出现短暂不一致的情况，你会如何从架构层面排查根因并设计优化方案？",
+            "question_type": "scenario",
+            "difficulty": "senior",
+            "stage": "scenario",
+            "reason": "当前为scenario阶段，需补强候选人简历中分布式缓存一致性的薄弱知识点，考察其架构取舍与边界场景处理能力。"
+          }
+        },
+        "rag_on": {
+          "rag": {
+            "enabled": true,
+            "corpus_chunks_in_store": 32,
+            "retrieved_chunks": [
+              {
+                "rank": 0,
+                "score": 0.4239815085282628,
+                "source": "handbook://architecture/cache-consistency",
+                "document_id": 14,
+                "chunk_id": 22,
+                "content_chars": 449,
+                "content_preview": "缓存与数据库的一致性没有银弹，只能按业务容忍度选方案。\n\n最常用的是旁路缓存（Cache Aside）：读时先查缓存，未命中查库并回填；写时先更新数据库，再删除缓存。为什么不更新缓存而是删除？因为并发写场景下两次更新缓存的顺序无法保证，会留"
+              },
+              {
+                "rank": 1,
+                "score": 0.3607709853146894,
+                "source": "resume://project/order-middle-cache",
+                "document_id": 19,
+                "chunk_id": 28,
+                "content_chars": 439,
+                "content_preview": "背景：订单中台在双十一前出现过缓存击穿导致数据库被打挂的事故，核心下单接口 P99 冲到三秒以上并触发熔断，持续约十分钟。\n\n排查发现三个问题叠加：热点商品的缓存 key 在同一秒集中失效；不存在的商品 id 直接穿透到数据库；缓存过期时间"
+              },
+              {
+                "rank": 2,
+                "score": 0.30612961627280444,
+                "source": "handbook://redis/data-structures",
+                "document_id": 8,
+                "chunk_id": 11,
+                "content_chars": 454,
+                "content_preview": "Redis 有五种基础数据结构。String 最常用，适合缓存对象序列化结果、计数器、分布式锁；Hash 适合存对象的部分字段更新，比整体序列化更省带宽；List 是有序可重复的链表，适合消息队列与最新列表；Set 无序去重，适合标签、共同"
+              },
+              {
+                "rank": 3,
+                "score": 0.25135148715187255,
+                "source": "resume://project/payment-gateway",
+                "document_id": 20,
+                "chunk_id": 30,
+                "content_chars": 460,
+                "content_preview": "背景：支付网关对接了六家渠道，日均交易量约两百万笔。上线初期出现过重复扣款投诉，根因是渠道回调重试加上本地网络超时重试，导致同一笔订单被处理两次。\n\n方案分三层。第一层是入口幂等：以「商户订单号加渠道标识」作为唯一键，在 Redis 里用 "
+              },
+              {
+                "rank": 4,
+                "score": 0.24902912254587597,
+                "source": "resume://project/order-middle-cache",
+                "document_id": 19,
+                "chunk_id": 29,
+                "content_chars": 162,
+                "content_preview": "动删除缓存而不是更新缓存。\n\n结果：数据库 QPS 从峰值八万降到一点二万，P99 从四百八十毫秒降到九十毫秒，缓存命中率从百分之七十六提升到百分之九十六。\n\n复盘教训：压测一定要用接近生产的流量模型。第一次压测只覆盖了均匀分布的商品 id"
+              }
+            ],
+            "retrieved_count": 5,
+            "retriever": {
+              "class": "VectorKnowledgeRetriever",
+              "source_name": "vector",
+              "model_name": "hash-local",
+              "top_k": 5,
+              "min_score": null,
+              "dedup": true
+            },
+            "query_topic": "分布式缓存一致性",
+            "knowledge_context_chars": 2277,
+            "knowledge_context_lines": 5,
+            "knowledge_injected": true,
+            "prompt_template_key": "question_knowledge",
+            "chunks_full_text_in": {
+              "file": "backend/scripts/rag_baseline.json",
+              "path": "runs[scenario_id=s3-cache-consistency-senior].rag.retrieved_chunks"
+            }
+          },
+          "output": {
+            "question": "在订单中台项目中，假设延迟双删的第二次删除操作因网络延迟未能执行，同时存在大量并发读请求回填旧值，这种情况下如何确保最终一致性？请结合版本号机制和数据库事务特性说明优化方案。",
+            "question_type": "technical",
+            "difficulty": "senior",
+            "stage": "scenario",
+            "reason": "当前阶段需要考察候选人在极端场景下的架构设计能力，重点补强缓存一致性这一薄弱知识点，通过订单中台实际案例验证其对延迟双删和版本号机制的深度理解"
+          }
+        }
+      }
+    }
+  ],
+  "summary": {
+    "scenarios": 3,
+    "arms": 2,
+    "runs_total": 6,
+    "inputs_identical_all": true,
+    "llm_identical_across_arms": true,
+    "corpus_chunks_in_store": {
+      "s1-mysql-index-mid": 32,
+      "s2-spring-boot-senior": 32,
+      "s3-cache-consistency-senior": 32
+    },
+    "retrieved_counts": {
+      "s1-mysql-index-mid": 5,
+      "s2-spring-boot-senior": 5,
+      "s3-cache-consistency-senior": 5
+    },
+    "knowledge_injected_all": true,
+    "note": "本文件只整理实验数据，不评价生成质量。"
+  },
+  "integrity": {
+    "checks_passed": true,
+    "problems": []
+  }
+}

@@ -4,6 +4,7 @@ import { ElMessage, ElCollapse, ElCollapseItem } from 'element-plus'
 import MarkdownIt from 'markdown-it'
 import * as echarts from 'echarts'
 import AuthModal from './components/AuthModal.vue'
+import KnowledgeBase from './components/KnowledgeBase.vue'
 import { apiClient, clearToken, setStoredUser } from './api/apiClient'
 
 const md = new MarkdownIt()
@@ -624,6 +625,13 @@ const handleResize = () => {
             简历分析
           </button>
           <button
+            v-if="isLoggedIn"
+            :class="{ active: currentPage === 'knowledge' }"
+            @click="currentPage = 'knowledge'"
+          >
+            知识库
+          </button>
+          <button
             v-if="currentUser.role === 'admin'"
             :class="{ active: currentPage === 'data-manage' }"
             @click="currentPage = 'data-manage'"
@@ -651,6 +659,12 @@ const handleResize = () => {
       <div class="orb orb-2"></div>
       <div class="grid-overlay"></div>
     </div>
+
+    <!-- Knowledge Base Page（RAG 语料入口；读任意登录用户，写仅 admin） -->
+    <KnowledgeBase
+      v-if="currentPage === 'knowledge'"
+      :is-admin="currentUser.role === 'admin'"
+    />
 
     <!-- Resume Analysis Page -->
     <div v-if="currentPage === 'resume-analysis'" class="resume-page">

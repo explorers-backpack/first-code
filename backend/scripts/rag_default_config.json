@@ -1,0 +1,773 @@
+{
+  "name": "RAG 检索生产默认配置决策",
+  "scope": "只针对检索链路（召回条数 / 噪声 / Prompt 体积）；不评价大模型生成质量",
+  "benchmark": "backend\\scripts\\interview_eval_benchmark.json",
+  "corpus": "backend\\scripts\\interview_knowledge.json",
+  "part_b_recall_ceiling_exact": 0.33915287475109385,
+  "candidates": [
+    {
+      "id": "current",
+      "label": "现状（代码默认：不设阈值）",
+      "top_k": 5,
+      "min_score": null,
+      "note": "top_k=5 = vector_store.DEFAULT_TOP_K；min_score 不设 = 不过滤"
+    },
+    {
+      "id": "declared",
+      "label": "基准逐场景声明值（s1/s2=0.25、s3=0.40）",
+      "top_k": 5,
+      "min_score": null,
+      "note": "基准文件 frozen_conditions_sha256 覆盖的口径，只作参照（单一全局值做不到）"
+    },
+    {
+      "id": "prod",
+      "label": "★ 推荐生产默认：top_k=8 × min_score=0.25",
+      "top_k": 8,
+      "min_score": 0.25,
+      "note": "0.25 在 s1/s2 的标定窗口内；距 Part B 召回上界 0.3392 有 0.089 余量"
+    },
+    {
+      "id": "prod_tk5",
+      "label": "对照：top_k=5 × min_score=0.25",
+      "top_k": 5,
+      "min_score": 0.25,
+      "note": "用来验证「top_k 8 与 5 在设阈值后等价」"
+    },
+    {
+      "id": "ceiling",
+      "label": "对照：top_k=8 × min_score=Part B 召回上界（无余量）",
+      "top_k": 8,
+      "min_score": 0.33915287475109385,
+      "note": "理论最小噪声点，但恰好压在边界上 ⇒ 不作为默认值"
+    }
+  ],
+  "cases": [
+    {
+      "scenario_id": "s1-mysql-index-mid",
+      "candidate_id": "current",
+      "conditions": {
+        "query_topic": "MySQL 索引",
+        "top_k": 5,
+        "min_score": null,
+        "min_score_source": "candidate",
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "recall": {
+        "chunk_count": 5,
+        "target_chunks": 2,
+        "noise_chunks": 3,
+        "expected_target_chunks": 2,
+        "coverage": "2/2",
+        "target_full": true,
+        "sources": [
+          "handbook://mysql/index",
+          "handbook://mysql/index",
+          "handbook://spring/auto-configuration",
+          "resume://project/log-platform",
+          "handbook://redis/persistence-and-ha"
+        ],
+        "scores": [
+          0.547609,
+          0.377964,
+          0.156532,
+          0.134523,
+          0.125471
+        ]
+      },
+      "length": {
+        "legacy_formatter_lines": 5,
+        "new_formatter_lines": 4,
+        "legacy_knowledge_block_chars": 1872,
+        "new_knowledge_block_chars": 1766,
+        "legacy_prompt_chars": 4433,
+        "new_prompt_chars": 4325
+      }
+    },
+    {
+      "scenario_id": "s2-spring-boot-senior",
+      "candidate_id": "current",
+      "conditions": {
+        "query_topic": "Spring Boot 自动配置",
+        "top_k": 5,
+        "min_score": null,
+        "min_score_source": "candidate",
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "recall": {
+        "chunk_count": 5,
+        "target_chunks": 2,
+        "noise_chunks": 3,
+        "expected_target_chunks": 2,
+        "coverage": "2/2",
+        "target_full": true,
+        "sources": [
+          "handbook://spring/auto-configuration",
+          "handbook://spring/auto-configuration",
+          "company://career-ai/about",
+          "handbook://network/http-and-https",
+          "handbook://spring/transaction"
+        ],
+        "scores": [
+          0.542934,
+          0.339153,
+          0.138212,
+          0.123463,
+          0.100504
+        ]
+      },
+      "length": {
+        "legacy_formatter_lines": 5,
+        "new_formatter_lines": 4,
+        "legacy_knowledge_block_chars": 2033,
+        "new_knowledge_block_chars": 1913,
+        "legacy_prompt_chars": 4625,
+        "new_prompt_chars": 4503
+      }
+    },
+    {
+      "scenario_id": "s3-cache-consistency-senior",
+      "candidate_id": "current",
+      "conditions": {
+        "query_topic": "分布式缓存一致性",
+        "top_k": 5,
+        "min_score": null,
+        "min_score_source": "candidate",
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "recall": {
+        "chunk_count": 5,
+        "target_chunks": 1,
+        "noise_chunks": 4,
+        "expected_target_chunks": 1,
+        "coverage": "1/1",
+        "target_full": true,
+        "sources": [
+          "handbook://architecture/cache-consistency",
+          "resume://project/order-middle-cache",
+          "handbook://redis/data-structures",
+          "resume://project/payment-gateway",
+          "resume://project/order-middle-cache"
+        ],
+        "scores": [
+          0.423982,
+          0.360771,
+          0.30613,
+          0.251351,
+          0.249029
+        ]
+      },
+      "length": {
+        "legacy_formatter_lines": 5,
+        "new_formatter_lines": 4,
+        "legacy_knowledge_block_chars": 2168,
+        "new_knowledge_block_chars": 2049,
+        "legacy_prompt_chars": 4752,
+        "new_prompt_chars": 4631
+      }
+    },
+    {
+      "scenario_id": "s1-mysql-index-mid",
+      "candidate_id": "declared",
+      "conditions": {
+        "query_topic": "MySQL 索引",
+        "top_k": 5,
+        "min_score": 0.25,
+        "min_score_source": "declared",
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "recall": {
+        "chunk_count": 2,
+        "target_chunks": 2,
+        "noise_chunks": 0,
+        "expected_target_chunks": 2,
+        "coverage": "2/2",
+        "target_full": true,
+        "sources": [
+          "handbook://mysql/index",
+          "handbook://mysql/index"
+        ],
+        "scores": [
+          0.547609,
+          0.377964
+        ]
+      },
+      "length": {
+        "legacy_formatter_lines": 2,
+        "new_formatter_lines": 1,
+        "legacy_knowledge_block_chars": 652,
+        "new_knowledge_block_chars": 546,
+        "legacy_prompt_chars": 3207,
+        "new_prompt_chars": 3099
+      }
+    },
+    {
+      "scenario_id": "s2-spring-boot-senior",
+      "candidate_id": "declared",
+      "conditions": {
+        "query_topic": "Spring Boot 自动配置",
+        "top_k": 5,
+        "min_score": 0.25,
+        "min_score_source": "declared",
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "recall": {
+        "chunk_count": 2,
+        "target_chunks": 2,
+        "noise_chunks": 0,
+        "expected_target_chunks": 2,
+        "coverage": "2/2",
+        "target_full": true,
+        "sources": [
+          "handbook://spring/auto-configuration",
+          "handbook://spring/auto-configuration"
+        ],
+        "scores": [
+          0.542934,
+          0.339153
+        ]
+      },
+      "length": {
+        "legacy_formatter_lines": 2,
+        "new_formatter_lines": 1,
+        "legacy_knowledge_block_chars": 988,
+        "new_knowledge_block_chars": 868,
+        "legacy_prompt_chars": 3574,
+        "new_prompt_chars": 3452
+      }
+    },
+    {
+      "scenario_id": "s3-cache-consistency-senior",
+      "candidate_id": "declared",
+      "conditions": {
+        "query_topic": "分布式缓存一致性",
+        "top_k": 5,
+        "min_score": 0.4,
+        "min_score_source": "declared",
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "recall": {
+        "chunk_count": 1,
+        "target_chunks": 1,
+        "noise_chunks": 0,
+        "expected_target_chunks": 1,
+        "coverage": "1/1",
+        "target_full": true,
+        "sources": [
+          "handbook://architecture/cache-consistency"
+        ],
+        "scores": [
+          0.423982
+        ]
+      },
+      "length": {
+        "legacy_formatter_lines": 1,
+        "new_formatter_lines": 1,
+        "legacy_knowledge_block_chars": 495,
+        "new_knowledge_block_chars": 495,
+        "legacy_prompt_chars": 3071,
+        "new_prompt_chars": 3071
+      }
+    },
+    {
+      "scenario_id": "s1-mysql-index-mid",
+      "candidate_id": "prod",
+      "conditions": {
+        "query_topic": "MySQL 索引",
+        "top_k": 8,
+        "min_score": 0.25,
+        "min_score_source": "candidate",
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "recall": {
+        "chunk_count": 2,
+        "target_chunks": 2,
+        "noise_chunks": 0,
+        "expected_target_chunks": 2,
+        "coverage": "2/2",
+        "target_full": true,
+        "sources": [
+          "handbook://mysql/index",
+          "handbook://mysql/index"
+        ],
+        "scores": [
+          0.547609,
+          0.377964
+        ]
+      },
+      "length": {
+        "legacy_formatter_lines": 2,
+        "new_formatter_lines": 1,
+        "legacy_knowledge_block_chars": 652,
+        "new_knowledge_block_chars": 546,
+        "legacy_prompt_chars": 3207,
+        "new_prompt_chars": 3099
+      },
+      "structure": {
+        "agent_keys": [
+          "difficulty",
+          "error",
+          "expected_points",
+          "ok",
+          "question",
+          "question_type",
+          "reason",
+          "topic"
+        ],
+        "agent_keys_expected": true,
+        "core_keys_expected": true,
+        "agent_prompt_equals_rendered": true,
+        "core_prompt_equals_rendered": true
+      }
+    },
+    {
+      "scenario_id": "s2-spring-boot-senior",
+      "candidate_id": "prod",
+      "conditions": {
+        "query_topic": "Spring Boot 自动配置",
+        "top_k": 8,
+        "min_score": 0.25,
+        "min_score_source": "candidate",
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "recall": {
+        "chunk_count": 2,
+        "target_chunks": 2,
+        "noise_chunks": 0,
+        "expected_target_chunks": 2,
+        "coverage": "2/2",
+        "target_full": true,
+        "sources": [
+          "handbook://spring/auto-configuration",
+          "handbook://spring/auto-configuration"
+        ],
+        "scores": [
+          0.542934,
+          0.339153
+        ]
+      },
+      "length": {
+        "legacy_formatter_lines": 2,
+        "new_formatter_lines": 1,
+        "legacy_knowledge_block_chars": 988,
+        "new_knowledge_block_chars": 868,
+        "legacy_prompt_chars": 3574,
+        "new_prompt_chars": 3452
+      }
+    },
+    {
+      "scenario_id": "s3-cache-consistency-senior",
+      "candidate_id": "prod",
+      "conditions": {
+        "query_topic": "分布式缓存一致性",
+        "top_k": 8,
+        "min_score": 0.25,
+        "min_score_source": "candidate",
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "recall": {
+        "chunk_count": 4,
+        "target_chunks": 1,
+        "noise_chunks": 3,
+        "expected_target_chunks": 1,
+        "coverage": "1/1",
+        "target_full": true,
+        "sources": [
+          "handbook://architecture/cache-consistency",
+          "resume://project/order-middle-cache",
+          "handbook://redis/data-structures",
+          "resume://project/payment-gateway"
+        ],
+        "scores": [
+          0.423982,
+          0.360771,
+          0.30613,
+          0.251351
+        ]
+      },
+      "length": {
+        "legacy_formatter_lines": 4,
+        "new_formatter_lines": 4,
+        "legacy_knowledge_block_chars": 1965,
+        "new_knowledge_block_chars": 1965,
+        "legacy_prompt_chars": 4547,
+        "new_prompt_chars": 4547
+      }
+    },
+    {
+      "scenario_id": "s1-mysql-index-mid",
+      "candidate_id": "prod_tk5",
+      "conditions": {
+        "query_topic": "MySQL 索引",
+        "top_k": 5,
+        "min_score": 0.25,
+        "min_score_source": "candidate",
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "recall": {
+        "chunk_count": 2,
+        "target_chunks": 2,
+        "noise_chunks": 0,
+        "expected_target_chunks": 2,
+        "coverage": "2/2",
+        "target_full": true,
+        "sources": [
+          "handbook://mysql/index",
+          "handbook://mysql/index"
+        ],
+        "scores": [
+          0.547609,
+          0.377964
+        ]
+      },
+      "length": {
+        "legacy_formatter_lines": 2,
+        "new_formatter_lines": 1,
+        "legacy_knowledge_block_chars": 652,
+        "new_knowledge_block_chars": 546,
+        "legacy_prompt_chars": 3207,
+        "new_prompt_chars": 3099
+      }
+    },
+    {
+      "scenario_id": "s2-spring-boot-senior",
+      "candidate_id": "prod_tk5",
+      "conditions": {
+        "query_topic": "Spring Boot 自动配置",
+        "top_k": 5,
+        "min_score": 0.25,
+        "min_score_source": "candidate",
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "recall": {
+        "chunk_count": 2,
+        "target_chunks": 2,
+        "noise_chunks": 0,
+        "expected_target_chunks": 2,
+        "coverage": "2/2",
+        "target_full": true,
+        "sources": [
+          "handbook://spring/auto-configuration",
+          "handbook://spring/auto-configuration"
+        ],
+        "scores": [
+          0.542934,
+          0.339153
+        ]
+      },
+      "length": {
+        "legacy_formatter_lines": 2,
+        "new_formatter_lines": 1,
+        "legacy_knowledge_block_chars": 988,
+        "new_knowledge_block_chars": 868,
+        "legacy_prompt_chars": 3574,
+        "new_prompt_chars": 3452
+      }
+    },
+    {
+      "scenario_id": "s3-cache-consistency-senior",
+      "candidate_id": "prod_tk5",
+      "conditions": {
+        "query_topic": "分布式缓存一致性",
+        "top_k": 5,
+        "min_score": 0.25,
+        "min_score_source": "candidate",
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "recall": {
+        "chunk_count": 4,
+        "target_chunks": 1,
+        "noise_chunks": 3,
+        "expected_target_chunks": 1,
+        "coverage": "1/1",
+        "target_full": true,
+        "sources": [
+          "handbook://architecture/cache-consistency",
+          "resume://project/order-middle-cache",
+          "handbook://redis/data-structures",
+          "resume://project/payment-gateway"
+        ],
+        "scores": [
+          0.423982,
+          0.360771,
+          0.30613,
+          0.251351
+        ]
+      },
+      "length": {
+        "legacy_formatter_lines": 4,
+        "new_formatter_lines": 4,
+        "legacy_knowledge_block_chars": 1965,
+        "new_knowledge_block_chars": 1965,
+        "legacy_prompt_chars": 4547,
+        "new_prompt_chars": 4547
+      }
+    },
+    {
+      "scenario_id": "s1-mysql-index-mid",
+      "candidate_id": "ceiling",
+      "conditions": {
+        "query_topic": "MySQL 索引",
+        "top_k": 8,
+        "min_score": 0.33915287475109385,
+        "min_score_source": "candidate",
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "recall": {
+        "chunk_count": 2,
+        "target_chunks": 2,
+        "noise_chunks": 0,
+        "expected_target_chunks": 2,
+        "coverage": "2/2",
+        "target_full": true,
+        "sources": [
+          "handbook://mysql/index",
+          "handbook://mysql/index"
+        ],
+        "scores": [
+          0.547609,
+          0.377964
+        ]
+      },
+      "length": {
+        "legacy_formatter_lines": 2,
+        "new_formatter_lines": 1,
+        "legacy_knowledge_block_chars": 652,
+        "new_knowledge_block_chars": 546,
+        "legacy_prompt_chars": 3207,
+        "new_prompt_chars": 3099
+      }
+    },
+    {
+      "scenario_id": "s2-spring-boot-senior",
+      "candidate_id": "ceiling",
+      "conditions": {
+        "query_topic": "Spring Boot 自动配置",
+        "top_k": 8,
+        "min_score": 0.33915287475109385,
+        "min_score_source": "candidate",
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "recall": {
+        "chunk_count": 2,
+        "target_chunks": 2,
+        "noise_chunks": 0,
+        "expected_target_chunks": 2,
+        "coverage": "2/2",
+        "target_full": true,
+        "sources": [
+          "handbook://spring/auto-configuration",
+          "handbook://spring/auto-configuration"
+        ],
+        "scores": [
+          0.542934,
+          0.339153
+        ]
+      },
+      "length": {
+        "legacy_formatter_lines": 2,
+        "new_formatter_lines": 1,
+        "legacy_knowledge_block_chars": 988,
+        "new_knowledge_block_chars": 868,
+        "legacy_prompt_chars": 3574,
+        "new_prompt_chars": 3452
+      }
+    },
+    {
+      "scenario_id": "s3-cache-consistency-senior",
+      "candidate_id": "ceiling",
+      "conditions": {
+        "query_topic": "分布式缓存一致性",
+        "top_k": 8,
+        "min_score": 0.33915287475109385,
+        "min_score_source": "candidate",
+        "corpus_documents": 22,
+        "chunks_in_store": 32
+      },
+      "recall": {
+        "chunk_count": 2,
+        "target_chunks": 1,
+        "noise_chunks": 1,
+        "expected_target_chunks": 1,
+        "coverage": "1/1",
+        "target_full": true,
+        "sources": [
+          "handbook://architecture/cache-consistency",
+          "resume://project/order-middle-cache"
+        ],
+        "scores": [
+          0.423982,
+          0.360771
+        ]
+      },
+      "length": {
+        "legacy_formatter_lines": 2,
+        "new_formatter_lines": 2,
+        "legacy_knowledge_block_chars": 975,
+        "new_knowledge_block_chars": 975,
+        "legacy_prompt_chars": 3553,
+        "new_prompt_chars": 3553
+      }
+    }
+  ],
+  "totals": {
+    "current": {
+      "scenarios": 3,
+      "chunk_count": 15,
+      "target_chunks": 5,
+      "noise_chunks": 10,
+      "expected_target_chunks": 5,
+      "target_full_scenarios": 3,
+      "coverage": [
+        "2/2",
+        "2/2",
+        "1/1"
+      ],
+      "legacy_knowledge_block_chars": 6073,
+      "new_knowledge_block_chars": 5728,
+      "legacy_prompt_chars": 13810,
+      "new_prompt_chars": 13459
+    },
+    "declared": {
+      "scenarios": 3,
+      "chunk_count": 5,
+      "target_chunks": 5,
+      "noise_chunks": 0,
+      "expected_target_chunks": 5,
+      "target_full_scenarios": 3,
+      "coverage": [
+        "2/2",
+        "2/2",
+        "1/1"
+      ],
+      "legacy_knowledge_block_chars": 2135,
+      "new_knowledge_block_chars": 1909,
+      "legacy_prompt_chars": 9852,
+      "new_prompt_chars": 9622
+    },
+    "prod": {
+      "scenarios": 3,
+      "chunk_count": 8,
+      "target_chunks": 5,
+      "noise_chunks": 3,
+      "expected_target_chunks": 5,
+      "target_full_scenarios": 3,
+      "coverage": [
+        "2/2",
+        "2/2",
+        "1/1"
+      ],
+      "legacy_knowledge_block_chars": 3605,
+      "new_knowledge_block_chars": 3379,
+      "legacy_prompt_chars": 11328,
+      "new_prompt_chars": 11098
+    },
+    "prod_tk5": {
+      "scenarios": 3,
+      "chunk_count": 8,
+      "target_chunks": 5,
+      "noise_chunks": 3,
+      "expected_target_chunks": 5,
+      "target_full_scenarios": 3,
+      "coverage": [
+        "2/2",
+        "2/2",
+        "1/1"
+      ],
+      "legacy_knowledge_block_chars": 3605,
+      "new_knowledge_block_chars": 3379,
+      "legacy_prompt_chars": 11328,
+      "new_prompt_chars": 11098
+    },
+    "ceiling": {
+      "scenarios": 3,
+      "chunk_count": 6,
+      "target_chunks": 5,
+      "noise_chunks": 1,
+      "expected_target_chunks": 5,
+      "target_full_scenarios": 3,
+      "coverage": [
+        "2/2",
+        "2/2",
+        "1/1"
+      ],
+      "legacy_knowledge_block_chars": 2615,
+      "new_knowledge_block_chars": 2389,
+      "legacy_prompt_chars": 10334,
+      "new_prompt_chars": 10104
+    }
+  },
+  "summary": {
+    "recommended": {
+      "top_k": 8,
+      "min_score": 0.25
+    },
+    "current": {
+      "top_k": 5,
+      "min_score": null
+    },
+    "recall_chunks": {
+      "before": 15,
+      "after": 8,
+      "saved": 7,
+      "ratio": 46.67
+    },
+    "target_chunks": {
+      "before": 5,
+      "after": 5,
+      "saved": 0,
+      "ratio": 0.0
+    },
+    "noise_chunks": {
+      "before": 10,
+      "after": 3,
+      "saved": 7,
+      "ratio": 70.0
+    },
+    "target_full_scenarios": "3/3",
+    "prompt_chars_legacy_formatter": {
+      "before": 13810,
+      "after": 11328,
+      "saved": 2482,
+      "ratio": 17.97
+    },
+    "prompt_chars_new_formatter": {
+      "before": 13459,
+      "after": 11098,
+      "saved": 2361,
+      "ratio": 17.54
+    },
+    "prompt_chars_combined": {
+      "before": 13810,
+      "after": 11098,
+      "saved": 2712,
+      "ratio": 19.64
+    },
+    "top_k_equivalence": {
+      "top_k_5_vs_8_at_0_25": {
+        "chunk_count": [
+          8,
+          8
+        ],
+        "new_prompt_chars": [
+          11098,
+          11098
+        ],
+        "identical": true
+      }
+    }
+  }
+}

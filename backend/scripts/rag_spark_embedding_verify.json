@@ -1,0 +1,118 @@
+{
+  "backend": "MySQL（真实库）",
+  "model": "xinghuo-embedding",
+  "dimension": 2560,
+  "imports": [
+    {
+      "ok": true,
+      "status": "ok",
+      "stage": "done",
+      "document_id": 1,
+      "chunk_count": 1,
+      "embedded_chunks": 1,
+      "skipped_chunks": 0,
+      "errors": []
+    },
+    {
+      "ok": true,
+      "status": "ok",
+      "stage": "done",
+      "document_id": 2,
+      "chunk_count": 1,
+      "embedded_chunks": 1,
+      "skipped_chunks": 0,
+      "errors": []
+    },
+    {
+      "ok": true,
+      "status": "ok",
+      "stage": "done",
+      "document_id": 3,
+      "chunk_count": 1,
+      "embedded_chunks": 1,
+      "skipped_chunks": 0,
+      "errors": []
+    }
+  ],
+  "idempotent": {
+    "ok": true,
+    "status": "skipped",
+    "embedded_chunks": 0,
+    "skipped_chunks": 1
+  },
+  "retrieval": [
+    {
+      "query": "RDB 和 AOF 有什么区别？",
+      "expected": "verify://redis/persistence",
+      "ranked": [
+        {
+          "source": "verify://redis/persistence",
+          "score": 0.840042,
+          "preview": "Redis 持久化提供 RDB 与 AOF 两种机制：RDB 是某一"
+        },
+        {
+          "source": "verify://mysql/index",
+          "score": 0.829665,
+          "preview": "MySQL 联合索引遵循最左前缀原则：只有从索引最左列开始的连续前缀"
+        },
+        {
+          "source": "verify://kafka/reliability",
+          "score": 0.822444,
+          "preview": "Kafka 保证消息不丢失需要三段都到位：生产者设置 acks=al"
+        }
+      ]
+    },
+    {
+      "query": "联合索引为什么要遵循最左前缀？",
+      "expected": "verify://mysql/index",
+      "ranked": [
+        {
+          "source": "verify://mysql/index",
+          "score": 0.842591,
+          "preview": "MySQL 联合索引遵循最左前缀原则：只有从索引最左列开始的连续前缀"
+        },
+        {
+          "source": "verify://kafka/reliability",
+          "score": 0.825507,
+          "preview": "Kafka 保证消息不丢失需要三段都到位：生产者设置 acks=al"
+        },
+        {
+          "source": "verify://redis/persistence",
+          "score": 0.821979,
+          "preview": "Redis 持久化提供 RDB 与 AOF 两种机制：RDB 是某一"
+        }
+      ]
+    },
+    {
+      "query": "怎么保证 Kafka 的消息不丢？",
+      "expected": "verify://kafka/reliability",
+      "ranked": [
+        {
+          "source": "verify://kafka/reliability",
+          "score": 0.851754,
+          "preview": "Kafka 保证消息不丢失需要三段都到位：生产者设置 acks=al"
+        },
+        {
+          "source": "verify://redis/persistence",
+          "score": 0.837438,
+          "preview": "Redis 持久化提供 RDB 与 AOF 两种机制：RDB 是某一"
+        },
+        {
+          "source": "verify://mysql/index",
+          "score": 0.835547,
+          "preview": "MySQL 联合索引遵循最左前缀原则：只有从索引最左列开始的连续前缀"
+        }
+      ]
+    }
+  ],
+  "latency": {
+    "calls": 6,
+    "worst_seconds": 0.525,
+    "avg_seconds": 0.272,
+    "limit_seconds": 60.0
+  },
+  "checks": {
+    "passed": 33,
+    "failed": 0
+  }
+}

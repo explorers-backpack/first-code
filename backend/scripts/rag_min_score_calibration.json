@@ -1,0 +1,1532 @@
+{
+  "name": "rag-min-score-calibration",
+  "version": 1,
+  "purpose": "把任务 69 实测的 min_score 安全窗口落地为可用的标定值，并用任务 70（R1）的 retriever_kwargs 透传路径实跑验证：注入条数 15 → 5、Prompt 13810 → 9852 字。只做标定与验证，不修改生产代码、不改基准文件、不评价生成质量。",
+  "scope": {
+    "modifies_code": false,
+    "modifies_benchmark": false,
+    "evaluates_quality": false,
+    "llm": "Mock（SpySpark + 场景 mock_reply）",
+    "why_mock": "要测的量（注入条数 / Prompt 字符数）由检索 + 模板渲染决定，与模型输出无关；真实星火输出不确定。已用真实星火跑出的 rag_baseline.json 逐场景交叉核对 Prompt 字符数。"
+  },
+  "sources": {
+    "benchmark": "backend/scripts/interview_eval_benchmark.json",
+    "corpus": "backend/scripts/interview_knowledge.json",
+    "no_rag_baseline": "backend/scripts/no_rag_baseline.json",
+    "rag_baseline": "backend/scripts/rag_baseline.json",
+    "task69_analysis": "backend/scripts/rag_param_analysis.json"
+  },
+  "calibration_basis": {
+    "window_rule": "窗口 = (非目标来源最高分, 目标来源最低分]；min_score 取值须落在此区间内才既能保住目标、又剔除噪声",
+    "window_measured_over": "全量候选（top_k=100 / min_score=None）",
+    "inclusivity": "检索保留 score >= min_score ⇒ 下界开、上界闭",
+    "recommended_value_rule": "取窗口中点（两侧余量对称，容忍度最大）",
+    "robustness_tiers": {
+      "wide": ">= 0.15",
+      "narrow": ">= 0.05",
+      "fragile": "< 0.05"
+    },
+    "usable_gap_threshold": 0.02,
+    "embedder": "default_embedder()（hash-local，词面哈希 ⇒ 分数只在同模型内可比）",
+    "corpus_chunks": 32
+  },
+  "passthrough_path": {
+    "entry": "interview_core.generate_next_question(db, session_id, retriever=None, use_rag=True, retriever_kwargs={...})",
+    "assembly": "resolve_retriever(db, None, True, retriever_kwargs=...) -> knowledge_rag.build_vector_retriever(db, **kwargs)",
+    "added_by": "任务 70 · R1",
+    "note": "retriever_kwargs 只在 use_rag=True 的组装分支生效；显式注入 retriever 时不被读取"
+  },
+  "scenarios": [
+    {
+      "scenario_id": "s1-mysql-index-mid",
+      "label": "后端开发工程师 · MySQL 索引 · 中级 · 项目阶段",
+      "calibration": {
+        "query_topic": "MySQL 索引",
+        "target_sources": [
+          "handbook://mysql/index"
+        ],
+        "expected_chunk_count": 2,
+        "top_k": 5,
+        "window": {
+          "noise_ceiling": 0.15653209603896637,
+          "target_floor": 0.37796447300922753,
+          "safe_window": [
+            0.15653209603896637,
+            0.37796447300922753
+          ],
+          "width": 0.22143237697026116,
+          "separated": true,
+          "target_count": 2,
+          "non_target_count": 30,
+          "display_6dp": {
+            "noise_ceiling": 0.156532,
+            "target_floor": 0.377964,
+            "safe_window": [
+              0.156532,
+              0.377964
+            ],
+            "width": 0.221432
+          }
+        },
+        "declared_min_score": 0.25,
+        "declared_in_window": true,
+        "declared_margin_to_floor": 0.127964,
+        "declared_margin_to_ceiling": 0.093468,
+        "recommendation": {
+          "recommended": 0.267,
+          "midpoint_exact": 0.26724828452409694,
+          "reason": "取窗口 (非目标上限, 目标下限] 的中点 ⇒ 两侧余量对称，对语料微调与浮点误差的容忍度最大",
+          "recommended_in_window": true,
+          "recommended_margin_to_floor": 0.110964,
+          "recommended_margin_to_ceiling": 0.110468,
+          "width": 0.221432,
+          "width_tier": "wide",
+          "usable_by_gap_threshold": true,
+          "gap_threshold": 0.02
+        },
+        "caveat": "窗口较宽，对语料微调不敏感；换 Embedding 后仍需重新标定"
+      },
+      "measured_window": {
+        "topic": "MySQL 索引",
+        "corpus_chunks": 32,
+        "over_all_candidates": {
+          "noise_ceiling": 0.15653209603896637,
+          "target_floor": 0.37796447300922753,
+          "safe_window": [
+            0.15653209603896637,
+            0.37796447300922753
+          ],
+          "width": 0.22143237697026116,
+          "separated": true,
+          "target_count": 2,
+          "non_target_count": 30,
+          "display_6dp": {
+            "noise_ceiling": 0.156532,
+            "target_floor": 0.377964,
+            "safe_window": [
+              0.156532,
+              0.377964
+            ],
+            "width": 0.221432
+          }
+        },
+        "over_topk_candidates": {
+          "noise_ceiling": 0.15653209603896637,
+          "target_floor": 0.37796447300922753,
+          "safe_window": [
+            0.15653209603896637,
+            0.37796447300922753
+          ],
+          "width": 0.22143237697026116,
+          "separated": true,
+          "target_count": 2,
+          "non_target_count": 3,
+          "display_6dp": {
+            "noise_ceiling": 0.156532,
+            "target_floor": 0.377964,
+            "safe_window": [
+              0.156532,
+              0.377964
+            ],
+            "width": 0.221432
+          }
+        },
+        "all_candidates_detail": {
+          "target_count": 2,
+          "non_target_count": 30,
+          "target_scores_desc": [
+            0.547609,
+            0.377964
+          ],
+          "non_target_scores_top6": [
+            0.156532,
+            0.134523,
+            0.125471,
+            0.115007,
+            0.084248,
+            0.084017
+          ]
+        }
+      },
+      "boundary_probe": {
+        "semantics": "检索保留 score >= min_score（含等号）⇒ 窗口下界开、上界闭",
+        "expected_target_count": 2,
+        "at_target_floor": {
+          "min_score": 0.37796447300922753,
+          "count": 2,
+          "target_count": 2,
+          "non_target_count": 0
+        },
+        "just_above_target_floor": {
+          "min_score": 0.3779644730092276,
+          "count": 1,
+          "target_count": 1,
+          "non_target_count": 0
+        },
+        "at_noise_ceiling": {
+          "min_score": 0.15653209603896637,
+          "count": 3,
+          "target_count": 2,
+          "non_target_count": 1
+        },
+        "just_above_noise_ceiling": {
+          "min_score": 0.1565320960389664,
+          "count": 2,
+          "target_count": 2,
+          "non_target_count": 0
+        },
+        "checks": {
+          "floor_is_inclusive": true,
+          "ceiling_is_inclusive": true,
+          "interior_keeps_all_targets_drops_all_noise": true
+        }
+      },
+      "arms": {
+        "rag_off": {
+          "arm": "rag_off",
+          "use_rag": false,
+          "retriever_kwargs_passed": null,
+          "ok": true,
+          "errors": [],
+          "warnings": [],
+          "prompt_template": "question",
+          "prompt_chars": 2426,
+          "prompt_has_knowledge_block": false,
+          "knowledge_context_count": 0,
+          "knowledge_context_sources": [],
+          "retrieved_count": 0,
+          "retrieved_sources": [],
+          "resolve_calls": [
+            {
+              "use_rag": false,
+              "retriever_injected": false,
+              "retriever_kwargs_received": null,
+              "built_class": null,
+              "built_top_k": null,
+              "built_min_score": null,
+              "warnings": []
+            }
+          ],
+          "retriever_kwargs_received": null,
+          "effective_top_k": null,
+          "effective_min_score": null,
+          "retriever_class": null,
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "retrieve_knowledge": true,
+            "generate_question": true
+          }
+        },
+        "rag_on_no_threshold": {
+          "arm": "rag_on_no_threshold",
+          "use_rag": true,
+          "retriever_kwargs_passed": null,
+          "ok": true,
+          "errors": [],
+          "warnings": [],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 4433,
+          "prompt_has_knowledge_block": true,
+          "knowledge_context_count": 5,
+          "knowledge_context_sources": [
+            "handbook://mysql/index",
+            "handbook://redis/persistence-and-ha",
+            "handbook://spring/auto-configuration",
+            "resume://project/log-platform"
+          ],
+          "retrieved_count": 5,
+          "retrieved_sources": [
+            "handbook://mysql/index",
+            "handbook://mysql/index",
+            "handbook://spring/auto-configuration",
+            "resume://project/log-platform",
+            "handbook://redis/persistence-and-ha"
+          ],
+          "resolve_calls": [
+            {
+              "use_rag": true,
+              "retriever_injected": false,
+              "retriever_kwargs_received": null,
+              "built_class": "VectorKnowledgeRetriever",
+              "built_top_k": 5,
+              "built_min_score": null,
+              "warnings": []
+            }
+          ],
+          "retriever_kwargs_received": null,
+          "effective_top_k": 5,
+          "effective_min_score": null,
+          "retriever_class": "VectorKnowledgeRetriever",
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "retrieve_knowledge": true,
+            "generate_question": true
+          }
+        },
+        "rag_on_declared": {
+          "arm": "rag_on_declared",
+          "use_rag": true,
+          "retriever_kwargs_passed": {
+            "top_k": 5,
+            "min_score": 0.25
+          },
+          "ok": true,
+          "errors": [],
+          "warnings": [],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 3207,
+          "prompt_has_knowledge_block": true,
+          "knowledge_context_count": 2,
+          "knowledge_context_sources": [
+            "handbook://mysql/index"
+          ],
+          "retrieved_count": 2,
+          "retrieved_sources": [
+            "handbook://mysql/index",
+            "handbook://mysql/index"
+          ],
+          "resolve_calls": [
+            {
+              "use_rag": true,
+              "retriever_injected": false,
+              "retriever_kwargs_received": {
+                "top_k": 5,
+                "min_score": 0.25
+              },
+              "built_class": "VectorKnowledgeRetriever",
+              "built_top_k": 5,
+              "built_min_score": 0.25,
+              "warnings": []
+            }
+          ],
+          "retriever_kwargs_received": {
+            "top_k": 5,
+            "min_score": 0.25
+          },
+          "effective_top_k": 5,
+          "effective_min_score": 0.25,
+          "retriever_class": "VectorKnowledgeRetriever",
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "retrieve_knowledge": true,
+            "generate_question": true
+          }
+        },
+        "rag_on_recommended": {
+          "arm": "rag_on_recommended",
+          "use_rag": true,
+          "retriever_kwargs_passed": {
+            "top_k": 5,
+            "min_score": 0.267
+          },
+          "ok": true,
+          "errors": [],
+          "warnings": [],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 3207,
+          "prompt_has_knowledge_block": true,
+          "knowledge_context_count": 2,
+          "knowledge_context_sources": [
+            "handbook://mysql/index"
+          ],
+          "retrieved_count": 2,
+          "retrieved_sources": [
+            "handbook://mysql/index",
+            "handbook://mysql/index"
+          ],
+          "resolve_calls": [
+            {
+              "use_rag": true,
+              "retriever_injected": false,
+              "retriever_kwargs_received": {
+                "top_k": 5,
+                "min_score": 0.267
+              },
+              "built_class": "VectorKnowledgeRetriever",
+              "built_top_k": 5,
+              "built_min_score": 0.267,
+              "warnings": []
+            }
+          ],
+          "retriever_kwargs_received": {
+            "top_k": 5,
+            "min_score": 0.267
+          },
+          "effective_top_k": 5,
+          "effective_min_score": 0.267,
+          "retriever_class": "VectorKnowledgeRetriever",
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "retrieve_knowledge": true,
+            "generate_question": true
+          }
+        }
+      },
+      "checks": [
+        {
+          "name": "★ 窗口端点与 top_k 截断无关（全量候选与 top_k 候选端点一致）",
+          "passed": true
+        },
+        {
+          "name": "★ 窗口是「真分离」：非目标上限 < 目标下限",
+          "passed": true
+        },
+        {
+          "name": "★ 重测窗口 == 任务 69 记录的窗口（6 位小数）",
+          "passed": true
+        },
+        {
+          "name": "★ 声明 min_score 落在窗口内",
+          "passed": true
+        },
+        {
+          "name": "★ 推荐标定值（窗口中点）落在窗口内",
+          "passed": true
+        },
+        {
+          "name": "无 RAG 臂出题成功且无 errors",
+          "passed": true
+        },
+        {
+          "name": "无 RAG 臂不注入知识（0 条）",
+          "passed": true
+        },
+        {
+          "name": "无 RAG 臂用 question 模板",
+          "passed": true
+        },
+        {
+          "name": "★ 无 RAG 臂 Prompt 字符数 == 无 RAG 基准记录（2426）",
+          "passed": true
+        },
+        {
+          "name": "有 RAG 臂（不传阈值）出题成功且无 errors",
+          "passed": true
+        },
+        {
+          "name": "★ 有 RAG 臂（不传阈值）条数 == top_k（阈值未生效的现状）",
+          "passed": true
+        },
+        {
+          "name": "★ 有 RAG 臂（不传阈值）Prompt 字符数 == 有 RAG 基准（真实星火）记录",
+          "passed": true
+        },
+        {
+          "name": "★ 有 RAG 臂（不传阈值）条数 == 有 RAG 基准（真实星火）记录",
+          "passed": true
+        },
+        {
+          "name": "★ 组装器实际收到的 retriever_kwargs == 传入值（有 RAG 臂·不传阈值）",
+          "passed": true
+        },
+        {
+          "name": "★ 组装器实际收到的 retriever_kwargs == 传入值（有 RAG 臂·声明阈值）",
+          "passed": true
+        },
+        {
+          "name": "★ 组装出的检索器 min_score == 声明值（阈值真的进了检索器）",
+          "passed": true
+        },
+        {
+          "name": "★ 组装出的检索器 top_k == 声明值",
+          "passed": true
+        },
+        {
+          "name": "★★ 声明阈值臂条数 == 基准期望条数（2）",
+          "passed": true
+        },
+        {
+          "name": "★ 声明阈值臂命中来源 == expected_hit_sources",
+          "passed": true
+        },
+        {
+          "name": "★ 声明阈值臂注入正文 == 检索器返回（同一份）",
+          "passed": true
+        },
+        {
+          "name": "★ 推荐标定值臂条数 == 2（窗口内部同样安全）",
+          "passed": true
+        },
+        {
+          "name": "★ 推荐标定值臂 Prompt 字符数 == 声明阈值臂（只换阈值不改长度）",
+          "passed": true
+        },
+        {
+          "name": "★ 阈值生效后 Prompt 变短（噪声被剔除）",
+          "passed": true
+        },
+        {
+          "name": "有 RAG 臂用 question_knowledge 模板",
+          "passed": true
+        },
+        {
+          "name": "每臂只调用一次大模型（一题一次 LLM 调用）",
+          "passed": true
+        },
+        {
+          "name": "每臂只调用一次 Agent",
+          "passed": true
+        },
+        {
+          "name": "替身与被替换函数同签名",
+          "passed": true
+        },
+        {
+          "name": "★ 边界：目标下限含等号（该分仍保留目标），抬高一个 ULP 恰好少一条目标",
+          "passed": true
+        },
+        {
+          "name": "★ 边界：非目标上限含等号（该分仍保留噪声），抬高一个 ULP 噪声归零",
+          "passed": true
+        },
+        {
+          "name": "★ 边界：窗口内部噪声全清、目标全留",
+          "passed": true
+        }
+      ],
+      "all_checks_passed": true,
+      "cross_checks_with_task69": [
+        {
+          "name": "任务 69 投影的条数 == 实跑条数",
+          "expected": 2,
+          "actual": 2,
+          "match": true
+        },
+        {
+          "name": "任务 69 投影的 Prompt 字符数 == 实跑 Prompt 字符数",
+          "expected": 3207,
+          "actual": 3207,
+          "match": true
+        },
+        {
+          "name": "任务 69 记录的 on_chars == 实跑（不传阈值）Prompt 字符数",
+          "expected": 4433,
+          "actual": 4433,
+          "match": true
+        },
+        {
+          "name": "任务 69 记录的 off_chars == 实跑无 RAG Prompt 字符数",
+          "expected": 2426,
+          "actual": 2426,
+          "match": true
+        }
+      ]
+    },
+    {
+      "scenario_id": "s2-spring-boot-senior",
+      "label": "后端开发工程师（Java）· Spring Boot 自动配置 · 高级 · 技术阶段",
+      "calibration": {
+        "query_topic": "Spring Boot 自动配置",
+        "target_sources": [
+          "handbook://spring/auto-configuration"
+        ],
+        "expected_chunk_count": 2,
+        "top_k": 5,
+        "window": {
+          "noise_ceiling": 0.1382118686237242,
+          "target_floor": 0.33915287475109385,
+          "safe_window": [
+            0.1382118686237242,
+            0.33915287475109385
+          ],
+          "width": 0.20094100612736965,
+          "separated": true,
+          "target_count": 2,
+          "non_target_count": 30,
+          "display_6dp": {
+            "noise_ceiling": 0.138212,
+            "target_floor": 0.339153,
+            "safe_window": [
+              0.138212,
+              0.339153
+            ],
+            "width": 0.200941
+          }
+        },
+        "declared_min_score": 0.25,
+        "declared_in_window": true,
+        "declared_margin_to_floor": 0.089153,
+        "declared_margin_to_ceiling": 0.111788,
+        "recommendation": {
+          "recommended": 0.239,
+          "midpoint_exact": 0.23868237168740902,
+          "reason": "取窗口 (非目标上限, 目标下限] 的中点 ⇒ 两侧余量对称，对语料微调与浮点误差的容忍度最大",
+          "recommended_in_window": true,
+          "recommended_margin_to_floor": 0.100153,
+          "recommended_margin_to_ceiling": 0.100788,
+          "width": 0.200941,
+          "width_tier": "wide",
+          "usable_by_gap_threshold": true,
+          "gap_threshold": 0.02
+        },
+        "caveat": "窗口较宽，对语料微调不敏感；换 Embedding 后仍需重新标定"
+      },
+      "measured_window": {
+        "topic": "Spring Boot 自动配置",
+        "corpus_chunks": 32,
+        "over_all_candidates": {
+          "noise_ceiling": 0.1382118686237242,
+          "target_floor": 0.33915287475109385,
+          "safe_window": [
+            0.1382118686237242,
+            0.33915287475109385
+          ],
+          "width": 0.20094100612736965,
+          "separated": true,
+          "target_count": 2,
+          "non_target_count": 30,
+          "display_6dp": {
+            "noise_ceiling": 0.138212,
+            "target_floor": 0.339153,
+            "safe_window": [
+              0.138212,
+              0.339153
+            ],
+            "width": 0.200941
+          }
+        },
+        "over_topk_candidates": {
+          "noise_ceiling": 0.1382118686237242,
+          "target_floor": 0.33915287475109385,
+          "safe_window": [
+            0.1382118686237242,
+            0.33915287475109385
+          ],
+          "width": 0.20094100612736965,
+          "separated": true,
+          "target_count": 2,
+          "non_target_count": 3,
+          "display_6dp": {
+            "noise_ceiling": 0.138212,
+            "target_floor": 0.339153,
+            "safe_window": [
+              0.138212,
+              0.339153
+            ],
+            "width": 0.200941
+          }
+        },
+        "all_candidates_detail": {
+          "target_count": 2,
+          "non_target_count": 30,
+          "target_scores_desc": [
+            0.542934,
+            0.339153
+          ],
+          "non_target_scores_top6": [
+            0.138212,
+            0.123463,
+            0.100504,
+            0.097786,
+            0.085097,
+            0.080051
+          ]
+        }
+      },
+      "boundary_probe": {
+        "semantics": "检索保留 score >= min_score（含等号）⇒ 窗口下界开、上界闭",
+        "expected_target_count": 2,
+        "at_target_floor": {
+          "min_score": 0.33915287475109385,
+          "count": 2,
+          "target_count": 2,
+          "non_target_count": 0
+        },
+        "just_above_target_floor": {
+          "min_score": 0.3391528747510939,
+          "count": 1,
+          "target_count": 1,
+          "non_target_count": 0
+        },
+        "at_noise_ceiling": {
+          "min_score": 0.1382118686237242,
+          "count": 3,
+          "target_count": 2,
+          "non_target_count": 1
+        },
+        "just_above_noise_ceiling": {
+          "min_score": 0.13821186862372423,
+          "count": 2,
+          "target_count": 2,
+          "non_target_count": 0
+        },
+        "checks": {
+          "floor_is_inclusive": true,
+          "ceiling_is_inclusive": true,
+          "interior_keeps_all_targets_drops_all_noise": true
+        }
+      },
+      "arms": {
+        "rag_off": {
+          "arm": "rag_off",
+          "use_rag": false,
+          "retriever_kwargs_passed": null,
+          "ok": true,
+          "errors": [],
+          "warnings": [],
+          "prompt_template": "question",
+          "prompt_chars": 2457,
+          "prompt_has_knowledge_block": false,
+          "knowledge_context_count": 0,
+          "knowledge_context_sources": [],
+          "retrieved_count": 0,
+          "retrieved_sources": [],
+          "resolve_calls": [
+            {
+              "use_rag": false,
+              "retriever_injected": false,
+              "retriever_kwargs_received": null,
+              "built_class": null,
+              "built_top_k": null,
+              "built_min_score": null,
+              "warnings": []
+            }
+          ],
+          "retriever_kwargs_received": null,
+          "effective_top_k": null,
+          "effective_min_score": null,
+          "retriever_class": null,
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "retrieve_knowledge": true,
+            "generate_question": true
+          }
+        },
+        "rag_on_no_threshold": {
+          "arm": "rag_on_no_threshold",
+          "use_rag": true,
+          "retriever_kwargs_passed": null,
+          "ok": true,
+          "errors": [],
+          "warnings": [],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 4625,
+          "prompt_has_knowledge_block": true,
+          "knowledge_context_count": 5,
+          "knowledge_context_sources": [
+            "company://career-ai/about",
+            "handbook://network/http-and-https",
+            "handbook://spring/auto-configuration",
+            "handbook://spring/transaction"
+          ],
+          "retrieved_count": 5,
+          "retrieved_sources": [
+            "handbook://spring/auto-configuration",
+            "handbook://spring/auto-configuration",
+            "company://career-ai/about",
+            "handbook://network/http-and-https",
+            "handbook://spring/transaction"
+          ],
+          "resolve_calls": [
+            {
+              "use_rag": true,
+              "retriever_injected": false,
+              "retriever_kwargs_received": null,
+              "built_class": "VectorKnowledgeRetriever",
+              "built_top_k": 5,
+              "built_min_score": null,
+              "warnings": []
+            }
+          ],
+          "retriever_kwargs_received": null,
+          "effective_top_k": 5,
+          "effective_min_score": null,
+          "retriever_class": "VectorKnowledgeRetriever",
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "retrieve_knowledge": true,
+            "generate_question": true
+          }
+        },
+        "rag_on_declared": {
+          "arm": "rag_on_declared",
+          "use_rag": true,
+          "retriever_kwargs_passed": {
+            "top_k": 5,
+            "min_score": 0.25
+          },
+          "ok": true,
+          "errors": [],
+          "warnings": [],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 3574,
+          "prompt_has_knowledge_block": true,
+          "knowledge_context_count": 2,
+          "knowledge_context_sources": [
+            "handbook://spring/auto-configuration"
+          ],
+          "retrieved_count": 2,
+          "retrieved_sources": [
+            "handbook://spring/auto-configuration",
+            "handbook://spring/auto-configuration"
+          ],
+          "resolve_calls": [
+            {
+              "use_rag": true,
+              "retriever_injected": false,
+              "retriever_kwargs_received": {
+                "top_k": 5,
+                "min_score": 0.25
+              },
+              "built_class": "VectorKnowledgeRetriever",
+              "built_top_k": 5,
+              "built_min_score": 0.25,
+              "warnings": []
+            }
+          ],
+          "retriever_kwargs_received": {
+            "top_k": 5,
+            "min_score": 0.25
+          },
+          "effective_top_k": 5,
+          "effective_min_score": 0.25,
+          "retriever_class": "VectorKnowledgeRetriever",
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "retrieve_knowledge": true,
+            "generate_question": true
+          }
+        },
+        "rag_on_recommended": {
+          "arm": "rag_on_recommended",
+          "use_rag": true,
+          "retriever_kwargs_passed": {
+            "top_k": 5,
+            "min_score": 0.239
+          },
+          "ok": true,
+          "errors": [],
+          "warnings": [],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 3574,
+          "prompt_has_knowledge_block": true,
+          "knowledge_context_count": 2,
+          "knowledge_context_sources": [
+            "handbook://spring/auto-configuration"
+          ],
+          "retrieved_count": 2,
+          "retrieved_sources": [
+            "handbook://spring/auto-configuration",
+            "handbook://spring/auto-configuration"
+          ],
+          "resolve_calls": [
+            {
+              "use_rag": true,
+              "retriever_injected": false,
+              "retriever_kwargs_received": {
+                "top_k": 5,
+                "min_score": 0.239
+              },
+              "built_class": "VectorKnowledgeRetriever",
+              "built_top_k": 5,
+              "built_min_score": 0.239,
+              "warnings": []
+            }
+          ],
+          "retriever_kwargs_received": {
+            "top_k": 5,
+            "min_score": 0.239
+          },
+          "effective_top_k": 5,
+          "effective_min_score": 0.239,
+          "retriever_class": "VectorKnowledgeRetriever",
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "retrieve_knowledge": true,
+            "generate_question": true
+          }
+        }
+      },
+      "checks": [
+        {
+          "name": "★ 窗口端点与 top_k 截断无关（全量候选与 top_k 候选端点一致）",
+          "passed": true
+        },
+        {
+          "name": "★ 窗口是「真分离」：非目标上限 < 目标下限",
+          "passed": true
+        },
+        {
+          "name": "★ 重测窗口 == 任务 69 记录的窗口（6 位小数）",
+          "passed": true
+        },
+        {
+          "name": "★ 声明 min_score 落在窗口内",
+          "passed": true
+        },
+        {
+          "name": "★ 推荐标定值（窗口中点）落在窗口内",
+          "passed": true
+        },
+        {
+          "name": "无 RAG 臂出题成功且无 errors",
+          "passed": true
+        },
+        {
+          "name": "无 RAG 臂不注入知识（0 条）",
+          "passed": true
+        },
+        {
+          "name": "无 RAG 臂用 question 模板",
+          "passed": true
+        },
+        {
+          "name": "★ 无 RAG 臂 Prompt 字符数 == 无 RAG 基准记录（2457）",
+          "passed": true
+        },
+        {
+          "name": "有 RAG 臂（不传阈值）出题成功且无 errors",
+          "passed": true
+        },
+        {
+          "name": "★ 有 RAG 臂（不传阈值）条数 == top_k（阈值未生效的现状）",
+          "passed": true
+        },
+        {
+          "name": "★ 有 RAG 臂（不传阈值）Prompt 字符数 == 有 RAG 基准（真实星火）记录",
+          "passed": true
+        },
+        {
+          "name": "★ 有 RAG 臂（不传阈值）条数 == 有 RAG 基准（真实星火）记录",
+          "passed": true
+        },
+        {
+          "name": "★ 组装器实际收到的 retriever_kwargs == 传入值（有 RAG 臂·不传阈值）",
+          "passed": true
+        },
+        {
+          "name": "★ 组装器实际收到的 retriever_kwargs == 传入值（有 RAG 臂·声明阈值）",
+          "passed": true
+        },
+        {
+          "name": "★ 组装出的检索器 min_score == 声明值（阈值真的进了检索器）",
+          "passed": true
+        },
+        {
+          "name": "★ 组装出的检索器 top_k == 声明值",
+          "passed": true
+        },
+        {
+          "name": "★★ 声明阈值臂条数 == 基准期望条数（2）",
+          "passed": true
+        },
+        {
+          "name": "★ 声明阈值臂命中来源 == expected_hit_sources",
+          "passed": true
+        },
+        {
+          "name": "★ 声明阈值臂注入正文 == 检索器返回（同一份）",
+          "passed": true
+        },
+        {
+          "name": "★ 推荐标定值臂条数 == 2（窗口内部同样安全）",
+          "passed": true
+        },
+        {
+          "name": "★ 推荐标定值臂 Prompt 字符数 == 声明阈值臂（只换阈值不改长度）",
+          "passed": true
+        },
+        {
+          "name": "★ 阈值生效后 Prompt 变短（噪声被剔除）",
+          "passed": true
+        },
+        {
+          "name": "有 RAG 臂用 question_knowledge 模板",
+          "passed": true
+        },
+        {
+          "name": "每臂只调用一次大模型（一题一次 LLM 调用）",
+          "passed": true
+        },
+        {
+          "name": "每臂只调用一次 Agent",
+          "passed": true
+        },
+        {
+          "name": "替身与被替换函数同签名",
+          "passed": true
+        },
+        {
+          "name": "★ 边界：目标下限含等号（该分仍保留目标），抬高一个 ULP 恰好少一条目标",
+          "passed": true
+        },
+        {
+          "name": "★ 边界：非目标上限含等号（该分仍保留噪声），抬高一个 ULP 噪声归零",
+          "passed": true
+        },
+        {
+          "name": "★ 边界：窗口内部噪声全清、目标全留",
+          "passed": true
+        }
+      ],
+      "all_checks_passed": true,
+      "cross_checks_with_task69": [
+        {
+          "name": "任务 69 投影的条数 == 实跑条数",
+          "expected": 2,
+          "actual": 2,
+          "match": true
+        },
+        {
+          "name": "任务 69 投影的 Prompt 字符数 == 实跑 Prompt 字符数",
+          "expected": 3574,
+          "actual": 3574,
+          "match": true
+        },
+        {
+          "name": "任务 69 记录的 on_chars == 实跑（不传阈值）Prompt 字符数",
+          "expected": 4625,
+          "actual": 4625,
+          "match": true
+        },
+        {
+          "name": "任务 69 记录的 off_chars == 实跑无 RAG Prompt 字符数",
+          "expected": 2457,
+          "actual": 2457,
+          "match": true
+        }
+      ]
+    },
+    {
+      "scenario_id": "s3-cache-consistency-senior",
+      "label": "后端架构师 · 分布式缓存一致性 · 高级 · 场景阶段",
+      "calibration": {
+        "query_topic": "分布式缓存一致性",
+        "target_sources": [
+          "handbook://architecture/cache-consistency"
+        ],
+        "expected_chunk_count": 1,
+        "top_k": 5,
+        "window": {
+          "noise_ceiling": 0.3607709853146894,
+          "target_floor": 0.4239815085282628,
+          "safe_window": [
+            0.3607709853146894,
+            0.4239815085282628
+          ],
+          "width": 0.0632105232135734,
+          "separated": true,
+          "target_count": 1,
+          "non_target_count": 31,
+          "display_6dp": {
+            "noise_ceiling": 0.360771,
+            "target_floor": 0.423982,
+            "safe_window": [
+              0.360771,
+              0.423982
+            ],
+            "width": 0.063211
+          }
+        },
+        "declared_min_score": 0.4,
+        "declared_in_window": true,
+        "declared_margin_to_floor": 0.023982,
+        "declared_margin_to_ceiling": 0.039229,
+        "recommendation": {
+          "recommended": 0.392,
+          "midpoint_exact": 0.3923762469214761,
+          "reason": "取窗口 (非目标上限, 目标下限] 的中点 ⇒ 两侧余量对称，对语料微调与浮点误差的容忍度最大",
+          "recommended_in_window": true,
+          "recommended_margin_to_floor": 0.031982,
+          "recommended_margin_to_ceiling": 0.031229,
+          "width": 0.063211,
+          "width_tier": "narrow",
+          "usable_by_gap_threshold": true,
+          "gap_threshold": 0.02
+        },
+        "caveat": "窗口窄 ⇒ 对语料微调敏感，换语料 / 换 Embedding 后必须重新标定"
+      },
+      "measured_window": {
+        "topic": "分布式缓存一致性",
+        "corpus_chunks": 32,
+        "over_all_candidates": {
+          "noise_ceiling": 0.3607709853146894,
+          "target_floor": 0.4239815085282628,
+          "safe_window": [
+            0.3607709853146894,
+            0.4239815085282628
+          ],
+          "width": 0.0632105232135734,
+          "separated": true,
+          "target_count": 1,
+          "non_target_count": 31,
+          "display_6dp": {
+            "noise_ceiling": 0.360771,
+            "target_floor": 0.423982,
+            "safe_window": [
+              0.360771,
+              0.423982
+            ],
+            "width": 0.063211
+          }
+        },
+        "over_topk_candidates": {
+          "noise_ceiling": 0.3607709853146894,
+          "target_floor": 0.4239815085282628,
+          "safe_window": [
+            0.3607709853146894,
+            0.4239815085282628
+          ],
+          "width": 0.0632105232135734,
+          "separated": true,
+          "target_count": 1,
+          "non_target_count": 4,
+          "display_6dp": {
+            "noise_ceiling": 0.360771,
+            "target_floor": 0.423982,
+            "safe_window": [
+              0.360771,
+              0.423982
+            ],
+            "width": 0.063211
+          }
+        },
+        "all_candidates_detail": {
+          "target_count": 1,
+          "non_target_count": 31,
+          "target_scores_desc": [
+            0.423982
+          ],
+          "non_target_scores_top6": [
+            0.360771,
+            0.30613,
+            0.251351,
+            0.249029,
+            0.243432,
+            0.231558
+          ]
+        }
+      },
+      "boundary_probe": {
+        "semantics": "检索保留 score >= min_score（含等号）⇒ 窗口下界开、上界闭",
+        "expected_target_count": 1,
+        "at_target_floor": {
+          "min_score": 0.4239815085282628,
+          "count": 1,
+          "target_count": 1,
+          "non_target_count": 0
+        },
+        "just_above_target_floor": {
+          "min_score": 0.42398150852826283,
+          "count": 0,
+          "target_count": 0,
+          "non_target_count": 0
+        },
+        "at_noise_ceiling": {
+          "min_score": 0.3607709853146894,
+          "count": 2,
+          "target_count": 1,
+          "non_target_count": 1
+        },
+        "just_above_noise_ceiling": {
+          "min_score": 0.36077098531468943,
+          "count": 1,
+          "target_count": 1,
+          "non_target_count": 0
+        },
+        "checks": {
+          "floor_is_inclusive": true,
+          "ceiling_is_inclusive": true,
+          "interior_keeps_all_targets_drops_all_noise": true
+        }
+      },
+      "arms": {
+        "rag_off": {
+          "arm": "rag_off",
+          "use_rag": false,
+          "retriever_kwargs_passed": null,
+          "ok": true,
+          "errors": [],
+          "warnings": [],
+          "prompt_template": "question",
+          "prompt_chars": 2449,
+          "prompt_has_knowledge_block": false,
+          "knowledge_context_count": 0,
+          "knowledge_context_sources": [],
+          "retrieved_count": 0,
+          "retrieved_sources": [],
+          "resolve_calls": [
+            {
+              "use_rag": false,
+              "retriever_injected": false,
+              "retriever_kwargs_received": null,
+              "built_class": null,
+              "built_top_k": null,
+              "built_min_score": null,
+              "warnings": []
+            }
+          ],
+          "retriever_kwargs_received": null,
+          "effective_top_k": null,
+          "effective_min_score": null,
+          "retriever_class": null,
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "retrieve_knowledge": true,
+            "generate_question": true
+          }
+        },
+        "rag_on_no_threshold": {
+          "arm": "rag_on_no_threshold",
+          "use_rag": true,
+          "retriever_kwargs_passed": null,
+          "ok": true,
+          "errors": [],
+          "warnings": [],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 4752,
+          "prompt_has_knowledge_block": true,
+          "knowledge_context_count": 5,
+          "knowledge_context_sources": [
+            "handbook://architecture/cache-consistency",
+            "handbook://redis/data-structures",
+            "resume://project/order-middle-cache",
+            "resume://project/payment-gateway"
+          ],
+          "retrieved_count": 5,
+          "retrieved_sources": [
+            "handbook://architecture/cache-consistency",
+            "resume://project/order-middle-cache",
+            "handbook://redis/data-structures",
+            "resume://project/payment-gateway",
+            "resume://project/order-middle-cache"
+          ],
+          "resolve_calls": [
+            {
+              "use_rag": true,
+              "retriever_injected": false,
+              "retriever_kwargs_received": null,
+              "built_class": "VectorKnowledgeRetriever",
+              "built_top_k": 5,
+              "built_min_score": null,
+              "warnings": []
+            }
+          ],
+          "retriever_kwargs_received": null,
+          "effective_top_k": 5,
+          "effective_min_score": null,
+          "retriever_class": "VectorKnowledgeRetriever",
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "retrieve_knowledge": true,
+            "generate_question": true
+          }
+        },
+        "rag_on_declared": {
+          "arm": "rag_on_declared",
+          "use_rag": true,
+          "retriever_kwargs_passed": {
+            "top_k": 5,
+            "min_score": 0.4
+          },
+          "ok": true,
+          "errors": [],
+          "warnings": [],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 3071,
+          "prompt_has_knowledge_block": true,
+          "knowledge_context_count": 1,
+          "knowledge_context_sources": [
+            "handbook://architecture/cache-consistency"
+          ],
+          "retrieved_count": 1,
+          "retrieved_sources": [
+            "handbook://architecture/cache-consistency"
+          ],
+          "resolve_calls": [
+            {
+              "use_rag": true,
+              "retriever_injected": false,
+              "retriever_kwargs_received": {
+                "top_k": 5,
+                "min_score": 0.4
+              },
+              "built_class": "VectorKnowledgeRetriever",
+              "built_top_k": 5,
+              "built_min_score": 0.4,
+              "warnings": []
+            }
+          ],
+          "retriever_kwargs_received": {
+            "top_k": 5,
+            "min_score": 0.4
+          },
+          "effective_top_k": 5,
+          "effective_min_score": 0.4,
+          "retriever_class": "VectorKnowledgeRetriever",
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "retrieve_knowledge": true,
+            "generate_question": true
+          }
+        },
+        "rag_on_recommended": {
+          "arm": "rag_on_recommended",
+          "use_rag": true,
+          "retriever_kwargs_passed": {
+            "top_k": 5,
+            "min_score": 0.392
+          },
+          "ok": true,
+          "errors": [],
+          "warnings": [],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 3071,
+          "prompt_has_knowledge_block": true,
+          "knowledge_context_count": 1,
+          "knowledge_context_sources": [
+            "handbook://architecture/cache-consistency"
+          ],
+          "retrieved_count": 1,
+          "retrieved_sources": [
+            "handbook://architecture/cache-consistency"
+          ],
+          "resolve_calls": [
+            {
+              "use_rag": true,
+              "retriever_injected": false,
+              "retriever_kwargs_received": {
+                "top_k": 5,
+                "min_score": 0.392
+              },
+              "built_class": "VectorKnowledgeRetriever",
+              "built_top_k": 5,
+              "built_min_score": 0.392,
+              "warnings": []
+            }
+          ],
+          "retriever_kwargs_received": {
+            "top_k": 5,
+            "min_score": 0.392
+          },
+          "effective_top_k": 5,
+          "effective_min_score": 0.392,
+          "retriever_class": "VectorKnowledgeRetriever",
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "retrieve_knowledge": true,
+            "generate_question": true
+          }
+        }
+      },
+      "checks": [
+        {
+          "name": "★ 窗口端点与 top_k 截断无关（全量候选与 top_k 候选端点一致）",
+          "passed": true
+        },
+        {
+          "name": "★ 窗口是「真分离」：非目标上限 < 目标下限",
+          "passed": true
+        },
+        {
+          "name": "★ 重测窗口 == 任务 69 记录的窗口（6 位小数）",
+          "passed": true
+        },
+        {
+          "name": "★ 声明 min_score 落在窗口内",
+          "passed": true
+        },
+        {
+          "name": "★ 推荐标定值（窗口中点）落在窗口内",
+          "passed": true
+        },
+        {
+          "name": "无 RAG 臂出题成功且无 errors",
+          "passed": true
+        },
+        {
+          "name": "无 RAG 臂不注入知识（0 条）",
+          "passed": true
+        },
+        {
+          "name": "无 RAG 臂用 question 模板",
+          "passed": true
+        },
+        {
+          "name": "★ 无 RAG 臂 Prompt 字符数 == 无 RAG 基准记录（2449）",
+          "passed": true
+        },
+        {
+          "name": "有 RAG 臂（不传阈值）出题成功且无 errors",
+          "passed": true
+        },
+        {
+          "name": "★ 有 RAG 臂（不传阈值）条数 == top_k（阈值未生效的现状）",
+          "passed": true
+        },
+        {
+          "name": "★ 有 RAG 臂（不传阈值）Prompt 字符数 == 有 RAG 基准（真实星火）记录",
+          "passed": true
+        },
+        {
+          "name": "★ 有 RAG 臂（不传阈值）条数 == 有 RAG 基准（真实星火）记录",
+          "passed": true
+        },
+        {
+          "name": "★ 组装器实际收到的 retriever_kwargs == 传入值（有 RAG 臂·不传阈值）",
+          "passed": true
+        },
+        {
+          "name": "★ 组装器实际收到的 retriever_kwargs == 传入值（有 RAG 臂·声明阈值）",
+          "passed": true
+        },
+        {
+          "name": "★ 组装出的检索器 min_score == 声明值（阈值真的进了检索器）",
+          "passed": true
+        },
+        {
+          "name": "★ 组装出的检索器 top_k == 声明值",
+          "passed": true
+        },
+        {
+          "name": "★★ 声明阈值臂条数 == 基准期望条数（1）",
+          "passed": true
+        },
+        {
+          "name": "★ 声明阈值臂命中来源 == expected_hit_sources",
+          "passed": true
+        },
+        {
+          "name": "★ 声明阈值臂注入正文 == 检索器返回（同一份）",
+          "passed": true
+        },
+        {
+          "name": "★ 推荐标定值臂条数 == 1（窗口内部同样安全）",
+          "passed": true
+        },
+        {
+          "name": "★ 推荐标定值臂 Prompt 字符数 == 声明阈值臂（只换阈值不改长度）",
+          "passed": true
+        },
+        {
+          "name": "★ 阈值生效后 Prompt 变短（噪声被剔除）",
+          "passed": true
+        },
+        {
+          "name": "有 RAG 臂用 question_knowledge 模板",
+          "passed": true
+        },
+        {
+          "name": "每臂只调用一次大模型（一题一次 LLM 调用）",
+          "passed": true
+        },
+        {
+          "name": "每臂只调用一次 Agent",
+          "passed": true
+        },
+        {
+          "name": "替身与被替换函数同签名",
+          "passed": true
+        },
+        {
+          "name": "★ 边界：目标下限含等号（该分仍保留目标），抬高一个 ULP 恰好少一条目标",
+          "passed": true
+        },
+        {
+          "name": "★ 边界：非目标上限含等号（该分仍保留噪声），抬高一个 ULP 噪声归零",
+          "passed": true
+        },
+        {
+          "name": "★ 边界：窗口内部噪声全清、目标全留",
+          "passed": true
+        }
+      ],
+      "all_checks_passed": true,
+      "cross_checks_with_task69": [
+        {
+          "name": "任务 69 投影的条数 == 实跑条数",
+          "expected": 1,
+          "actual": 1,
+          "match": true
+        },
+        {
+          "name": "任务 69 投影的 Prompt 字符数 == 实跑 Prompt 字符数",
+          "expected": 3071,
+          "actual": 3071,
+          "match": true
+        },
+        {
+          "name": "任务 69 记录的 on_chars == 实跑（不传阈值）Prompt 字符数",
+          "expected": 4752,
+          "actual": 4752,
+          "match": true
+        },
+        {
+          "name": "任务 69 记录的 off_chars == 实跑无 RAG Prompt 字符数",
+          "expected": 2449,
+          "actual": 2449,
+          "match": true
+        }
+      ]
+    }
+  ],
+  "aggregate": {
+    "scenarios": 3,
+    "chunks_injected_before": 15,
+    "chunks_injected_after": 5,
+    "chunks_removed": 10,
+    "chunks_expected_after": 5,
+    "prompt_chars_off": 7332,
+    "prompt_chars_before": 13810,
+    "prompt_chars_after": 9852,
+    "prompt_chars_saved": 3958,
+    "prompt_chars_saved_ratio": 0.2866,
+    "prompt_chars_growth_ratio": 0.8835,
+    "declared_min_scores": {
+      "s1-mysql-index-mid": 0.25,
+      "s2-spring-boot-senior": 0.25,
+      "s3-cache-consistency-senior": 0.4
+    },
+    "recommended_min_scores": {
+      "s1-mysql-index-mid": 0.267,
+      "s2-spring-boot-senior": 0.239,
+      "s3-cache-consistency-senior": 0.392
+    }
+  },
+  "aggregate_checks": [
+    {
+      "name": "注入条数 15 → 5",
+      "expected_before": 15,
+      "expected_after": 5,
+      "actual_before": 15,
+      "actual_after": 5,
+      "match": true
+    },
+    {
+      "name": "Prompt 13810 → 9852 字",
+      "expected_before": 13810,
+      "expected_after": 9852,
+      "actual_before": 13810,
+      "actual_after": 9852,
+      "match": true
+    }
+  ],
+  "integrity": {
+    "checks_passed": true,
+    "problems": []
+  }
+}

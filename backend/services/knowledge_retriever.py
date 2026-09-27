@@ -26,8 +26,20 @@
 ---------------------
 1. 继承 :class:`KnowledgeRetriever`，覆写 :meth:`KnowledgeRetriever.retrieve`；
 2. 把结果统一构造成 :class:`KnowledgeChunk`（用 ``from_dict`` 转换上游原始结构）；
-3. 由 ``InterviewAgent`` 侧显式注入（本模块**不**提供全局单例，
-   避免「悄悄接上 RAG」这类不可控变更）。
+3. 由调用方显式注入——生产链路上是 ``interview_core.retrieve_knowledge`` 的
+   ``retriever`` 参数（本模块**不**提供全局单例，避免「悄悄接上 RAG」）。
+
+.. warning::
+   **同名不同物**：本模块的 :class:`KnowledgeChunk` 是**内存值对象**
+   （``@dataclass(frozen=True)``）；``models.knowledge.KnowledgeChunk`` 是
+   **ORM 数据库行**（有 ``id`` / ``document_id``）。
+
+   两者**刻意不互相 import**：本模块必须保持「零第三方依赖、可脱离 DB 单测」，
+   所以**不要在这里加 ``from_row`` / ``to_model`` 之类的方法**——那会让
+   ``models``（进而 SQLAlchemy）被拉进 ``sys.modules``，直接破坏该性质，
+   并被 ``tests/test_knowledge_retriever.py`` 的 AST 与子进程守卫拦下。
+   「ORM 行 → 本模块值对象」的转换属于**真实 Retriever 自己的职责**
+   （在它的模块里完成，本模块只提供 ``from_dict`` 这个归一入口）。
 
 **接口签名已按异步设计**：真实检索几乎一定要访问外部服务（向量库 / HTTP），
 现在写成 ``async`` 是为了届时不必修改任何调用方——反过来则会破坏所有调用点。

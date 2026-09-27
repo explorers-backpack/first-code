@@ -8,6 +8,10 @@ __pycache__/
 *.sqlite3
 backend/instance/
 
+# 向量库索引目录（chromadb 的本地持久化；可从 MySQL 权威行重建，不纳入版本管理）
+backend/data/chroma/
+backend/data/
+
 # Node / Vite
 node_modules/
 dist/

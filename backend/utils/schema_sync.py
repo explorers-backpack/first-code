@@ -85,6 +85,41 @@ DESIRED_COLUMNS: Dict[str, Dict[str, Dict[str, Any]]] = {
             "nullable": False,
         },
     },
+    # ---- 知识库两张表（models/knowledge.py）----
+    # 说明：这两张是**新表**，首次启动由 create_all 一次建全，本模块对它们
+    # 通常是空操作。登记的意义是**为将来加列兜底**：模型一旦新增字段，
+    # 只要往这里补一条，老库启动时就会自动 ALTER 补上。
+    #
+    # 注意（重要）：``NOT NULL`` 且**无默认值**的列（title / content / category /
+    # document_id / metadata）在 MySQL 上只能 `ADD COLUMN` 到**空表**。
+    # 当前阶段成立（新表、尚无数据）；若表里已有数据再要加这类列，
+    # 必须人工评估（先给默认值或先加可空列再回填），不要硬塞进本机制。
+    "knowledge_document": {
+        "title": {"type": "VARCHAR(300)", "nullable": False},
+        "content": {"type": "TEXT", "nullable": False},
+        "category": {"type": "VARCHAR(30)", "nullable": False},
+        # 与 ORM 一致：String(300) / nullable=False / server_default=""
+        "source": {"type": "VARCHAR(300)", "default": "''", "nullable": False},
+        # 与 ORM 一致：可空（ORM 侧 default=datetime.utcnow，无 server_default）
+        "created_at": {"type": "DATETIME"},
+    },
+    "knowledge_chunk": {
+        "document_id": {"type": "INTEGER", "nullable": False},
+        "content": {"type": "TEXT", "nullable": False},
+        # 数据库列名就是 metadata（Python 属性名是 chunk_metadata，见 models/knowledge.py）
+        "metadata": {"type": "JSON", "nullable": False},
+        # ---- 向量存储（预留）----
+        # 这三列是**真的会用到本机制**的列：knowledge_chunk 表在任务 39/40 就已经
+        # 由 create_all 建出来了，老库上并没有这三列 → 启动时会实际 ALTER 补上。
+        # 可空：尚未向量化（"embedding IS NULL" 即「待处理」）
+        "embedding": {"type": "JSON"},
+        # 与 ORM 一致：String(100) / nullable=False / server_default=""。
+        # 关键：NOT NULL 的列**必须带默认值**，否则 MySQL 无法把它 ADD COLUMN
+        # 到**已有数据**的表上（这三列正属于这种情况，不能只靠 create_all）。
+        "embedding_model": {"type": "VARCHAR(100)", "default": "''", "nullable": False},
+        # 与 ORM 一致：可空（无默认值）
+        "embedding_dim": {"type": "INTEGER"},
+    },
 }
 
 # 表名 / 列名均为本文件硬编码常量，不接受任何外部输入，

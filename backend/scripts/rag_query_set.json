@@ -1,0 +1,243 @@
+{
+  "name": "RAG 检索准确性 · 固定 query 测试集",
+  "version": 1,
+  "purpose": "用一组**固定的 query** 度量知识库检索的准确性：每条 query 声明它应该命中哪一类知识、命中结果必须包含哪些关键词，以及 top_k / min_score 两个检索参数。用于回归对比——换 Embedding、换向量后端、改切片策略之后，看命中率是否下降。",
+  "independence": {
+    "不依赖生产知识库": "本文件自带 corpus（见 corpus.documents），测试时导入**内存 SQLite**，完全不读生产知识库的任何表，也不需要生产库里有任何数据。",
+    "不依赖其它测试数据": "corpus 是本文件自带的**受控语料**，与 backend/scripts/interview_knowledge.json 无关；两者互不影响，改一个不会让另一个失败。",
+    "不修改业务代码": "只被 tests/test_rag_query_set.py 读取；Retriever / VectorStore / Embedding / InterviewAgent 一行都不用改，它们只被**调用**。"
+  },
+  "format": "queries[] 每项恰好 5 个键：query / expected_category / expected_keywords / top_k / min_score。corpus.documents[] 每项 4 键：title / content / category / source（与知识文档入库接口的入参契约一致）。",
+  "corpus_policy": {
+    "每篇正文长度上限": 480,
+    "理由": "DEFAULT_CHUNK_SIZE = 500 ⇒ 每篇恰好切成 1 片，于是「expected_keywords 是否出现」可以**确定性地**对那一篇正文取证，不存在「关键词落在第 2 片、而 top-1 是第 1 片」的歧义。这是刻意的取舍：本测试集测的是**检索排序准确性**，不是切片质量（切片质量由 test_document_chunker 覆盖）。",
+    "decoy": "corpus 里故意放了同类别、共享部分关键词的**干扰文档**——例如查「订单中台的缓存击穿」时，Redis 通用缓存文档也会命中「击穿」与「逻辑过期」；查「Java 后端工程师岗位职责」时，大数据岗位文档同样含「岗位职责 / 任职要求 / Java」。因此「top-1 必须正确」这条断言是非平凡的。",
+    "规模": "16 篇：technical 11 / job 2 / project 3"
+  },
+  "expectation_contract": {
+    "1": "检索结果条数 <= top_k",
+    "2": "每条结果的 score >= min_score",
+    "3": "top-1 结果的 metadata.category == expected_category",
+    "4": "top-1 结果的正文包含**全部** expected_keywords",
+    "note": "expected_keywords 里至少有一个是**目标文档独有**的指纹词，否则同类别干扰文档也能满足关键词断言，测试就失去了鉴别力。"
+  },
+  "min_score_calibration": {
+    "规则": "min_score = floor(0.5 × 该 query 的 top-1 实测分数, 2 位小数)。即「目标分数的一半」——既真的过滤掉了噪声尾部（不相关文档的余弦普遍落在 0.06~0.15），又给模型/版本漂移留了 2 倍余量。",
+    "标定环境": "默认离线占位 HashEmbeddingService（provider=hash-local，dimension=256），DEFAULT_CHUNK_SIZE=500 / DEFAULT_CHUNK_OVERLAP=80，SqlAlchemyVectorStore 后端。",
+    "换模型后怎么办": "min_score 是**绝对分数下限**，与 Embedding 模型绑定；换真实语义模型后绝对分数会整体变化，需要按上面的规则**重新标定**（0.5×新分数）。而「top-1 正确」这条**排序**断言与模型无关，应当继续成立——两者要分开看：排序退化是 bug，分数整体位移只是标定过期。"
+  },
+  "corpus": {
+    "documents": [
+      {
+        "title": "Java HashMap 原理与扩容",
+        "category": "technical",
+        "source": "handbook://java/hashmap",
+        "content": "HashMap 基于数组加链表加红黑树实现，数组就是哈希桶。put 时先对 key 的 hashCode 做扰动（高十六位异或低十六位），再与数组长度减一按位与得到下标。\n\n哈希冲突用链地址法解决。链表长度达到 8 且数组长度不小于 64 时，链表转成红黑树，查询复杂度从 O(n) 降到 O(logn)；红黑树节点数降到 6 时退回链表。\n\n扩容阈值等于容量乘负载因子：默认容量 16、负载因子 0.75，阈值就是 12。触发扩容时容量翻倍并重新分配元素，JDK 8 用高低位链表拆分代替重新计算 hash，元素要么留在原下标，要么移动到原下标加旧容量。\n\nHashMap 不是线程安全的，并发扩容可能读到不一致的数据，多线程场景应该用 ConcurrentHashMap。"
+      },
+      {
+        "title": "Java 并发：线程池与锁",
+        "category": "technical",
+        "source": "handbook://java/concurrency",
+        "content": "线程池的核心参数有七个：核心线程数、最大线程数、空闲存活时间、时间单位、工作队列、线程工厂、拒绝策略。任务提交顺序是：核心线程未满就新建；核心线程满了入队；队列满了再新建非核心线程直到最大线程数；仍然满就执行拒绝策略。\n\n队列选择很关键。用无界队列会让最大线程数永远用不上，任务堆积可能内存溢出，推荐有界队列。\n\n四种拒绝策略：AbortPolicy 抛异常（默认）、CallerRunsPolicy 由提交线程执行、DiscardPolicy 静默丢弃、DiscardOldestPolicy 丢弃最老任务。核心链路应自定义策略并打点上报。\n\n线程数怎么定：CPU 密集型设为核数加一；IO 密集型用核数乘目标利用率再乘等待比计算时间。锁方面，synchronized 有偏向锁到重量级锁的升级，ReentrantLock 支持公平锁、可中断与超时。"
+      },
+      {
+        "title": "Redis 缓存穿透、击穿与雪崩",
+        "category": "technical",
+        "source": "handbook://redis/cache-problems",
+        "content": "缓存穿透、击穿、雪崩要分开治理。\n\n穿透是查询不存在的数据，请求每次都打到数据库。方案是空值缓存或布隆过滤器：把空结果用很短 TTL 缓存，或者在接入层用布隆过滤器把明显不存在的 key 直接拦掉。\n\n击穿是单个热点 key 失效，瞬间大量请求同时回源。方案是互斥锁重建，或者逻辑过期：value 里带过期时间戳，命中后先返回旧值，再用异步线程重建缓存。\n\n雪崩是大量 key 在同一时刻失效。方案是给过期时间加随机扰动，同时做好多级缓存与降级预案。\n\n读缓存的流程是：先查缓存，未命中再查数据库并回填；写的时候先更新数据库，再删除缓存。"
+      },
+      {
+        "title": "Redis 持久化：RDB 与 AOF",
+        "category": "technical",
+        "source": "handbook://redis/persistence",
+        "content": "Redis 提供两种持久化方式。\n\nRDB 是某一时刻的全量快照，文件紧凑、恢复速度快，适合备份与主从全量同步；缺点是两次快照之间宕机会丢数据。\n\nAOF 记录每一条写命令，用 appendfsync 控制落盘频率：always 每条都刷盘最安全但性能最差，everysec 每秒刷一次（默认，最多丢一秒数据），no 交给操作系统决定。\n\nAOF 文件会不断膨胀，需要重写来压缩。Redis 4.0 之后支持混合持久化，RDB 存全量、AOF 存增量，兼顾恢复速度与数据安全。\n\n高可用方面，哨兵在主从基础上做自动故障转移，Redis Cluster 用 16384 个哈希槽做分片。"
+      },
+      {
+        "title": "MySQL 索引与执行计划",
+        "category": "technical",
+        "source": "handbook://mysql/index",
+        "content": "InnoDB 用 B+ 树作为索引结构。B+ 树的非叶子节点只存键值不存数据，单页能容纳更多键、树高更低，一次查找通常只要三到四次磁盘 IO；叶子节点用双向链表串联，天然支持范围扫描。\n\n聚簇索引的叶子节点存放整行数据，主键就是聚簇索引。二级索引的叶子节点存主键值，查非索引列需要回表。如果查询需要的列都在索引里，就叫覆盖索引，可以避免回表。\n\n联合索引遵循最左前缀原则，范围查询之后的列用不到索引，所以列顺序应该等值条件在前、范围条件在后。\n\n用 EXPLAIN 看索引是否生效，重点看 type（从优到劣是 const、eq_ref、ref、range、index、ALL）、key 和 rows。Extra 里出现 Using filesort 说明排序没走索引，出现 Using temporary 说明用了临时表，都是需要优化的信号。"
+      },
+      {
+        "title": "MySQL 事务隔离级别与锁",
+        "category": "technical",
+        "source": "handbook://mysql/isolation",
+        "content": "SQL 标准定义了四个隔离级别。读未提交会脏读；读已提交解决了脏读，但同一事务内两次读同一行可能不同，即不可重复读；可重复读解决了不可重复读，但可能出现幻读；串行化并发度最低。\n\nInnoDB 默认是可重复读，并通过间隙锁在很大程度上避免了幻读。\n\nInnoDB 的锁按粒度分表锁与行锁，行锁又分记录锁、间隙锁和临键锁（记录锁加间隙锁）。临键锁锁住左开右闭区间，是默认级别下防幻读的关键。\n\n两个要点：第一，InnoDB 的行锁加在索引上，更新条件没走索引会退化成锁全表，这是线上最容易踩的坑；第二，间隙锁会显著增加死锁概率，排查要用 SHOW ENGINE INNODB STATUS 看 LATEST DETECTED DEADLOCK 段落。"
+      },
+      {
+        "title": "JVM 内存结构与垃圾回收",
+        "category": "technical",
+        "source": "handbook://jvm/memory-and-gc",
+        "content": "JVM 运行时内存分线程私有与线程共享两部分。私有的是程序计数器、虚拟机栈和本地方法栈；共享的是堆和方法区（JDK 8 之后方法区的实现是元空间，位于本地内存）。\n\n新生代默认占堆三分之一，内部是一个 Eden 加两个 Survivor，比例 8:1:1。对象优先在 Eden 分配，Minor GC 时存活对象复制到 Survivor，年龄加一，达到阈值（默认 15）后晋升老年代。\n\n垃圾判定用可达性分析，从 GC Roots 出发不可达的对象即为垃圾。常见回收算法：标记清除会产生内存碎片，复制算法没有碎片但浪费空间，标记整理兼顾两者。\n\n常见收集器：Serial 单线程；Parallel 关注吞吐量；CMS 关注停顿但有碎片；G1 把堆切成 Region 并按回收收益排序；ZGC 追求极低停顿。判断内存泄漏要看老年代是否持续增长、Full GC 之后回收效果是否明显。"
+      },
+      {
+        "title": "Spring 事务与传播行为",
+        "category": "technical",
+        "source": "handbook://spring/transaction",
+        "content": "Spring 的声明式事务基于 AOP：容器为标注 @Transactional 的 Bean 生成代理，在方法调用前后开启与提交事务，异常时回滚。默认只在遇到 RuntimeException 与 Error 时回滚，受检异常不回滚，可用 rollbackFor 改变。\n\n七个传播行为里最常问三个。REQUIRED 是默认值：当前有事务就加入，没有就新建。REQUIRES_NEW 会挂起当前事务并开启一个全新事务，两者互不影响，适合记录操作日志这类主流程失败也要留痕的场景。NESTED 基于数据库保存点实现，外层回滚会连带内层，内层回滚不影响外层。\n\n两个高频陷阱：同类内部方法直接调用不走代理，@Transactional 会失效；事务方法里做远程调用会长时间占用连接，应把外部调用挪到事务外。"
+      },
+      {
+        "title": "Kafka 消息可靠性与幂等",
+        "category": "technical",
+        "source": "handbook://kafka/reliability",
+        "content": "Kafka 的可靠性要从生产、存储、消费三段看。\n\n生产端：acks=0 发出即成功可能丢消息；acks=1 主副本写入成功即返回；acks=all 所有同步副本都写入成功才返回，最可靠。配合 retries 与 max.in.flight.requests.per.connection=1 可以避免重试导致乱序。开启幂等生产者（enable.idempotence=true）之后，broker 用生产者 id 与序列号去重，保证单分区内不重复、不乱序。\n\n存储端：replication.factor 建议至少 3，配合 min.insync.replicas=2 与 acks=all，可以容忍一个副本故障而不丢数据。\n\n消费端：位移提交决定重复与丢失。要做到精确一次，需要把位移提交与业务写库放进同一个事务，或者业务侧用唯一键做幂等去重。消费积压先看消费者组是否在 rebalance，再看单条消息处理耗时，最后才考虑加分区。"
+      },
+      {
+        "title": "HTTP 状态码与缓存机制",
+        "category": "technical",
+        "source": "handbook://network/http",
+        "content": "HTTP 是无状态的应用层协议。GET 幂等且可缓存，POST 不幂等，PUT 与 DELETE 幂等。\n\n状态码按首位分五类：1xx 信息、2xx 成功、3xx 重定向、4xx 客户端错误、5xx 服务端错误。301 是永久重定向会被缓存，302 是临时重定向，304 表示资源未修改可以走协商缓存。\n\nHTTP 缓存分强缓存与协商缓存。强缓存看 Cache-Control 的 max-age 与 Expires，命中则不发请求；协商缓存看 ETag 与 If-None-Match、Last-Modified 与 If-Modified-Since，命中返回 304 且不带主体。ETag 比 Last-Modified 更精确，因为后者只能精确到秒，且文件内容未变时修改时间也可能变化。"
+      },
+      {
+        "title": "HTTPS 握手与证书校验",
+        "category": "technical",
+        "source": "handbook://network/https",
+        "content": "HTTPS 在 HTTP 与 TCP 之间加了 TLS 层，解决窃听、篡改与冒充三个问题。\n\n握手过程大致是：客户端发 ClientHello，带上支持的密码套件与随机数；服务端回 ServerHello，选定套件并返回证书与随机数；客户端校验证书链是否有效（是否由受信 CA 签发、域名是否匹配、是否过期），然后生成预主密钥并用服务端公钥加密发送；双方用三个随机数推导出会话密钥，之后用对称加密通信。\n\n非对称加密只用于密钥交换，业务数据用对称加密，这是性能与安全的折中。TLS 1.3 把握手压缩到一次往返，并废除了 RSA 密钥交换，只保留前向安全的方案。"
+      },
+      {
+        "title": "Java 后端工程师（高级）",
+        "category": "job",
+        "source": "jd://career-ai/java-backend-senior",
+        "content": "岗位职责：负责核心交易链路的后端服务设计与开发，保障高并发场景下的稳定性；主导关键模块的技术方案评审，输出可落地的设计文档；参与线上问题定位与复盘，推动架构演进；指导初级工程师完成模块开发与代码评审。\n\n任职要求：本科及以上学历，五年以上 Java 服务端开发经验；精通 Java 基础、集合与并发编程，熟悉 JVM 内存模型与常见调优手段；熟练使用 Spring Boot 与 MyBatis；熟悉 MySQL，能独立完成索引设计与慢查询优化；熟悉 Redis 与缓存治理；熟悉 Kafka 等消息中间件，理解消息可靠性与幂等设计。\n\n加分项：有分布式事务、分库分表的实践经验；有高并发系统的压测与容量评估经验；熟悉 Kubernetes 与 CI/CD 流程。"
+      },
+      {
+        "title": "大数据开发工程师",
+        "category": "job",
+        "source": "jd://career-ai/bigdata-engineer",
+        "content": "岗位职责：负责离线与实时数据链路的建设，支撑业务报表与用户画像；负责数据仓库分层建模，维护数仓规范与指标口径一致性；负责数据质量监控，及时发现并修复数据异常；参与数据平台工具建设，提升研发与分析的效率。\n\n任职要求：熟悉 Hive、Spark、Flink 中至少两种计算引擎，理解其执行计划与调优手段；熟悉数仓分层（ODS、DWD、DWS、ADS）与维度建模；熟悉 Kafka 与常用数据同步工具；熟悉 SQL 调优，能定位数据倾斜并给出解决方案；熟悉 Java 或 Scala，能阅读并改造引擎侧代码。\n\n加分项：有实时数仓的落地经验；有数据治理与元数据管理的经验；有湖仓一体架构的实践经验。"
+      },
+      {
+        "title": "项目：订单中台缓存治理",
+        "category": "project",
+        "source": "resume://project/order-middle-cache",
+        "content": "背景：订单中台的缓存治理起因于双十一前一次缓存击穿事故，数据库被打挂，核心下单接口 P99 冲到三秒以上并触发熔断，持续约十分钟。\n\n排查发现三个问题叠加：热点商品的缓存 key 在同一秒集中失效；不存在的商品 id 直接穿透到数据库；缓存过期时间统一设置为三十分钟，没有随机扰动。\n\n改造做了四件事。第一，对热点商品改成逻辑过期：value 里带过期时间戳，命中后先返回旧值，再用异步线程重建缓存。第二，对空结果做短 TTL 的空值缓存，并在接入层加布隆过滤器。第三，给过期时间加零到三百秒的随机扰动。第四，本地缓存与 Redis 组成两级缓存，更新数据库后主动删除缓存。\n\n结果：数据库 QPS 从峰值八万降到一点二万，P99 从四百八十毫秒降到九十毫秒，缓存命中率从百分之七十六提升到百分之九十六。\n\n复盘教训：压测一定要用接近生产的流量模型。"
+      },
+      {
+        "title": "项目：支付网关幂等与对账",
+        "category": "project",
+        "source": "resume://project/payment-gateway",
+        "content": "背景：支付网关对接了六家渠道，日均交易量约两百万笔。上线初期出现过重复扣款投诉，根因是渠道回调重试加上本地网络超时重试，导致同一笔订单被处理两次。\n\n方案分三层。第一层是入口幂等：以商户订单号加渠道标识作为唯一键，在 Redis 里用 SET NX 加过期时间做前置拦截，同时在数据库对唯一键建唯一索引兜底——Redis 只用来挡流量，正确性由数据库保证。第二层是状态机：支付单状态严格按待支付、支付中、成功、失败、已退款流转，只能前进不能回退，重复回调直接返回当前状态。第三层是对账：每天凌晨拉取渠道对账文件，与本地下单流水做双向比对，差异分本地有渠道无、渠道有本地无、金额不一致三类处理。\n\n结果：重复扣款归零，对账差异率从万分之三降到十万分之一以内。\n\n关键取舍：没有引入分布式事务框架，而是用本地消息表加定时补偿保证最终一致。"
+      },
+      {
+        "title": "项目：秒杀系统限流与降级",
+        "category": "project",
+        "source": "resume://project/seckill",
+        "content": "背景：公司做了一场整点秒杀活动，预计峰值 QPS 十万，而实际库存只有两千件。核心诉求是不能超卖、不能打挂、失败要快速返回。\n\n方案按请求链路逐层削减流量。第一层在 CDN 与网关做静态资源分离，活动页面全部静态化；网关按用户维度做令牌桶限流，超过阈值直接返回活动太火爆。第二层在应用层做答题与验证码前置，过滤脚本刷单，同时把请求按 uid 哈希打散到不同的本地队列。第三层用 Redis 做库存预扣减，用 Lua 脚本保证判断库存、扣减、记录用户三步的原子性，扣减成功才生成订单号并投递 Kafka 异步落库。\n\n降级预案分三级：一级关闭非核心功能；二级把同步下单改成异步排队，前端轮询结果；三级直接返回兜底页。预案通过配置中心开关控制，可以在秒级生效。\n\n结果：峰值 QPS 达到十一万，系统无故障，库存零超卖。"
+      }
+    ]
+  },
+  "queries": [
+    {
+      "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+      "expected_category": "technical",
+      "expected_keywords": ["红黑树", "负载因子"],
+      "top_k": 3,
+      "min_score": 0.19
+    },
+    {
+      "query": "Java 线程池的核心参数和拒绝策略",
+      "expected_category": "technical",
+      "expected_keywords": ["拒绝策略", "核心线程数"],
+      "top_k": 1,
+      "min_score": 0.23
+    },
+    {
+      "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+      "expected_category": "technical",
+      "expected_keywords": ["穿透", "击穿", "雪崩"],
+      "top_k": 3,
+      "min_score": 0.12
+    },
+    {
+      "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+      "expected_category": "technical",
+      "expected_keywords": ["RDB", "AOF", "appendfsync"],
+      "top_k": 3,
+      "min_score": 0.12
+    },
+    {
+      "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+      "expected_category": "technical",
+      "expected_keywords": ["EXPLAIN", "覆盖索引"],
+      "top_k": 5,
+      "min_score": 0.09
+    },
+    {
+      "query": "MySQL 的可重复读隔离级别和间隙锁",
+      "expected_category": "technical",
+      "expected_keywords": ["可重复读", "间隙锁"],
+      "top_k": 1,
+      "min_score": 0.2
+    },
+    {
+      "query": "JVM 垃圾回收算法和常见收集器",
+      "expected_category": "technical",
+      "expected_keywords": ["可达性分析", "收集器"],
+      "top_k": 3,
+      "min_score": 0.14
+    },
+    {
+      "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+      "expected_category": "technical",
+      "expected_keywords": ["REQUIRES_NEW", "NESTED", "保存点"],
+      "top_k": 3,
+      "min_score": 0.17
+    },
+    {
+      "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+      "expected_category": "technical",
+      "expected_keywords": ["幂等", "位移提交"],
+      "top_k": 3,
+      "min_score": 0.17
+    },
+    {
+      "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+      "expected_category": "technical",
+      "expected_keywords": ["ClientHello", "证书链", "会话密钥"],
+      "top_k": 3,
+      "min_score": 0.11
+    },
+    {
+      "query": "HTTP 的强缓存和协商缓存有什么区别",
+      "expected_category": "technical",
+      "expected_keywords": ["强缓存", "协商缓存", "ETag"],
+      "top_k": 3,
+      "min_score": 0.21
+    },
+    {
+      "query": "Java 后端工程师的岗位职责和任职要求",
+      "expected_category": "job",
+      "expected_keywords": ["岗位职责", "任职要求", "交易链路"],
+      "top_k": 3,
+      "min_score": 0.16
+    },
+    {
+      "query": "大数据开发工程师需要熟悉哪些计算引擎",
+      "expected_category": "job",
+      "expected_keywords": ["计算引擎", "Hive"],
+      "top_k": 3,
+      "min_score": 0.15
+    },
+    {
+      "query": "订单中台的缓存击穿是怎么治理的",
+      "expected_category": "project",
+      "expected_keywords": ["订单中台", "逻辑过期"],
+      "top_k": 3,
+      "min_score": 0.14
+    },
+    {
+      "query": "支付网关怎么做到幂等和日终对账",
+      "expected_category": "project",
+      "expected_keywords": ["支付网关", "对账", "唯一索引"],
+      "top_k": 3,
+      "min_score": 0.1
+    },
+    {
+      "query": "秒杀系统怎么做限流和降级",
+      "expected_category": "project",
+      "expected_keywords": ["令牌桶限流", "降级预案"],
+      "top_k": 3,
+      "min_score": 0.05
+    }
+  ]
+}

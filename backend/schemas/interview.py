@@ -66,6 +66,31 @@ class AnswerSubmitRequest(BaseModel):
     )
 
 
+class NextQuestionRequest(BaseModel):
+    """按需生成下一题（大模型出题通道）—— **RAG 的生产开关就在这里**。
+
+    ``use_rag`` 默认 ``False``：不显式要求就不会组装检索链路，
+    出题行为与引入本接口前**逐字节一致**。
+    置 ``True`` 时由 ``interview_core.resolve_retriever`` 组装真实链路
+    （Embedding + 向量后端 + 检索器），组装/检索失败**静默降级为「无知识」**
+    （只在结果的 ``warnings`` 里记 ``knowledge_retrieval_failed``，不算失败）。
+
+    ``top_k`` / ``min_score`` 是**检索参数**，只在 ``use_rag=True`` 时生效
+    （一并透传给 ``services.knowledge_rag.build_vector_retriever``）；
+    两者都缺省时不传该组参数 ⇒ 组装器用自身默认值（``top_k=5``、不过滤）。
+    """
+
+    use_rag: bool = Field(
+        default=False, description="是否启用 RAG 知识检索（默认关闭，不传即不检索）"
+    )
+    top_k: Optional[int] = Field(
+        default=None, ge=1, le=100, description="检索候选条数（仅 use_rag=true 时生效）"
+    )
+    min_score: Optional[float] = Field(
+        default=None, ge=-1, le=1, description="相似度下限，取值域 [-1, 1]（仅 use_rag=true 时生效）"
+    )
+
+
 # ============================================================
 # 响应体
 # ============================================================
@@ -240,6 +265,34 @@ class EndSessionResponse(BaseModel):
     session: InterviewSessionOut
     report: InterviewReportOut
     message: str = "面试已结束"
+
+
+class NextQuestionResponse(BaseModel):
+    """按需出题结果 —— 即 ``interview_core`` 的结果字典。
+
+    字段集**恒定**（成功与失败同形状），与
+    ``services.interview_core.QUESTION_RESULT_FIELDS`` 一一对应，
+    调用方无需按 ``ok`` 分支取值。约定：
+
+    - ``ok=False`` 时 ``question`` 恒为 ``""``（**绝不放行未校验的问题**）
+    - ``errors`` 放**稳定错误码**（``session_not_found`` / ``session_finished`` /
+      ``all_answered`` / ``agent_failed`` / ``validation_failed``）
+    - 知识检索失败**不是失败**：``ok`` 不受影响，只在 ``warnings`` 里记
+      ``knowledge_retrieval_failed``
+    """
+
+    ok: bool
+    question_no: Optional[int] = None
+    question: str = ""
+    question_type: str = ""
+    topic: str = ""
+    difficulty: str = ""
+    expected_points: List[str] = Field(default_factory=list)
+    reason: str = ""
+    stage: str = ""
+    warnings: List[str] = Field(default_factory=list)
+    errors: List[str] = Field(default_factory=list)
+    error: Optional[str] = None
 
 
 class ErrorResponse(BaseModel):

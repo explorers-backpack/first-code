@@ -1,0 +1,434 @@
+{
+  "generated_at": "2026-09-27T23:23:20+08:00",
+  "database": "mysql+aiomysql://root:***@localhost:3306/career?charset=utf8mb4",
+  "corpus": "C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\scripts\\interview_knowledge.json",
+  "corpus_name": "AI 面试 RAG 测试数据集",
+  "embedding": {
+    "provider": "xinghuo-embedding",
+    "name": "xinghuo-embedding",
+    "dimension": 2560,
+    "declared_dimension": 2560,
+    "semantic_enabled": true,
+    "role": "document"
+  },
+  "chunking": {
+    "chunk_size": 500,
+    "chunk_overlap": 80,
+    "chunker": "DocumentChunker(默认)"
+  },
+  "options": {
+    "dry_run": false,
+    "category": null,
+    "limit": null,
+    "only_failed_from": null,
+    "pace_seconds": 3.0,
+    "retries": 3,
+    "retry_delay": 3.0
+  },
+  "summary": {
+    "documents_in_corpus": 22,
+    "documents_imported": 22,
+    "documents_failed": 0,
+    "documents_created": 0,
+    "documents_reused": 22,
+    "chunks_total_in_db": 32,
+    "chunks_new_this_run": 0,
+    "chunks_embedded_this_run": 0,
+    "chunks_skipped_this_run": 32,
+    "embedding_dimension": [
+      2560
+    ],
+    "embedding_models": [
+      {
+        "model": "xinghuo-embedding",
+        "count": 32
+      }
+    ],
+    "vector_store_backend": "sqlalchemy",
+    "vector_store_count": 32
+  },
+  "db_before": {
+    "documents": 22,
+    "chunks": 32,
+    "vectorized_chunks": 32,
+    "embedding_dims": [
+      2560
+    ],
+    "embedding_models": [
+      {
+        "model": "xinghuo-embedding",
+        "count": 32
+      }
+    ],
+    "documents_by_category": [
+      {
+        "category": "company",
+        "count": 3
+      },
+      {
+        "category": "job",
+        "count": 3
+      },
+      {
+        "category": "project",
+        "count": 4
+      },
+      {
+        "category": "technical",
+        "count": 12
+      }
+    ]
+  },
+  "db_after": {
+    "documents": 22,
+    "chunks": 32,
+    "vectorized_chunks": 32,
+    "embedding_dims": [
+      2560
+    ],
+    "embedding_models": [
+      {
+        "model": "xinghuo-embedding",
+        "count": 32
+      }
+    ],
+    "documents_by_category": [
+      {
+        "category": "company",
+        "count": 3
+      },
+      {
+        "category": "job",
+        "count": 3
+      },
+      {
+        "category": "project",
+        "count": 4
+      },
+      {
+        "category": "technical",
+        "count": 12
+      }
+    ]
+  },
+  "embedding_calls": {
+    "attempts": 0,
+    "retried": 0,
+    "worst_seconds": null,
+    "avg_seconds": null
+  },
+  "timing": {
+    "seconds": 0.156
+  },
+  "failed_sources": [],
+  "reports": [
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 4,
+      "chunk_count": 1,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 1,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 5,
+      "chunk_count": 1,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 1,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 6,
+      "chunk_count": 1,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 1,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 7,
+      "chunk_count": 2,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 2,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 8,
+      "chunk_count": 2,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 2,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 9,
+      "chunk_count": 2,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 2,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 10,
+      "chunk_count": 1,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 1,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 11,
+      "chunk_count": 1,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 1,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 12,
+      "chunk_count": 2,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 2,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 13,
+      "chunk_count": 2,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 2,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 14,
+      "chunk_count": 2,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 2,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 15,
+      "chunk_count": 2,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 2,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 16,
+      "chunk_count": 2,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 2,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 17,
+      "chunk_count": 1,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 1,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 18,
+      "chunk_count": 2,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 2,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 19,
+      "chunk_count": 1,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 1,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 20,
+      "chunk_count": 1,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 1,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 21,
+      "chunk_count": 1,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 1,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 22,
+      "chunk_count": 2,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 2,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 23,
+      "chunk_count": 1,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 1,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 24,
+      "chunk_count": 1,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 1,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    },
+    {
+      "ok": true,
+      "status": "skipped",
+      "stage": "done",
+      "document_id": 25,
+      "chunk_count": 1,
+      "saved_chunks": 0,
+      "embedded_chunks": 0,
+      "skipped_chunks": 1,
+      "reused_document": true,
+      "failed_index": null,
+      "errors": [],
+      "error": ""
+    }
+  ]
+}

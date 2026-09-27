@@ -1,0 +1,50 @@
+{
+  "generated_at": "2026-09-27T23:03:13+08:00",
+  "database": "mysql+aiomysql://root:***@localhost:3306/career?charset=utf8mb4",
+  "vector_backend": "sql",
+  "embedding": {
+    "provider": "xinghuo-embedding",
+    "name": "xinghuo-embedding",
+    "dimension": 2560,
+    "declared_dimension": 2560,
+    "semantic_enabled": true
+  },
+  "role": "document",
+  "options": {
+    "dry_run": false,
+    "document_id": null,
+    "limit": null,
+    "batch_size": 8,
+    "pace_seconds": 0.0,
+    "retries": 0,
+    "retry_delay": 1.0,
+    "max_failures": null,
+    "retry_failed_from": null,
+    "reset_index": null
+  },
+  "timing": {
+    "seconds": 0.031,
+    "attempted_chunks": 0,
+    "per_chunk_seconds": null
+  },
+  "distribution_before": [],
+  "distribution_after": [],
+  "result": {
+    "ok": true,
+    "status": "skipped",
+    "stage": "done",
+    "scanned_chunks": 0,
+    "pending_chunks": 0,
+    "migrated_chunks": 0,
+    "skipped_chunks": 0,
+    "failed_chunks": 0,
+    "batches": 0,
+    "target_model": "xinghuo-embedding",
+    "target_dim": 2560,
+    "dry_run": false,
+    "stopped_early": false,
+    "errors": [],
+    "failures": [],
+    "error": ""
+  }
+}

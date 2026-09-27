@@ -1,0 +1,595 @@
+{
+  "generated_at": "2026-09-27T23:43:44+08:00",
+  "runner": "tests/rag_min_score_calibration_spark_run.py",
+  "purpose": "在**真实 Embedding**（讯飞星火）下重新标定 min_score / 复核 top_k",
+  "method": {
+    "window": "(非目标来源最高分, 目标来源最低分]；过滤语义 score >= min_score ⇒ 下界开、上界闭",
+    "must_use_full_candidates": "窗口必须在全量候选（top_k=100）上算，否则只是局部窗口",
+    "recommendation": "窗口中点（两侧余量对称）",
+    "boundary_kept_full_precision": "判定边界一律保留全精度；display_6dp 仅供人读",
+    "pace_seconds": 3.0,
+    "retries": 3,
+    "retry_delay": 3.0
+  },
+  "embedding": {
+    "document": {
+      "provider": "xinghuo-embedding",
+      "dimension": 2560,
+      "semantic_enabled": true,
+      "role": "para"
+    },
+    "query": {
+      "provider": "xinghuo-embedding",
+      "dimension": 2560,
+      "semantic_enabled": true,
+      "role": "query"
+    }
+  },
+  "corpus": {
+    "file": "backend/scripts/interview_knowledge.json",
+    "documents": 22,
+    "chunks": 32,
+    "import_failed": 0
+  },
+  "embedding_calls": {
+    "document_attempts": 32,
+    "document_retried": 0,
+    "query_attempts": 3,
+    "query_retried": 0,
+    "query_cache_hits": 30,
+    "worst_seconds": 0.8453,
+    "avg_seconds": 0.2297
+  },
+  "hash_calibration_reference": {
+    "file": "backend/scripts/rag_min_score_calibration.json",
+    "note": "任务 70 · R2 的**离线哈希**标定结果；仅作对照，本运行器不覆盖它"
+  },
+  "summary": {
+    "scenarios": 3,
+    "recommended_min_score_per_scenario": {
+      "s1-mysql-index-mid": 0.833,
+      "s2-spring-boot-senior": 0.841,
+      "s3-cache-consistency-senior": 0.835
+    },
+    "recommended_min_score_range": [
+      0.833,
+      0.841
+    ],
+    "width_tiers": {
+      "s1-mysql-index-mid": "fragile",
+      "s2-spring-boot-senior": "fragile",
+      "s3-cache-consistency-senior": "fragile"
+    },
+    "window_widths": {
+      "s1-mysql-index-mid": 0.006398,
+      "s2-spring-boot-senior": 0.006402,
+      "s3-cache-consistency-senior": -0.002739
+    },
+    "chunks": {
+      "no_threshold": 96,
+      "declared": 96,
+      "recommended": 6
+    },
+    "noise": {
+      "no_threshold": 91,
+      "declared": 91,
+      "recommended": 2
+    },
+    "targets": {
+      "no_threshold": 5,
+      "declared": 5,
+      "recommended": 4
+    },
+    "prompt_chars": {
+      "rag_off": 7332,
+      "no_threshold": 13449,
+      "declared": 13449,
+      "recommended": 9704
+    },
+    "declared_threshold_is_clean_all": false
+  },
+  "scenarios": [
+    {
+      "scenario_id": "s1-mysql-index-mid",
+      "label": "后端开发工程师 · MySQL 索引 · 中级 · 项目阶段",
+      "topic": "MySQL 索引",
+      "declared": {
+        "top_k": 5,
+        "min_score": 0.25,
+        "expected_hit_sources": [
+          "handbook://mysql/index"
+        ],
+        "expected_chunk_count": 2
+      },
+      "corpus_chunks": 32,
+      "window": {
+        "noise_ceiling": 0.8297559484546307,
+        "target_floor": 0.8361536780129588,
+        "safe_window": [
+          0.8297559484546307,
+          0.8361536780129588
+        ],
+        "width": 0.006397729558328069,
+        "separated": true,
+        "target_count": 2,
+        "non_target_count": 30,
+        "display_6dp": {
+          "noise_ceiling": 0.829756,
+          "target_floor": 0.836154,
+          "safe_window": [
+            0.829756,
+            0.836154
+          ],
+          "width": 0.006398
+        }
+      },
+      "recommendation": {
+        "recommended": 0.833,
+        "midpoint_exact": 0.8329548132337947,
+        "reason": "取窗口 (非目标上限, 目标下限] 的中点 ⇒ 两侧余量对称，对语料微调与浮点误差的容忍度最大",
+        "recommended_in_window": true,
+        "recommended_margin_to_floor": 0.003154,
+        "recommended_margin_to_ceiling": 0.003244,
+        "width": 0.006398,
+        "width_tier": "fragile",
+        "usable_by_gap_threshold": false,
+        "gap_threshold": 0.02
+      },
+      "boundary_probe": {
+        "semantics": "检索保留 score >= min_score（含等号）⇒ 窗口下界开、上界闭",
+        "expected_target_count": 2,
+        "at_target_floor": {
+          "min_score": 0.8361536780129588,
+          "count": 2,
+          "target_count": 2,
+          "non_target_count": 0,
+          "sources": [
+            "handbook://mysql/index",
+            "handbook://mysql/index"
+          ]
+        },
+        "just_above_target_floor": {
+          "min_score": 0.8361536780129589,
+          "count": 1,
+          "target_count": 1,
+          "non_target_count": 0,
+          "sources": [
+            "handbook://mysql/index"
+          ]
+        },
+        "at_noise_ceiling": {
+          "min_score": 0.8297559484546307,
+          "count": 3,
+          "target_count": 2,
+          "non_target_count": 1,
+          "sources": [
+            "handbook://mysql/index",
+            "handbook://mysql/index",
+            "handbook://redis/data-structures"
+          ]
+        },
+        "just_above_noise_ceiling": {
+          "min_score": 0.8297559484546309,
+          "count": 2,
+          "target_count": 2,
+          "non_target_count": 0,
+          "sources": [
+            "handbook://mysql/index",
+            "handbook://mysql/index"
+          ]
+        },
+        "checks": {
+          "floor_is_inclusive": true,
+          "ceiling_is_inclusive": true,
+          "interior_keeps_all_targets_drops_all_noise": true
+        }
+      },
+      "profiles": {
+        "no_threshold": {
+          "min_score": null,
+          "count": 32,
+          "target_count": 2,
+          "non_target_count": 30
+        },
+        "declared": {
+          "min_score": 0.25,
+          "count": 32,
+          "target_count": 2,
+          "non_target_count": 30
+        },
+        "recommended": {
+          "min_score": 0.833,
+          "count": 2,
+          "target_count": 2,
+          "non_target_count": 0
+        }
+      },
+      "top_k_plateau": {
+        "required_top_k_at_recommended": 2,
+        "required_top_k_at_declared": 2,
+        "checks": {
+          "targets_never_truncated_at_declared_top_k": true,
+          "targets_never_truncated_at_recommended_top_k_8": true
+        },
+        "note": "min_score 生效后 top_k 只剩「别把目标截掉」；调 top_k 不会缩短 Prompt"
+      },
+      "prompt_chars": {
+        "rag_off": {
+          "template": "question",
+          "prompt_chars": 2426,
+          "has_knowledge_block": false
+        },
+        "no_threshold": {
+          "template": "question_knowledge",
+          "prompt_chars": 4418,
+          "has_knowledge_block": true
+        },
+        "declared": {
+          "template": "question_knowledge",
+          "prompt_chars": 4418,
+          "has_knowledge_block": true
+        },
+        "recommended": {
+          "template": "question_knowledge",
+          "prompt_chars": 3177,
+          "has_knowledge_block": true
+        }
+      },
+      "declared_threshold_is_clean": false,
+      "ranking": {
+        "target_scores_desc": [
+          0.836726,
+          0.836154
+        ],
+        "non_target_scores_top8": [
+          0.829756,
+          0.828749,
+          0.824641,
+          0.824578,
+          0.824468,
+          0.823771,
+          0.823716,
+          0.823231
+        ]
+      }
+    },
+    {
+      "scenario_id": "s2-spring-boot-senior",
+      "label": "后端开发工程师（Java）· Spring Boot 自动配置 · 高级 · 技术阶段",
+      "topic": "Spring Boot 自动配置",
+      "declared": {
+        "top_k": 5,
+        "min_score": 0.25,
+        "expected_hit_sources": [
+          "handbook://spring/auto-configuration"
+        ],
+        "expected_chunk_count": 2
+      },
+      "corpus_chunks": 32,
+      "window": {
+        "noise_ceiling": 0.8377341027879086,
+        "target_floor": 0.8441359057554968,
+        "safe_window": [
+          0.8377341027879086,
+          0.8441359057554968
+        ],
+        "width": 0.006401802967588188,
+        "separated": true,
+        "target_count": 2,
+        "non_target_count": 30,
+        "display_6dp": {
+          "noise_ceiling": 0.837734,
+          "target_floor": 0.844136,
+          "safe_window": [
+            0.837734,
+            0.844136
+          ],
+          "width": 0.006402
+        }
+      },
+      "recommendation": {
+        "recommended": 0.841,
+        "midpoint_exact": 0.8409350042717028,
+        "reason": "取窗口 (非目标上限, 目标下限] 的中点 ⇒ 两侧余量对称，对语料微调与浮点误差的容忍度最大",
+        "recommended_in_window": true,
+        "recommended_margin_to_floor": 0.003136,
+        "recommended_margin_to_ceiling": 0.003266,
+        "width": 0.006402,
+        "width_tier": "fragile",
+        "usable_by_gap_threshold": false,
+        "gap_threshold": 0.02
+      },
+      "boundary_probe": {
+        "semantics": "检索保留 score >= min_score（含等号）⇒ 窗口下界开、上界闭",
+        "expected_target_count": 2,
+        "at_target_floor": {
+          "min_score": 0.8441359057554968,
+          "count": 2,
+          "target_count": 2,
+          "non_target_count": 0,
+          "sources": [
+            "handbook://spring/auto-configuration",
+            "handbook://spring/auto-configuration"
+          ]
+        },
+        "just_above_target_floor": {
+          "min_score": 0.8441359057554969,
+          "count": 1,
+          "target_count": 1,
+          "non_target_count": 0,
+          "sources": [
+            "handbook://spring/auto-configuration"
+          ]
+        },
+        "at_noise_ceiling": {
+          "min_score": 0.8377341027879086,
+          "count": 3,
+          "target_count": 2,
+          "non_target_count": 1,
+          "sources": [
+            "handbook://spring/auto-configuration",
+            "handbook://spring/auto-configuration",
+            "handbook://spring/transaction"
+          ]
+        },
+        "just_above_noise_ceiling": {
+          "min_score": 0.8377341027879087,
+          "count": 2,
+          "target_count": 2,
+          "non_target_count": 0,
+          "sources": [
+            "handbook://spring/auto-configuration",
+            "handbook://spring/auto-configuration"
+          ]
+        },
+        "checks": {
+          "floor_is_inclusive": true,
+          "ceiling_is_inclusive": true,
+          "interior_keeps_all_targets_drops_all_noise": true
+        }
+      },
+      "profiles": {
+        "no_threshold": {
+          "min_score": null,
+          "count": 32,
+          "target_count": 2,
+          "non_target_count": 30
+        },
+        "declared": {
+          "min_score": 0.25,
+          "count": 32,
+          "target_count": 2,
+          "non_target_count": 30
+        },
+        "recommended": {
+          "min_score": 0.841,
+          "count": 2,
+          "target_count": 2,
+          "non_target_count": 0
+        }
+      },
+      "top_k_plateau": {
+        "required_top_k_at_recommended": 2,
+        "required_top_k_at_declared": 2,
+        "checks": {
+          "targets_never_truncated_at_declared_top_k": true,
+          "targets_never_truncated_at_recommended_top_k_8": true
+        },
+        "note": "min_score 生效后 top_k 只剩「别把目标截掉」；调 top_k 不会缩短 Prompt"
+      },
+      "prompt_chars": {
+        "rag_off": {
+          "template": "question",
+          "prompt_chars": 2457,
+          "has_knowledge_block": false
+        },
+        "no_threshold": {
+          "template": "question_knowledge",
+          "prompt_chars": 4532,
+          "has_knowledge_block": true
+        },
+        "declared": {
+          "template": "question_knowledge",
+          "prompt_chars": 4532,
+          "has_knowledge_block": true
+        },
+        "recommended": {
+          "template": "question_knowledge",
+          "prompt_chars": 3452,
+          "has_knowledge_block": true
+        }
+      },
+      "declared_threshold_is_clean": false,
+      "ranking": {
+        "target_scores_desc": [
+          0.847096,
+          0.844136
+        ],
+        "non_target_scores_top8": [
+          0.837734,
+          0.837574,
+          0.833127,
+          0.832797,
+          0.831499,
+          0.831193,
+          0.830665,
+          0.830266
+        ]
+      }
+    },
+    {
+      "scenario_id": "s3-cache-consistency-senior",
+      "label": "后端架构师 · 分布式缓存一致性 · 高级 · 场景阶段",
+      "topic": "分布式缓存一致性",
+      "declared": {
+        "top_k": 5,
+        "min_score": 0.4,
+        "expected_hit_sources": [
+          "handbook://architecture/cache-consistency"
+        ],
+        "expected_chunk_count": 1
+      },
+      "corpus_chunks": 32,
+      "window": {
+        "noise_ceiling": 0.8358889738487449,
+        "target_floor": 0.8331503539245129,
+        "safe_window": [
+          0.8358889738487449,
+          0.8331503539245129
+        ],
+        "width": -0.0027386199242320775,
+        "separated": false,
+        "target_count": 1,
+        "non_target_count": 31,
+        "display_6dp": {
+          "noise_ceiling": 0.835889,
+          "target_floor": 0.83315,
+          "safe_window": [
+            0.835889,
+            0.83315
+          ],
+          "width": -0.002739
+        }
+      },
+      "recommendation": {
+        "recommended": 0.835,
+        "midpoint_exact": 0.8345196638866289,
+        "reason": "取窗口 (非目标上限, 目标下限] 的中点 ⇒ 两侧余量对称，对语料微调与浮点误差的容忍度最大",
+        "recommended_in_window": false,
+        "recommended_margin_to_floor": -0.00185,
+        "recommended_margin_to_ceiling": -0.000889,
+        "width": -0.002739,
+        "width_tier": "fragile",
+        "usable_by_gap_threshold": false,
+        "gap_threshold": 0.02
+      },
+      "boundary_probe": {
+        "semantics": "检索保留 score >= min_score（含等号）⇒ 窗口下界开、上界闭",
+        "expected_target_count": 1,
+        "at_target_floor": {
+          "min_score": 0.8331503539245129,
+          "count": 6,
+          "target_count": 1,
+          "non_target_count": 5,
+          "sources": [
+            "handbook://redis/persistence-and-ha",
+            "handbook://java/concurrency",
+            "handbook://kafka/reliability-and-idempotence",
+            "handbook://redis/persistence-and-ha",
+            "handbook://redis/data-structures",
+            "handbook://architecture/cache-consistency"
+          ]
+        },
+        "just_above_target_floor": {
+          "min_score": 0.833150353924513,
+          "count": 5,
+          "target_count": 0,
+          "non_target_count": 5,
+          "sources": [
+            "handbook://redis/persistence-and-ha",
+            "handbook://java/concurrency",
+            "handbook://kafka/reliability-and-idempotence",
+            "handbook://redis/persistence-and-ha",
+            "handbook://redis/data-structures"
+          ]
+        },
+        "at_noise_ceiling": {
+          "min_score": 0.8358889738487449,
+          "count": 1,
+          "target_count": 0,
+          "non_target_count": 1,
+          "sources": [
+            "handbook://redis/persistence-and-ha"
+          ]
+        },
+        "just_above_noise_ceiling": {
+          "min_score": 0.835888973848745,
+          "count": 0,
+          "target_count": 0,
+          "non_target_count": 0,
+          "sources": []
+        },
+        "checks": {
+          "floor_is_inclusive": true,
+          "ceiling_is_inclusive": true,
+          "interior_keeps_all_targets_drops_all_noise": false
+        }
+      },
+      "profiles": {
+        "no_threshold": {
+          "min_score": null,
+          "count": 32,
+          "target_count": 1,
+          "non_target_count": 31
+        },
+        "declared": {
+          "min_score": 0.4,
+          "count": 32,
+          "target_count": 1,
+          "non_target_count": 31
+        },
+        "recommended": {
+          "min_score": 0.835,
+          "count": 2,
+          "target_count": 0,
+          "non_target_count": 2
+        }
+      },
+      "top_k_plateau": {
+        "required_top_k_at_recommended": null,
+        "required_top_k_at_declared": 6,
+        "checks": {
+          "targets_never_truncated_at_declared_top_k": false,
+          "targets_never_truncated_at_recommended_top_k_8": false
+        },
+        "note": "min_score 生效后 top_k 只剩「别把目标截掉」；调 top_k 不会缩短 Prompt"
+      },
+      "prompt_chars": {
+        "rag_off": {
+          "template": "question",
+          "prompt_chars": 2449,
+          "has_knowledge_block": false
+        },
+        "no_threshold": {
+          "template": "question_knowledge",
+          "prompt_chars": 4499,
+          "has_knowledge_block": true
+        },
+        "declared": {
+          "template": "question_knowledge",
+          "prompt_chars": 4499,
+          "has_knowledge_block": true
+        },
+        "recommended": {
+          "template": "question_knowledge",
+          "prompt_chars": 3075,
+          "has_knowledge_block": true
+        }
+      },
+      "declared_threshold_is_clean": false,
+      "ranking": {
+        "target_scores_desc": [
+          0.83315
+        ],
+        "non_target_scores_top8": [
+          0.835889,
+          0.835134,
+          0.834541,
+          0.834201,
+          0.834132,
+          0.833147,
+          0.832732,
+          0.8321
+        ]
+      }
+    }
+  ],
+  "problems": [
+    "s1-mysql-index-mid: 基准声明的 min_score=0.25 放进了 30 条噪声",
+    "s2-spring-boot-senior: 基准声明的 min_score=0.25 放进了 30 条噪声",
+    "s3-cache-consistency-senior: 边界探针 interior_keeps_all_targets_drops_all_noise 未通过",
+    "s3-cache-consistency-senior: top_k 平台区 targets_never_truncated_at_declared_top_k 未通过",
+    "s3-cache-consistency-senior: top_k 平台区 targets_never_truncated_at_recommended_top_k_8 未通过",
+    "s3-cache-consistency-senior: 基准声明的 min_score=0.4 放进了 31 条噪声"
+  ]
+}

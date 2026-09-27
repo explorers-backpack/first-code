@@ -63,7 +63,7 @@ interview_core``，不要依赖这些别名。
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Mapping, Optional
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -662,27 +662,41 @@ async def generate_next_question(
     session_id: int,
     *,
     spark: Any = None,
+    retriever: Any = None,
+    use_rag: bool = False,
+    retriever_kwargs: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """生成下一道面试题——**经由 Core**，Service 不直接调用 Agent / Validator。
 
     调用链::
 
-        Service（归属校验）→ Core（流程编排）→ Agent（生成）→ Validator（校验）
+        Service（归属校验）→ Core（流程编排）→ KnowledgeRetriever（可选）
+                                                      → Agent（生成）→ Validator（校验）
 
     与 ``start_session`` 的**规则出题路径互不影响**：本入口是「大模型出题」通道，
     需调用方显式触发，**不会自动接管**现有流程（否则会改变现有业务效果）。
 
     分工：
     - **Service**：归属校验（不存在 / 非本人 → 404）——唯一需要 HTTP 语义的一步
-    - **Core**：session → context → plan → Agent → Validator 全流程
+    - **Core**：session → context → plan → Retriever → Agent → Validator 全流程
     - **Agent / Validator**：只被 Core 调用，Service **不 import、不依赖**
+    - **RAG**：``use_rag=True`` 时由 Core 组装真实链路（Embedding + 向量库 + 检索器）；
+      ``retriever=`` 可直接注入现成检索器（优先级更高）。**默认都不开**——
+      不显式要求就不会打开 RAG。Service 只做透传，**不自己组装**检索器
+      （组装归 ``services.knowledge_rag``，见那里的模块文档）。
+      ``retriever_kwargs=`` 一并透传给 Core，**只在 ``use_rag=True`` 组装时生效**
+      （``top_k`` / ``min_score`` / ``category`` / ``document_id`` / ``dedup``），
+      默认 ``None`` ⇒ 行为逐字节不变；注入了 ``retriever`` 时它不被读取。
 
     返回值即 Core 的结果字典（字段集恒定，见
     ``interview_core.QUESTION_RESULT_FIELDS``）。状态类错误（已结束 / 已答完 /
     生成失败 / 校验失败）以 ``ok=False`` 返回，**不抛 HTTPException**，
     便于数字人前端按字段分支处理。
+    知识检索失败**不是失败**，只在 ``warnings`` 里记 ``knowledge_retrieval_failed``。
     """
     await _load_session(db, session_id, user_id)  # 归属校验：不存在/非本人 → 404
     return await interview_core.generate_next_question(
-        db, session_id, user_id=user_id, spark=spark
+        db, session_id, user_id=user_id, spark=spark,
+        retriever=retriever, use_rag=use_rag,
+        retriever_kwargs=retriever_kwargs,
     )

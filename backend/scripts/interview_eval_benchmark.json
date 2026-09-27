@@ -1,0 +1,335 @@
+{
+  "name": "AI 面试问题生成 · 无 RAG vs 有 RAG 评估基准",
+  "version": 1,
+  "purpose": "为「**无 RAG** vs **有 RAG**」的问题生成对比，**固定全部输入条件**并**定义输出检查字段**。目标是把两臂的差异收敛到**唯一一个处理变量**（是否注入检索到的知识），使后续任何一次对比都在同一套条件下进行、结果可复现、差异可归因。",
+  "scope": "本文件**只建立测试数据与评价标准**：不含执行逻辑，不改 Agent / Prompt / RAG。条件是否成立由 tests/test_interview_eval_benchmark.py **逐条实测校验**（含两臂实跑一次）。",
+  "independence": {
+    "不修改业务代码": "Agent / Prompt / RAG / Planner / Validator **一行都不改**；本基准只**调用**它们，并用源码指纹锁死。",
+    "不依赖生产知识库": "知识语料取自 backend/scripts/interview_knowledge.json（22 篇受控语料），测试时导入**内存 SQLite**，不读生产 MySQL 的任何表。",
+    "不依赖真实大模型": "两臂都注入**同一条 Mock 回复**，全程不调用 Spark。",
+    "与既有数据集的关系": "只**引用** interview_knowledge.json 的文档（按 source 自然键），**不复制**其正文；改语料不会让本基准的断言静默失效（断言的是 source 与实测命中集合）。"
+  },
+  "format": "scenarios[] 每项声明：id / label / job_type / skill_direction / job / candidate / session / context / retrieval / mock_reply / frozen_conditions_sha256。check_fields[] 每项声明：name / type / provenance / hard_gates[] / observations[] / ab_expectation。gate 与 metric 都是闭集 kind（见 kind_vocabulary）。",
+
+  "kind_vocabulary": {
+    "non_empty_text": "值是 strip 后非空的字符串",
+    "enum_member": "值属于声明的 allowed 集合（需要 allowed 字段）",
+    "equals_declared": "值等于 compare_to 指向的场景声明值（需要 compare_to 字段）",
+    "not_duplicate_of_history": "值不与 against 指向的历史问题列表重复（复用项目既有的相似度规则）",
+    "text_length": "值的字符数（观察量，无阈值）",
+    "contains_any": "值是否包含 against 指向的任一字符串（观察量，无阈值）",
+    "longest_common_substring": "值与 against 指向文本的最长公共子串长度（观察量，无阈值）"
+  },
+
+  "comparison": {
+    "arms": [
+      {
+        "id": "rag_off",
+        "label": "无 RAG",
+        "how": "interview_core.generate_next_question(db, session_id, retriever=None, use_rag=False, spark=<MockSpark>)",
+        "expected_knowledge_context": "恰好 []（空列表，不是 None）",
+        "expected_prompt_template": "prompts/interview/question.txt",
+        "expected_prompt_has_knowledge_block": false
+      },
+      {
+        "id": "rag_on",
+        "label": "有 RAG",
+        "how": "interview_core.generate_next_question(db, session_id, retriever=VectorKnowledgeRetriever(default_embedder(), SqlAlchemyVectorStore(db), top_k=<场景 retrieval.top_k>, min_score=<场景 retrieval.min_score>), use_rag=False, spark=<同一个 MockSpark 实例/同一条回复>)",
+        "expected_knowledge_context": "非空，条数 == 场景 retrieval.expected_chunk_count",
+        "expected_prompt_template": "prompts/interview/question_knowledge.txt",
+        "expected_prompt_has_knowledge_block": true,
+        "why_explicit_retriever_not_use_rag": "generate_next_question 里的 use_rag=True 走 resolve_retriever → knowledge_rag.build_vector_retriever(db)，**不传任何 retriever_kwargs** ⇒ 只能用默认 top_k=5 / min_score=None，无法按场景钉死检索参数。显式注入 retriever 才能把 top_k / min_score 固定住（resolve_retriever 的优先级也是「显式注入 > use_rag」）。"
+      }
+    ],
+    "frozen_across_arms": [
+      "同一套数据库行：同一个 Job / Resume / InterviewSession / InterviewContext（同一次建库）",
+      "同一个 plan：Planner 走 use_llm=False，两臂逐键相同",
+      "同一个 context：current_stage / asked_questions / covered_topics / weak_topics 完全一致",
+      "同一份模板集合：prompts/interview/ 不变，且 question_knowledge.txt 去掉知识小节后与 question.txt 逐字节相同（任务 61/62 已证）",
+      "同一条 Mock 回复：排除模型采样随机性对两臂的干扰",
+      "同一个闸门状态：session_id / current_question_no 相同（题号恒为 1）"
+    ],
+    "the_only_variable": "是否把检索到的知识注入 Agent（以及由此决定的 knowledge_context 与 Prompt 模板分流）。两臂的 Prompt 差异**恰好**是「四·五、参考知识」小节。",
+    "control_facts": [
+      "两臂的 plan 与 10 个基础变量逐键相同（本基准实测断言）",
+      "有 RAG 臂的 Prompt = 无 RAG 臂的 Prompt + 一段「四·五、参考知识」小节；删掉该小节后逐字节相同",
+      "两臂都只调用模型一次（每题一次 LLM 调用）",
+      "⇒ 差异可归因：观测到的输出差异不能归给「模板不同」「计划不同」「上下文不同」，只能是知识注入"
+    ],
+    "llm_nondeterminism": "真实 Spark 输出不确定，因此两臂**必须使用同一条 Mock 回复**——此时比较的是**输入条件**（Prompt 是否注入了知识），不是生成质量。若要比较**生成质量**，需要另设「同参数多次采样、比较分布」或引入人工/LLM 评委的方案，**不在本基准范围内**。本基准只交付「条件 + 字段标准」。"
+  },
+
+  "check_fields": [
+    {
+      "name": "question",
+      "type": "str",
+      "provenance": "**模型输出**（回复 JSON 的 question 键）。经 QuestionValidator 标准化后由 Core 原样返回，**不做 strip 写回**（空白只在判空时忽略）。",
+      "hard_gates": [
+        {
+          "id": "question_non_empty",
+          "kind": "non_empty_text",
+          "why": "空问题直接判 ERROR_QUESTION_EMPTY（question_empty），属阻断性失败"
+        },
+        {
+          "id": "question_not_duplicate_of_history",
+          "kind": "not_duplicate_of_history",
+          "against": "context.asked_questions",
+          "why": "与历史问题完全相同 ⇒ ERROR_DUPLICATE_QUESTION（duplicate_question），阻断"
+        }
+      ],
+      "observations": [
+        {"id": "question_length", "kind": "text_length", "why": "过短（<10 字）通常意味着模型敷衍"},
+        {"id": "cites_resume_focus", "kind": "contains_any", "against": "plan.resume_focus_points", "why": "模板要求「简历中出现过的项目名称应被具体引用」，这是可自动判定的代理指标"},
+        {"id": "max_verbatim_run_vs_knowledge", "kind": "longest_common_substring", "against": "injected_knowledge", "why": "模板明写「不得整段照抄」参考知识；用最长公共子串长度度量照抄程度"}
+      ],
+      "ab_expectation": "有 RAG 臂的 question 应更贴合具体场景与追问点（cites_resume_focus 命中率、question_length 可作代理）；同时 max_verbatim_run_vs_knowledge 必须保持在**低水平**（建议阈值 40 字），否则说明模型在照抄知识而不是融入场景。"
+    },
+    {
+      "name": "question_type",
+      "type": "str",
+      "provenance": "**模型输出**。QuestionValidator 明确**不做枚举校验**：缺失 → \"\"，不阻断、不产生 error（也不产生 warning，因为键缺失属正常补全路径）。",
+      "hard_gates": [],
+      "observations": [
+        {"id": "type_in_enum", "kind": "enum_member", "allowed": ["introduction", "resume", "technical", "project", "scenario", "hr", "closing"], "why": "枚举来自 prompts/interview/question.txt 的字段约束；非法值本项目**不拦**，只记录"},
+        {"id": "type_matches_stage", "kind": "equals_declared", "compare_to": "context.current_stage", "why": "模板要求「优先围绕当前阶段出题」——这是「是否按阶段出题」的直接度量"}
+      ],
+      "ab_expectation": "**软指标，不是闸门**。type_matches_stage 是核心观测量：知识注入若能让模型更准确地落到当前阶段，命中率应上升。⚠️ 不匹配**只记录、不判失败**——本项目刻意不校验该枚举（题型推进属业务层职责）。"
+    },
+    {
+      "name": "difficulty",
+      "type": "str",
+      "provenance": "**模型输出**；缺失时由 QuestionValidator.resolve_difficulty 用**本场已知难度**（来自 plan）补全。取值必须属于 ALLOWED_DIFFICULTIES = junior / mid / senior。",
+      "hard_gates": [
+        {
+          "id": "difficulty_matches_scenario",
+          "kind": "equals_declared",
+          "compare_to": "session.difficulty",
+          "why": "难度是本场配置的确定值；生成结果必须与之一致（模板第 4 条要求「难度必须与面试难度一致」）"
+        },
+        {
+          "id": "difficulty_in_enum",
+          "kind": "enum_member",
+          "allowed": ["junior", "mid", "senior"],
+          "why": "非法值（如 god_mode）⇒ ERROR_INVALID_DIFFICULTY（invalid_difficulty），阻断"
+        }
+      ],
+      "observations": [],
+      "ab_expectation": "两臂都必须等于场景难度——**这是闸门，不是指标**。若某臂出现非法难度，说明该次运行**流程失败**，应作废重跑，**不得**把失败当成「有/无 RAG 的质量差异」。"
+    },
+    {
+      "name": "reason",
+      "type": "str",
+      "provenance": "**模型输出**。缺失 → \"\"，**不阻断**、不产生 error（键存在但不是字符串才产生 warning）。",
+      "hard_gates": [],
+      "observations": [
+        {"id": "reason_length", "kind": "text_length", "why": "模板要求「一句话即可」，过长通常意味着模型在复述"},
+        {"id": "reason_non_empty", "kind": "non_empty_text", "why": "非空率：空 reason 不影响 valid，但会削弱可解释性"}
+      ],
+      "ab_expectation": "软指标。有 RAG 臂的 reason 若更常提到「结合具体场景/参考知识」属定性观察，**本轮不设阈值、不判失败**。"
+    },
+    {
+      "name": "stage",
+      "type": "str",
+      "provenance": "**不是模型输出**。Core 从 context.current_stage 读出后原样回填（interview_core._question_result(stage=stage)），模型无法影响它。",
+      "hard_gates": [
+        {
+          "id": "stage_matches_context",
+          "kind": "equals_declared",
+          "compare_to": "context.current_stage",
+          "why": "它是流程状态的回显；不等即说明上下文没正确送达 Core"
+        }
+      ],
+      "observations": [],
+      "ab_expectation": "两臂必须相同。⚠️ 它是**上下文回显**，不是生成质量指标——**不能**用它评判模型优劣，只能用它验证「上下文是否正确送达」。"
+    }
+  ],
+
+  "evaluation_contract": {
+    "valid_run": "某次运行的**全部 hard_gates 通过** ⇒ 该次运行有效，可进入两臂对比。",
+    "invalid_run": "任一 hard_gate 失败 ⇒ 该次运行**作废**，重跑，**不计入**两臂对比（避免把流程失败误读为质量差异）。",
+    "hard_gates_total": 5,
+    "observation_metrics": "逐字段记录原始值 + 观察指标；**不做阈值判定**（阈值判定留给后续对比任务，本轮只建立标准）。",
+    "ab_delta_metrics": [
+      "question_length 的均值差",
+      "cites_resume_focus 命中率差",
+      "max_verbatim_run_vs_knowledge 的均值差（照抄程度）",
+      "type_matches_stage 命中率差",
+      "reason_non_empty 命中率差"
+    ],
+    "not_evaluated": [
+      "语义正确性 / 教学质量打分（无人工标注，本轮不引入 LLM 评委）",
+      "两臂的绝对分数对比（LLM 非确定性；本基准只用同一条 Mock 回复比**输入条件**）",
+      "延迟 / token 消耗（属性能基准，另设）"
+    ]
+  },
+
+  "retrieval_contract": {
+    "why_min_score_is_mandatory": "默认 embedder 是 HashEmbeddingService（semantic_enabled=False，**词面哈希**），VectorStore 只按相似度排序、**不做相关性判断** ⇒ 不设 min_score 时**全部 top_k 候选都会被注入**，含不相关文档。那会让「有 RAG」臂被噪声污染，测的是「RAG 噪声」而不是「RAG 知识」。**因此每个场景都必须声明 min_score。**",
+    "why_topic_must_be_screened": "同理，query topic 与目标文档必须有足够**词面重叠**。实测反例：topic「HTTP 与 HTTPS」的次高分（JVM 文档 0.221088）**高于**目标文档（0.136083，rank 4）⇒ 该 topic **不可用**。所以候选 topic 必须逐个实测筛选（见 topic_screening）。",
+    "query_topic_rule": "检索 query 不是直接传入的，而是由 interview_core.current_topic(plan, context) 推导：priority_topics 中**尚未出现在 covered_topics** 的首项 → priority_topics 首项 → target_topics 首项 → current_stage → \"\"。因此场景用 context.covered_topics **播种**，把 query 钉死到 retrieval.query_topic。",
+    "declared_per_scenario": "query_topic / top_k / min_score / expected_hit_sources / expected_excluded_sources / expected_chunk_count，全部由测试**逐条实测校验**（目标命中、诱饵排除、条数一致）。",
+    "corpus": {
+      "file": "backend/scripts/interview_knowledge.json",
+      "documents": 22,
+      "note": "两臂都导入**同一份**完整语料（22 篇）；区分靠 min_score，而不是靠「只导入目标文档」——后者会让基准失去鉴别力。"
+    }
+  },
+
+  "topic_screening": {
+    "how": "把 22 篇语料导入内存 SQLite，对每个候选 query 用 top_k=100 / min_score=None 检索，按**每个 source 的最高分**排序，记录目标文档的名次（target_rank）、目标分数（target_score）、次高分（runner_up_score，来自其它 source 的最高分）与间隔（score_gap = target_score - runner_up_score）。",
+    "usable_rule": "usable = (target_rank == 1) and (score_gap > 0.02)。gap 阈值 0.02 是经验值：低于它时 min_score 的可选窗口太窄，场景会因语料微调而失效。",
+    "why_measured_not_assumed": "★ 这是本基准**最重要的一条实测结论**：默认 embedder 是词面哈希，**「语义上相关」不等于「检索得到」**。12 个候选里只有 6 个可用，`HTTP 与 HTTPS` 甚至让诱饵文档排到了目标之前。任何新场景都必须先跑这张筛选表。",
+    "rows": [
+      {"query": "Redis 持久化", "target_source": "handbook://redis/persistence-and-ha", "target_rank": 1, "target_score": 0.186816, "runner_up_score": 0.159787, "score_gap": 0.027029, "usable": true},
+      {"query": "Redis 数据结构", "target_source": "handbook://redis/data-structures", "target_rank": 2, "target_score": 0.236463, "runner_up_score": 0.343155, "score_gap": -0.106691, "usable": false},
+      {"query": "MySQL 索引", "target_source": "handbook://mysql/index", "target_rank": 1, "target_score": 0.547609, "runner_up_score": 0.156532, "score_gap": 0.391077, "usable": true},
+      {"query": "MySQL 事务隔离级别与锁", "target_source": "handbook://mysql/isolation-and-lock", "target_rank": 1, "target_score": 0.308557, "runner_up_score": 0.276385, "score_gap": 0.032172, "usable": true},
+      {"query": "JVM 内存结构与垃圾回收", "target_source": "handbook://jvm/memory-and-gc", "target_rank": 1, "target_score": 0.199882, "runner_up_score": 0.18294, "score_gap": 0.016941, "usable": false},
+      {"query": "JVM 线上问题诊断", "target_source": "handbook://jvm/troubleshooting", "target_rank": 2, "target_score": 0.130327, "runner_up_score": 0.171709, "score_gap": -0.041382, "usable": false},
+      {"query": "Java 并发线程池与锁", "target_source": "handbook://java/concurrency", "target_rank": 2, "target_score": 0.22521, "runner_up_score": 0.276938, "score_gap": -0.051728, "usable": false},
+      {"query": "Kafka 消息可靠性与幂等", "target_source": "handbook://kafka/reliability-and-idempotence", "target_rank": 1, "target_score": 0.274023, "runner_up_score": 0.266053, "score_gap": 0.00797, "usable": false},
+      {"query": "Spring 事务与传播行为", "target_source": "handbook://spring/transaction", "target_rank": 1, "target_score": 0.375287, "runner_up_score": 0.314362, "score_gap": 0.060925, "usable": true},
+      {"query": "Spring Boot 自动配置", "target_source": "handbook://spring/auto-configuration", "target_rank": 1, "target_score": 0.542934, "runner_up_score": 0.138212, "score_gap": 0.404722, "usable": true},
+      {"query": "分布式缓存一致性", "target_source": "handbook://architecture/cache-consistency", "target_rank": 1, "target_score": 0.423982, "runner_up_score": 0.360771, "score_gap": 0.063211, "usable": true},
+      {"query": "HTTP 与 HTTPS", "target_source": "handbook://network/http-and-https", "target_rank": 4, "target_score": 0.136083, "runner_up_score": 0.221088, "score_gap": -0.085005, "usable": false}
+    ]
+  },
+
+  "scenarios": [
+    {
+      "id": "s1-mysql-index-mid",
+      "label": "后端开发工程师 · MySQL 索引 · 中级 · 项目阶段",
+      "job_type": "后端开发工程师",
+      "skill_direction": ["MySQL 索引", "Spring Boot", "性能优化"],
+      "job": {
+        "job_name": "后端开发工程师",
+        "skills": "MySQL 索引,Spring Boot",
+        "duty": "负责交易链路的后端服务开发与数据库性能优化"
+      },
+      "candidate": {
+        "years": 4,
+        "resume_content": "4 年后端开发经验，负责订单中台与交易链路。\n项目名称：订单中台\n主导 MySQL 索引优化与慢查询治理，核心接口 QPS 提升 3 倍。\n技术栈：Python、MySQL、Redis、Spring Boot。",
+        "highlights": ["MySQL 索引优化与慢查询治理", "订单中台", "核心接口 QPS 提升 3 倍"]
+      },
+      "session": {
+        "interview_type": "technical",
+        "difficulty": "mid",
+        "duration": 30,
+        "total_questions": 5
+      },
+      "context": {
+        "current_stage": "project",
+        "asked_questions": ["请介绍一下你在订单中台负责的模块与主要产出。"],
+        "covered_topics": [],
+        "weak_topics": ["慢查询治理"]
+      },
+      "retrieval": {
+        "query_topic": "MySQL 索引",
+        "top_k": 5,
+        "min_score": 0.25,
+        "expected_hit_sources": ["handbook://mysql/index"],
+        "expected_chunk_count": 2,
+        "expected_excluded_sources": ["handbook://spring/auto-configuration", "handbook://redis/persistence-and-ha", "handbook://jvm/memory-and-gc"]
+      },
+      "mock_reply": {
+        "question": "你在订单中台做过 MySQL 索引优化，请具体说明当时是怎么定位到需要新建索引的，以及最终为什么选择了这个索引而不是其它方案？",
+        "question_type": "project",
+        "topic": "MySQL 索引",
+        "difficulty": "mid",
+        "expected_points": ["执行计划", "索引选择", "区分度", "回表"],
+        "reason": "简历中明确提到订单中台的索引优化经历，结合当前项目阶段追问取舍过程"
+      },
+      "frozen_conditions_sha256": "90c37596c78c5b6d1bb2d48b5eccc407290b031272621f70dd08ad10603e1d2b"
+    },
+    {
+      "id": "s2-spring-boot-senior",
+      "label": "后端开发工程师（Java）· Spring Boot 自动配置 · 高级 · 技术阶段",
+      "job_type": "后端开发工程师（Java）",
+      "skill_direction": ["Spring Boot 自动配置", "Spring 事务", "Java 并发"],
+      "job": {
+        "job_name": "后端开发工程师（Java）",
+        "skills": "Spring Boot 自动配置,MySQL",
+        "duty": "负责核心交易链路的后端服务设计与开发"
+      },
+      "candidate": {
+        "years": 5,
+        "resume_content": "5 年后端开发经验，主导过订单中台重构。\n项目名称：订单中台\n主导 Spring Boot 自动配置与装配冲突排查，统一了多模块配置规范。\n技术栈：Java、Spring Boot、MySQL、Redis。",
+        "highlights": ["Spring Boot 自动配置与装配冲突排查", "订单中台重构", "多模块配置规范"]
+      },
+      "session": {
+        "interview_type": "technical",
+        "difficulty": "senior",
+        "duration": 30,
+        "total_questions": 5
+      },
+      "context": {
+        "current_stage": "technical",
+        "asked_questions": ["请介绍一次你主导的架构重构，说明背景与你的决策依据。"],
+        "covered_topics": ["MySQL"],
+        "weak_topics": ["装配冲突排查"]
+      },
+      "retrieval": {
+        "query_topic": "Spring Boot 自动配置",
+        "top_k": 5,
+        "min_score": 0.25,
+        "expected_hit_sources": ["handbook://spring/auto-configuration"],
+        "expected_chunk_count": 2,
+        "expected_excluded_sources": ["handbook://spring/transaction", "handbook://mysql/index", "handbook://java/concurrency"]
+      },
+      "mock_reply": {
+        "question": "请从条件装配与自动配置类的加载顺序角度，解释 Spring Boot 自动配置的生效过程，以及多模块下配置冲突通常如何排查？",
+        "question_type": "technical",
+        "topic": "Spring Boot 自动配置",
+        "difficulty": "senior",
+        "expected_points": ["条件装配", "自动配置类", "加载顺序", "覆盖优先级"],
+        "reason": "当前处于技术阶段，且简历中提到装配冲突排查经历，属薄弱知识点优先补强"
+      },
+      "frozen_conditions_sha256": "992eebab2e317c1fdcc523dffc52e026f9917761eb1ef8ac4d240443f2929bf1"
+    },
+    {
+      "id": "s3-cache-consistency-senior",
+      "label": "后端架构师 · 分布式缓存一致性 · 高级 · 场景阶段",
+      "job_type": "后端架构师",
+      "skill_direction": ["分布式缓存一致性", "Redis", "MySQL"],
+      "job": {
+        "job_name": "后端架构师",
+        "skills": "分布式缓存一致性,Redis,MySQL",
+        "duty": "负责缓存与一致性方案的架构设计与技术评审"
+      },
+      "candidate": {
+        "years": 8,
+        "resume_content": "8 年后端与架构经验，负责交易与缓存体系。\n项目名称：订单中台\n主导分布式缓存一致性方案（延迟双删 + 版本号），解决缓存与库不一致问题。\n技术栈：Java、Redis、MySQL、Kafka。",
+        "highlights": ["分布式缓存一致性方案（延迟双删 + 版本号）", "订单中台", "缓存与库不一致问题治理"]
+      },
+      "session": {
+        "interview_type": "technical",
+        "difficulty": "senior",
+        "duration": 30,
+        "total_questions": 5
+      },
+      "context": {
+        "current_stage": "scenario",
+        "asked_questions": ["请说明你在缓存体系上做过的最难的一次技术决策。"],
+        "covered_topics": ["Redis", "MySQL"],
+        "weak_topics": ["缓存与库不一致"]
+      },
+      "retrieval": {
+        "query_topic": "分布式缓存一致性",
+        "top_k": 5,
+        "min_score": 0.4,
+        "expected_hit_sources": ["handbook://architecture/cache-consistency"],
+        "expected_chunk_count": 1,
+        "expected_excluded_sources": ["handbook://redis/persistence-and-ha", "handbook://mysql/index", "handbook://redis/data-structures"]
+      },
+      "mock_reply": {
+        "question": "假设订单中台的缓存与数据库出现了持续不一致，你会按什么顺序排查，又如何在延迟双删与版本号方案之间做取舍？",
+        "question_type": "scenario",
+        "topic": "分布式缓存一致性",
+        "difficulty": "senior",
+        "expected_points": ["一致性窗口", "延迟双删", "版本号", "失败重试"],
+        "reason": "当前处于场景阶段，针对简历中的缓存一致性经历设计故障排查题"
+      },
+      "frozen_conditions_sha256": "691ff887a5b6a491d5afbf2c9bc8dc840a113fdcac493490c218274e04806fbd"
+    }
+  ]
+}

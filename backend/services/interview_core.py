@@ -65,6 +65,11 @@
 - **检索是可选增强，失败绝不中断出题**：检索抛异常时静默回退为 ``[]``
   并在结果 ``warnings`` 里记一条 :data:`WARNING_KNOWLEDGE_FAILED`
   （与 Planner 的 Spark 增强同一套「失败静默回退」约定）。
+- **检索参数可透传**：``generate_next_question(..., retriever_kwargs={...})``
+  在 ``use_rag=True`` 组装链路时把 ``top_k`` / ``min_score`` 等原样交给
+  :func:`services.knowledge_rag.build_vector_retriever`。默认 ``None``
+  ⇒ 行为逐字节不变；**没有该入口时，「配了阈值」与「阈值生效」是两回事**
+  （见任务 69 的实测结论）。
 
 现有业务路径的边界
 ------------------
@@ -136,6 +141,7 @@ __all__ = [
     # 知识检索接缝（RAG 扩展点：只服务 Agent 出题路径）
     "current_topic",
     "retrieve_knowledge",
+    "resolve_retriever",
     # 流程入口（文字面试 / 数字人面试共用）
     "generate_next_question",
     "QUESTION_RESULT_FIELDS",
@@ -923,6 +929,67 @@ async def _gather_knowledge(
     return list(chunks or []), []
 
 
+def resolve_retriever(
+    db: Any,
+    retriever: Any = None,
+    use_rag: bool = False,
+    *,
+    retriever_kwargs: Optional[Mapping[str, Any]] = None,
+) -> Tuple[Any, List[str]]:
+    """决定本次出题用哪个检索器 → ``(retriever, warnings)``。
+
+    **全项目「是否接真实 RAG」的唯一开关**，优先级：
+
+    1. **显式注入的 ``retriever``**（最高优先级：测试替身、自定义检索器、外部服务）
+    2. ``use_rag=True`` → 由 :func:`services.knowledge_rag.build_vector_retriever`
+       从 ``db`` **组装真实链路**（EmbeddingService + 向量后端 + 检索器）
+    3. 都不是 → ``None``：``retrieve_knowledge`` 会用空实现，**恒返回 ``[]``**
+       （「不注入就不接」——**不会悄悄打开 RAG**，这是刻意保留的安全默认）
+
+    ``retriever_kwargs``（keyword-only，默认 ``None``）
+    ---------------------------------------------------
+    组装真实链路时**原样透传给** :func:`services.knowledge_rag.build_vector_retriever`，
+    用来把检索参数真正接上线：``top_k`` / ``min_score`` / ``category`` /
+    ``document_id`` / ``dedup``（以及组装器自己的 ``embedder`` / ``model``）。
+
+    **这是「配了阈值却永不生效」的修复点**：在此之前，唯一可用的开关
+    ``use_rag=True`` 无法携带任何参数，组装器只能按默认值构造检索器，
+    于是调用方在别处声明的 ``min_score`` 被静默忽略。
+
+    语义要点：
+
+    - **默认 ``None`` ⇒ 行为逐字节不变**（等价于 ``build_vector_retriever(db)``），
+      现有调用方无需改动。
+    - 只在**第 2 条分支**生效：注入 ``retriever`` 时它**不被读取**
+      （注入的检索器已自带配置，本函数不重配）。
+    - 空映射 ``{}`` 与 ``None`` 等价（都表示「不传额外参数」）。
+    - **不做白名单**：非法键会由组装器 / 检索器构造函数抛
+      ``RetrieverConfigError``（``ValueError``），并在这里按「组装失败」
+      静默降级为「无知识」+ :data:`WARNING_KNOWLEDGE_FAILED`——
+      与检索失败同一套约定（检索是可选增强，绝不阻塞出题）。
+
+    **组装失败不抛异常**，而是降级为 ``None``（无知识）并返回
+    :data:`WARNING_KNOWLEDGE_FAILED`——与检索失败同一套约定
+    （检索是可选增强，绝不阻塞出题）。
+
+    组装是**同步**的（只构造对象、不发起 IO），所以本函数是同步函数。
+    ``services.knowledge_rag`` 是**延迟导入**的：那会连带拉进
+    ``vector_store_sql`` → ``models`` → ``database``，而本模块要保持
+    「无 ``DATABASE_URL`` 也能 import」。
+    """
+    if retriever is not None:
+        return retriever, []
+    if not use_rag:
+        return None, []
+    try:
+        from services.knowledge_rag import build_vector_retriever
+
+        kwargs = dict(retriever_kwargs) if retriever_kwargs else {}
+        return build_vector_retriever(db, **kwargs), []
+    except Exception:  # noqa: BLE001 - 可选增强：组装失败＝无知识
+        return None, [WARNING_KNOWLEDGE_FAILED]
+
+
 # ============================================================
 # 七、面试流程控制：生成下一道问题
 # ============================================================
@@ -1085,6 +1152,8 @@ async def generate_next_question(
     context: Any = None,
     plan: Any = None,
     retriever: Any = None,
+    use_rag: bool = False,
+    retriever_kwargs: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
     """**生成下一道面试题**（文字面试 / 数字人面试共用入口）。
 
@@ -1099,14 +1168,26 @@ async def generate_next_question(
     - ``retriever``：可选，注入的知识检索器。**缺省即不接真实知识库**
       （用 ``KnowledgeRetriever()`` 空实现 → 无知识），出题行为与引入知识能力前
       完全一致。真实检索器（向量库 / 手册 / 外部服务）由调用方显式注入。
+      与 ``use_rag`` 同时给时**以本参数为准**。
+    - ``use_rag``：可选（默认 ``False``）。**置 ``True`` 才组装真实 RAG 链路**
+      （``services.knowledge_rag.build_vector_retriever`` → EmbeddingService +
+      向量后端 + 真实检索器）。默认 ``False`` 是刻意的：**不显式要求就不会打开 RAG**，
+      现有调用方的行为一字不变。组装失败静默降级为「无知识」+ 记 warning。
+    - ``retriever_kwargs``：可选（keyword-only，默认 ``None``）。**只在使用
+      ``use_rag=True`` 组装链路时生效**，原样透传给
+      ``build_vector_retriever``（``top_k`` / ``min_score`` / ``category`` /
+      ``document_id`` / ``dedup`` 等）。默认 ``None`` ⇒ 与不传等价，
+      行为逐字节不变。**注入了 ``retriever`` 时本参数不被读取**——
+      注入的检索器自带配置，本函数不重配。非法参数会让组装失败，
+      按既有约定静默降级为「无知识」+ ``knowledge_retrieval_failed``。
 
     流程
     ----
     1. **session**：取会话行 → 存在性 / 归属 / 终态 / 是否已答完 四道闸门
     2. **context**：确保上下文存在并读取（幂等创建；注入 ``context`` 则跳过）
     3. **plan**：按会话配置制定计划（确定性规则，不调 LLM；注入 ``plan`` 则跳过）
-    4. **KnowledgeRetriever**：按「岗位 + 当前 topic + 上下文」取知识
-       （可选增强，失败静默降级为「无知识」）
+    4. **KnowledgeRetriever**：``resolve_retriever`` 决定检索器 → 按
+       「岗位 + 当前 topic + 上下文」取知识（可选增强，失败静默降级为「无知识」）
     5. **Agent**：``generate_candidate_question`` 生成**一道候选问题**
        （携带上一步的知识上下文）
     6. **Validator**：``validate_candidate_question`` 校验并标准化
@@ -1166,9 +1247,16 @@ async def generate_next_question(
     # ---- 3.5 KnowledgeRetriever（只检索；缺省即空实现 → 无知识）----
     resume = await load_resume_row(db, session.resume_id)
     job = await load_job_row(db, session.job_id)
+    # 「是否接真实 RAG」的唯一开关：注入的 retriever 优先，其次 use_rag 组装真实链路，
+    # 都不给则 None（空实现 → 无知识）。组装失败降级为「无知识」+ warning。
+    # retriever_kwargs 只在「组装」这一分支生效（把 top_k / min_score 真正接上线）。
+    retriever, retriever_warnings = resolve_retriever(
+        db, retriever, use_rag, retriever_kwargs=retriever_kwargs
+    )
     knowledge_context, knowledge_warnings = await _gather_knowledge(
         job, plan, context, retriever
     )
+    knowledge_warnings = [*retriever_warnings, *knowledge_warnings]
 
     # ---- 4. Agent（只生成；携带可选知识）----
     candidate = await generate_candidate_question(

@@ -233,6 +233,8 @@ class QuestionGenerator(ABC):
         plan: Any = None,
         *,
         retriever: Any = None,
+        use_rag: bool = False,
+        retriever_kwargs: Optional[Mapping[str, Any]] = None,
         spark: Any = None,
     ) -> Dict[str, Any]:
         """生成题目，返回 :data:`GENERATED_SET_FIELDS` 形状的结果信封。
@@ -242,6 +244,13 @@ class QuestionGenerator(ABC):
         - ``context`` / ``plan``：可选注入，便于脱离 DB 单测
         - ``retriever``：可选注入的知识检索器（**仅 agent 模式使用**；
           rule 模式接收但**绝不使用**，见 :class:`RuleQuestionGenerator`）
+        - ``use_rag``：可选（默认 ``False``）。**仅 agent 模式使用**：
+          置 ``True`` 时由 Core 组装真实 RAG 链路（Embedding + 向量库 + 检索器）。
+          rule 模式接收但**绝不使用**。
+        - ``retriever_kwargs``：可选（默认 ``None``）。**仅 agent 模式使用**：
+          ``use_rag=True`` 时原样透传给 Core → ``build_vector_retriever``
+          （``top_k`` / ``min_score`` 等），使检索参数真正生效。rule 模式接收但
+          **绝不使用**。默认 ``None`` ⇒ 行为逐字节不变。
         - ``spark``：可选注入的 LLM 客户端（仅 agent 模式使用）
         """
         raise NotImplementedError
@@ -270,19 +279,25 @@ class RuleQuestionGenerator(QuestionGenerator):
         plan: Any = None,
         *,
         retriever: Any = None,
+        use_rag: bool = False,
+        retriever_kwargs: Optional[Mapping[str, Any]] = None,
         spark: Any = None,
     ) -> Dict[str, Any]:
         """按会话配置生成**整场**题目（确定性规则）。
 
-        ``context`` / ``plan`` / ``retriever`` / ``spark`` 在本模式下
-        **都不参与生成**——规则出题只需要「会话 + 岗位 + 简历技能」。
+        ``context`` / ``plan`` / ``retriever`` / ``use_rag`` / ``retriever_kwargs``
+        / ``spark`` 在本模式下**都不参与生成**——规则出题只需要
+        「会话 + 岗位 + 简历技能」。
         刻意保留这些参数是为了接口统一；不读取它们（而非静默忽略某个已注入的依赖）
         是明确的行为声明。
 
-        其中 ``retriever`` 是**关键**：规则模式**完全不调用知识检索**
-        （既不调 ``retrieve_knowledge`` 接缝，也不碰 ``retriever.retrieve``），
-        方法体内**没有任何检索调用**（只有签名与本文档提到 ``retriever``）。
-        这样「rule 不触发检索」是**结构性保证**，而不是靠调用方自觉不传。
+        其中 ``retriever`` / ``use_rag`` / ``retriever_kwargs`` 是**关键**：
+        规则模式**完全不调用知识检索**——既不调 ``retrieve_knowledge`` 接缝、
+        也不碰 ``retriever.retrieve``、更不会组装真实 RAG 链路（本方法只调
+        ``load_*`` 与 ``build_question_plan``）。于是「rule 不触发 RAG」是
+        **结构性保证**：即使调用方误传 ``use_rag=True``、
+        ``retriever_kwargs={"min_score": 0.9}`` 或注入一个会爆炸的检索器，
+        规则出题也不受影响。
         """
         session = await interview_core.load_session_row(db, session_id)
         if session is None:
@@ -331,14 +346,19 @@ class AgentQuestionGenerator(QuestionGenerator):
         plan: Any = None,
         *,
         retriever: Any = None,
+        use_rag: bool = False,
+        retriever_kwargs: Optional[Mapping[str, Any]] = None,
         spark: Any = None,
     ) -> Dict[str, Any]:
         """生成**一道**题目（Core 的完整流程：session→context→plan→Retriever→Agent→Validator）。
 
-        ``retriever`` 原样透传给 Core：**注入则用注入的检索器，不注入则用
-        Core 的默认空实现**（无知识）。本层**不自己调用** ``retrieve``——
-        「检索什么 topic、何时检索」是流程编排，归 Core；
-        本层只负责「把 agent 模式该有的依赖接上」。
+        ``retriever`` / ``use_rag`` / ``retriever_kwargs`` 都原样透传给 Core：
+        **注入的 ``retriever`` 优先；只给 ``use_rag=True`` 则由 Core 组装真实 RAG
+        链路（``retriever_kwargs`` 在此分支生效，把 ``top_k`` / ``min_score``
+        真正接上线）；都不给则用空实现**（无知识）。
+        本层**不自己调用** ``retrieve``、也**不自己组装** RAG——
+        「检索什么 topic、何时检索、用哪个 Embedding/向量库、用什么阈值」都是流程与组装，
+        归 Core / ``knowledge_rag``；本层只负责「把 agent 模式该有的依赖接上」。
         """
         core_result = await interview_core.generate_next_question(
             db,
@@ -347,6 +367,8 @@ class AgentQuestionGenerator(QuestionGenerator):
             context=context,
             plan=plan,
             retriever=retriever,
+            use_rag=use_rag,
+            retriever_kwargs=retriever_kwargs,
         )
 
         if not core_result.get("ok"):
@@ -401,16 +423,24 @@ async def generate_questions(
     plan: Any = None,
     *,
     retriever: Any = None,
+    use_rag: bool = False,
+    retriever_kwargs: Optional[Mapping[str, Any]] = None,
     spark: Any = None,
 ) -> Dict[str, Any]:
     """便捷入口：按 ``mode`` 选择生成器并生成题目。
 
     等价于
-    ``await get_generator(mode).generate(db, session_id, context, plan, retriever=retriever, spark=spark)``。
+    ``await get_generator(mode).generate(db, session_id, context, plan,
+    retriever=retriever, use_rag=use_rag, retriever_kwargs=retriever_kwargs,
+    spark=spark)``。
 
-    ``retriever`` 只在 ``mode="agent"`` 时起作用；``mode="rule"`` 会**接收并忽略**它
-    （规则模式不调用任何检索）。
+    ``retriever`` / ``use_rag`` / ``retriever_kwargs`` 只在 ``mode="agent"`` 时起作用；
+    ``mode="rule"`` 会**接收并忽略**它们——规则模式不调用任何检索，
+    也不会组装真实 RAG 链路（「rule 不触发 RAG」是结构性保证，见
+    :class:`RuleQuestionGenerator`）。
     """
     return await get_generator(mode).generate(
-        db, session_id, context, plan, retriever=retriever, spark=spark
+        db, session_id, context, plan,
+        retriever=retriever, use_rag=use_rag,
+        retriever_kwargs=retriever_kwargs, spark=spark,
     )

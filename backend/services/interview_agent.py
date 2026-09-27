@@ -22,8 +22,17 @@
 外部知识上下文（可选）
 ----------------------
 ``generate_question(..., knowledge_context=[...])`` 可接收外部检索到的领域知识，
-由 :func:`normalize_knowledge_context` 归一后注入
+由 :func:`format_knowledge_context` 组装成文本行后注入
 ``prompts/interview/question_knowledge.txt`` 的「参考知识」小节。
+
+组装口径（**只影响渲染出的文本，不影响任何返回结构**）：
+
+1. **只取 ``content`` 与 ``source``**——``metadata``（含 ``score`` / ``chunk_id`` /
+   模型名）**从不进 Prompt**；数字 / 布尔等非知识标量一律丢弃。
+2. **同源分组**：同一 ``source`` 的多片合并成一个块，来源标注每个来源只写一次。
+3. **去切片重叠**：同源相邻片之间「上片结尾 == 下片开头」的重复文本被剥离
+   （``document_chunker`` 默认留 80 字重叠）。
+4. **总量上限**：:data:`KNOWLEDGE_CONTEXT_MAX_CHARS`，按整行粒度截断并加显式标记。
 
 **空知识时行为与引入本参数之前完全一致**：走原模板 ``question.txt``，
 渲染结果逐字节相同（见 :func:`render_question_prompt`）。
@@ -89,6 +98,19 @@ MAX_REPAIR_ATTEMPTS = 1
 
 #: 注入 Prompt 的简历摘要上限
 RESUME_SUMMARY_MAX = 1200
+
+#: 同一来源的相邻切片合并时，**短于此长度**的「尾-首」重复**不**视为切片重叠。
+#: ``document_chunker`` 默认 ``DEFAULT_CHUNK_OVERLAP = 80``（实测重叠 78 字），
+#: 取 16 作下限既能吃掉真实重叠，又不会误删两片之间偶然相同的短串。
+KNOWLEDGE_OVERLAP_MIN_CHARS = 16
+
+#: 注入 Prompt 的「参考知识」**总字符数**上限（安全阀，按行粒度截断）。
+#: 取值 ≈ 8 片 500 字切片的规模——正常 ``top_k``（默认 5）下不会触发；
+#: 仅在上游把 ``top_k`` 调得很大时兜住 Prompt 体积。
+KNOWLEDGE_CONTEXT_MAX_CHARS = 4000
+
+#: 超过 :data:`KNOWLEDGE_CONTEXT_MAX_CHARS` 时追加的截断标记行。
+KNOWLEDGE_TRUNCATION_MARK = "……（参考知识已截断）"
 
 #: 回填进修复提示词的上次原始输出上限
 REPAIR_RAW_MAX = 1500
@@ -390,33 +412,49 @@ def build_question_variables(
 # ============================================================
 # 五·五、外部知识上下文（RAG 扩展点）
 # ============================================================
-def _knowledge_line(item: Any) -> str:
-    """把**单条**知识归一为一行文本；取不到内容时返回空串（由调用方剔除）。"""
+def _knowledge_entry(item: Any) -> Optional[Tuple[str, str]]:
+    """把**单条**知识归一为 ``(content, source)``；取不到内容时返回 ``None``。
+
+    ``source`` 取不到时以空串表示（调用方据此决定是否渲染来源标注）。
+    与 :func:`_knowledge_line` 共用同一套宽松输入约定，区别只在于**保留结构**。
+    """
     if item is None:
-        return ""
+        return None
 
     if isinstance(item, str):
-        return item.strip()
+        text = item.strip()
+        return (text, "") if text else None
 
     # dict / KnowledgeChunk.to_dict() 形态
     if isinstance(item, Mapping):
         content = _clean(item.get("content"))
-        source = _clean(item.get("source"))
-        if content:
-            return f"{content}（来源：{source}）" if source else content
-        return ""
+        return (content, _clean(item.get("source"))) if content else None
 
     # 带 content 属性的对象（如 services.knowledge_retriever.KnowledgeChunk）
     # 刻意用鸭子类型读取：Agent **不 import** knowledge_retriever，避免耦合具体实现
     content = _clean(getattr(item, "content", None))
     if content:
-        source = _clean(getattr(item, "source", None))
-        return f"{content}（来源：{source}）" if source else content
+        return content, _clean(getattr(item, "source", None))
 
     # 其余标量（数字 / 布尔 / 任意对象）**一律丢弃**：它们不是「知识」，
     # 若用 _clean 转成 str 会把 ``123`` / ``true`` 这类 repr 塞进 Prompt。
     # 注意：这里刻意不复用 _clean——_clean 面向「字段值」语义，与知识行不同。
-    return ""
+    return None
+
+
+def _knowledge_line(item: Any) -> str:
+    """把**单条**知识归一为一行文本；取不到内容时返回空串（由调用方剔除）。
+
+    .. note::
+       这是 :func:`format_knowledge_context` 的**退化形态**（不分组、不去重叠、
+       不截断）。:func:`normalize_knowledge_context` 仍以它为准，以保证既有基准与
+       套件的逐字节期望不变。
+    """
+    entry = _knowledge_entry(item)
+    if entry is None:
+        return ""
+    content, source = entry
+    return f"{content}（来源：{source}）" if source else content
 
 
 def normalize_knowledge_context(value: Any) -> List[str]:
@@ -456,6 +494,120 @@ def normalize_knowledge_context(value: Any) -> List[str]:
     return out
 
 
+def _strip_chunk_overlap(previous: str, nxt: str) -> str:
+    """返回 ``nxt`` 中**不与 ``previous`` 尾部重复**的部分。
+
+    ``document_chunker`` 切片时保留 ``DEFAULT_CHUNK_OVERLAP = 80`` 字重叠，
+    因此同一文档的相邻两片必然共享一段「上片结尾 == 下片开头」的文本。
+    这段文本进 Prompt 属于**纯重复**，对模型没有信息增益。
+
+    规则：
+    - ``nxt`` 整段已出现在 ``previous`` 里 ⇒ 完全是重复片，返回空串；
+    - 否则取「最长的、同时是 ``previous`` 后缀与 ``nxt`` 前缀」的片段并剥离；
+    - 该片段短于 :data:`KNOWLEDGE_OVERLAP_MIN_CHARS` 时**不剥离**
+      （避免误删两片之间偶然相同的短串）。
+    """
+    if nxt and nxt in previous:
+        return ""
+    limit = min(len(previous), len(nxt))
+    for size in range(limit, KNOWLEDGE_OVERLAP_MIN_CHARS - 1, -1):
+        if previous.endswith(nxt[:size]):
+            return nxt[size:]
+    return nxt
+
+
+def _merge_pieces(pieces: Sequence[str]) -> str:
+    """把同一来源的多片正文按原顺序拼成一段，并去掉相邻片之间的重叠。"""
+    merged = pieces[0]
+    for piece in pieces[1:]:
+        merged += _strip_chunk_overlap(merged, piece)
+    return merged
+
+
+def _cap_knowledge_lines(lines: Sequence[str]) -> List[str]:
+    """按**整行粒度**把知识行截到 :data:`KNOWLEDGE_CONTEXT_MAX_CHARS` 以内。
+
+    超限时追加一行 :data:`KNOWLEDGE_TRUNCATION_MARK`，让「被截断」对模型与排查者
+    都是**显式**的，而不是悄悄丢内容。单行就超限时先硬截该行再附标记。
+    """
+    if not lines:
+        return []
+
+    kept: List[str] = []
+    total = 0
+    for line in lines:
+        extra = len(line) + (1 if kept else 0)   # 行间以 "\n" 连接
+        if total + extra <= KNOWLEDGE_CONTEXT_MAX_CHARS:
+            kept.append(line)
+            total += extra
+            continue
+        if kept:
+            kept.append(KNOWLEDGE_TRUNCATION_MARK)
+        else:
+            head = KNOWLEDGE_CONTEXT_MAX_CHARS - len(KNOWLEDGE_TRUNCATION_MARK)
+            kept.append(line[:head] + KNOWLEDGE_TRUNCATION_MARK)
+        break
+    return kept
+
+
+def format_knowledge_context(value: Any) -> List[str]:
+    """把外部知识上下文组装成**进 Prompt 的文本行**（formatter 唯一落点）。
+
+    与 :func:`normalize_knowledge_context` 的输入约定**完全一致**（同一套宽松接受
+    规则、同一套非知识标量丢弃规则、``set`` 同样先排序），差别只在**输出形态**：
+
+    1. **按来源分组**：同一 ``source`` 的多片正文合并成一个块，来源标注
+       「（来源：…）」**每个来源只写一次**（原来每片都写一次）；
+       组间顺序 = 各来源**首次出现**的顺序。无来源的条目各自成行。
+    2. **去掉切片重叠**：同来源相邻片之间「上片结尾 == 下片开头」的重复文本被剥离
+       （见 :func:`_strip_chunk_overlap`）。
+    3. **总量上限**：整行粒度截到 :data:`KNOWLEDGE_CONTEXT_MAX_CHARS`，超限加标记行。
+
+    **不做**的事（刻意留给上游）：按相关性筛选 / 丢弃低分片、读 ``metadata``、
+    改写 ``content`` 正文——``metadata``（含 ``score`` / ``chunk_id`` / ``model``）
+    **从来没有**进过 Prompt，本函数也不读它。
+
+    单条知识（或每条来源只有一片）时输出与 :func:`normalize_knowledge_context`
+    **逐字节相同**——这是既有套件与基准不受影响的前提。
+    """
+    if value is None:
+        return []
+
+    if isinstance(value, (set, frozenset)):
+        items: List[Any] = sorted(value, key=str)
+    elif isinstance(value, Sequence) and not isinstance(value, str):
+        items = list(value)
+    else:
+        items = [value]
+
+    order: List[Any] = []
+    groups: Dict[Any, List[str]] = {}
+    sources: Dict[Any, str] = {}
+    for index, item in enumerate(items):
+        entry = _knowledge_entry(item)
+        if entry is None:
+            continue
+        content, source = entry
+        # 无来源 ⇒ 各自成组（没有溯源收益，合并反而会把互不相关的知识粘成一行）
+        key: Any = source if source else (None, index)
+        if key not in groups:
+            groups[key] = []
+            sources[key] = source
+            order.append(key)
+        groups[key].append(content)
+
+    lines: List[str] = []
+    seen: set[str] = set()
+    for key in order:
+        merged = _merge_pieces(groups[key])
+        source = sources[key]
+        line = f"{merged}（来源：{source}）" if source else merged
+        if line and line not in seen:
+            seen.add(line)
+            lines.append(line)
+    return _cap_knowledge_lines(lines)
+
+
 def render_question_prompt(
     variables: Mapping[str, Any],
     knowledge_context: Any = None,
@@ -474,8 +626,11 @@ def render_question_prompt(
     「参考知识：（无）」——那就不再是「行为完全一致」了。
     两个模板的一致性由 ``tests/test_agent_knowledge.py`` 的漂移守卫锁死
     （去掉知识小节后必须与原模板逐字节相同）。
+
+    知识行的组装交给 :func:`format_knowledge_context`（同源分组 + 去切片重叠 +
+    总量上限）；它只改**渲染出来的文本**，返回结构与变量集都不变。
     """
-    lines = normalize_knowledge_context(knowledge_context)
+    lines = format_knowledge_context(knowledge_context)
     if not lines:
         return PROMPT_QUESTION, render_prompt(PROMPT_QUESTION, variables, group=PROMPT_GROUP)
 

@@ -1,0 +1,2041 @@
+{
+  "name": "rag-top-k-calibration",
+  "version": 1,
+  "purpose": "校准 top_k 取值口径：实测 min_score 生效后 top_k 还约束什么、「只调小 top_k」能否替代 min_score、top_k 是否影响 Prompt 长度，并给出推荐值与下限警告。不修改生产代码、不改基准文件、不评价生成质量。",
+  "scope": {
+    "modifies_code": false,
+    "modifies_benchmark": false,
+    "evaluates_quality": false,
+    "llm": "Mock（SpySpark + 场景 mock_reply）"
+  },
+  "sources": {
+    "benchmark": "backend/scripts/interview_eval_benchmark.json",
+    "corpus": "backend/scripts/interview_knowledge.json",
+    "rag_baseline": "backend/scripts/rag_baseline.json",
+    "min_score_calibration": "backend/scripts/rag_min_score_calibration.json"
+  },
+  "grid": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    8,
+    10,
+    16,
+    32
+  ],
+  "recommended_top_k": 8,
+  "upstream_min_score": {
+    "s1-mysql-index-mid": {
+      "declared": 0.25,
+      "recommended": 0.267,
+      "window": {
+        "noise_ceiling": 0.156532,
+        "target_floor": 0.377964,
+        "safe_window": [
+          0.156532,
+          0.377964
+        ],
+        "width": 0.221432
+      }
+    },
+    "s2-spring-boot-senior": {
+      "declared": 0.25,
+      "recommended": 0.239,
+      "window": {
+        "noise_ceiling": 0.138212,
+        "target_floor": 0.339153,
+        "safe_window": [
+          0.138212,
+          0.339153
+        ],
+        "width": 0.200941
+      }
+    },
+    "s3-cache-consistency-senior": {
+      "declared": 0.4,
+      "recommended": 0.392,
+      "window": {
+        "noise_ceiling": 0.360771,
+        "target_floor": 0.423982,
+        "safe_window": [
+          0.360771,
+          0.423982
+        ],
+        "width": 0.063211
+      }
+    }
+  },
+  "scenarios": [
+    {
+      "scenario_id": "s1-mysql-index-mid",
+      "label": "后端开发工程师 · MySQL 索引 · 中级 · 项目阶段",
+      "declared": {
+        "top_k": 5,
+        "min_score": 0.25,
+        "expected_chunk_count": 2
+      },
+      "sweep": {
+        "topic": "MySQL 索引",
+        "corpus_chunks": 32,
+        "total_target_chunks": 2,
+        "with_declared_threshold": [
+          {
+            "top_k": 1,
+            "min_score": 0.25,
+            "count": 1,
+            "target_count": 1,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://mysql/index"
+            ],
+            "scores": [
+              0.547609
+            ]
+          },
+          {
+            "top_k": 2,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "scores": [
+              0.547609,
+              0.377964
+            ]
+          },
+          {
+            "top_k": 3,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "scores": [
+              0.547609,
+              0.377964
+            ]
+          },
+          {
+            "top_k": 4,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "scores": [
+              0.547609,
+              0.377964
+            ]
+          },
+          {
+            "top_k": 5,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "scores": [
+              0.547609,
+              0.377964
+            ]
+          },
+          {
+            "top_k": 6,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "scores": [
+              0.547609,
+              0.377964
+            ]
+          },
+          {
+            "top_k": 8,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "scores": [
+              0.547609,
+              0.377964
+            ]
+          },
+          {
+            "top_k": 10,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "scores": [
+              0.547609,
+              0.377964
+            ]
+          },
+          {
+            "top_k": 16,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "scores": [
+              0.547609,
+              0.377964
+            ]
+          },
+          {
+            "top_k": 32,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "scores": [
+              0.547609,
+              0.377964
+            ]
+          }
+        ],
+        "without_threshold": [
+          {
+            "top_k": 1,
+            "min_score": null,
+            "count": 1,
+            "target_count": 1,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://mysql/index"
+            ],
+            "scores": [
+              0.547609
+            ]
+          },
+          {
+            "top_k": 2,
+            "min_score": null,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "scores": [
+              0.547609,
+              0.377964
+            ]
+          },
+          {
+            "top_k": 3,
+            "min_score": null,
+            "count": 3,
+            "target_count": 2,
+            "non_target_count": 1,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index",
+              "handbook://spring/auto-configuration"
+            ],
+            "scores": [
+              0.547609,
+              0.377964,
+              0.156532
+            ]
+          },
+          {
+            "top_k": 4,
+            "min_score": null,
+            "count": 4,
+            "target_count": 2,
+            "non_target_count": 2,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index",
+              "handbook://spring/auto-configuration",
+              "resume://project/log-platform"
+            ],
+            "scores": [
+              0.547609,
+              0.377964,
+              0.156532,
+              0.134523
+            ]
+          },
+          {
+            "top_k": 5,
+            "min_score": null,
+            "count": 5,
+            "target_count": 2,
+            "non_target_count": 3,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index",
+              "handbook://spring/auto-configuration",
+              "resume://project/log-platform",
+              "handbook://redis/persistence-and-ha"
+            ],
+            "scores": [
+              0.547609,
+              0.377964,
+              0.156532,
+              0.134523,
+              0.125471
+            ]
+          },
+          {
+            "top_k": 6,
+            "min_score": null,
+            "count": 6,
+            "target_count": 2,
+            "non_target_count": 4,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index",
+              "handbook://spring/auto-configuration",
+              "resume://project/log-platform",
+              "handbook://redis/persistence-and-ha",
+              "handbook://jvm/memory-and-gc"
+            ],
+            "scores": [
+              0.547609,
+              0.377964,
+              0.156532,
+              0.134523,
+              0.125471,
+              0.115007
+            ]
+          },
+          {
+            "top_k": 8,
+            "min_score": null,
+            "count": 8,
+            "target_count": 2,
+            "non_target_count": 6,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index",
+              "handbook://spring/auto-configuration",
+              "resume://project/log-platform",
+              "handbook://redis/persistence-and-ha",
+              "handbook://jvm/memory-and-gc",
+              "handbook://spring/auto-configuration",
+              "jd://career-ai/java-backend-senior"
+            ],
+            "scores": [
+              0.547609,
+              0.377964,
+              0.156532,
+              0.134523,
+              0.125471,
+              0.115007,
+              0.084248,
+              0.084017
+            ]
+          },
+          {
+            "top_k": 10,
+            "min_score": null,
+            "count": 10,
+            "target_count": 2,
+            "non_target_count": 8,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index",
+              "handbook://spring/auto-configuration",
+              "resume://project/log-platform",
+              "handbook://redis/persistence-and-ha",
+              "handbook://jvm/memory-and-gc",
+              "handbook://spring/auto-configuration",
+              "jd://career-ai/java-backend-senior",
+              "jd://career-ai/sdet",
+              "resume://project/order-middle-cache"
+            ],
+            "scores": [
+              0.547609,
+              0.377964,
+              0.156532,
+              0.134523,
+              0.125471,
+              0.115007,
+              0.084248,
+              0.084017,
+              0.079778,
+              0.072336
+            ]
+          },
+          {
+            "top_k": 16,
+            "min_score": null,
+            "count": 16,
+            "target_count": 2,
+            "non_target_count": 14,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index",
+              "handbook://spring/auto-configuration",
+              "resume://project/log-platform",
+              "handbook://redis/persistence-and-ha",
+              "handbook://jvm/memory-and-gc",
+              "handbook://spring/auto-configuration",
+              "jd://career-ai/java-backend-senior",
+              "jd://career-ai/sdet",
+              "resume://project/order-middle-cache",
+              "handbook://redis/persistence-and-ha",
+              "handbook://jvm/memory-and-gc",
+              "resume://project/payment-gateway",
+              "company://career-ai/interview-process",
+              "company://career-ai/engineering-culture",
+              "handbook://java/concurrency"
+            ],
+            "scores": [
+              0.547609,
+              0.377964,
+              0.156532,
+              0.134523,
+              0.125471,
+              0.115007,
+              0.084248,
+              0.084017,
+              0.079778,
+              0.072336,
+              0.065372,
+              0.065233,
+              0.062403,
+              0.058571,
+              0.049346,
+              0.048853
+            ]
+          },
+          {
+            "top_k": 32,
+            "min_score": null,
+            "count": 32,
+            "target_count": 2,
+            "non_target_count": 30,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index",
+              "handbook://spring/auto-configuration",
+              "resume://project/log-platform",
+              "handbook://redis/persistence-and-ha",
+              "handbook://jvm/memory-and-gc",
+              "handbook://spring/auto-configuration",
+              "jd://career-ai/java-backend-senior",
+              "jd://career-ai/sdet",
+              "resume://project/order-middle-cache",
+              "handbook://redis/persistence-and-ha",
+              "handbook://jvm/memory-and-gc",
+              "resume://project/payment-gateway",
+              "company://career-ai/interview-process",
+              "company://career-ai/engineering-culture",
+              "handbook://java/concurrency",
+              "handbook://spring/transaction",
+              "resume://project/order-middle-cache",
+              "handbook://network/http-and-https",
+              "handbook://java/concurrency",
+              "jd://career-ai/bigdata-engineer",
+              "handbook://jvm/troubleshooting",
+              "handbook://mysql/isolation-and-lock",
+              "handbook://network/http-and-https",
+              "handbook://kafka/reliability-and-idempotence",
+              "resume://project/seckill",
+              "handbook://redis/data-structures",
+              "handbook://jvm/troubleshooting",
+              "handbook://kafka/reliability-and-idempotence",
+              "company://career-ai/about",
+              "handbook://spring/transaction",
+              "handbook://architecture/cache-consistency"
+            ],
+            "scores": [
+              0.547609,
+              0.377964,
+              0.156532,
+              0.134523,
+              0.125471,
+              0.115007,
+              0.084248,
+              0.084017,
+              0.079778,
+              0.072336,
+              0.065372,
+              0.065233,
+              0.062403,
+              0.058571,
+              0.049346,
+              0.048853,
+              0.046806,
+              0.043664,
+              0.039284,
+              0.037176,
+              0.029412,
+              0.028217,
+              0.023287,
+              0.016836,
+              0.014052,
+              0.013335,
+              0.0,
+              0.0,
+              0.0,
+              0.0,
+              -0.025126,
+              -0.072981
+            ]
+          }
+        ]
+      },
+      "plateau": {
+        "min_top_k_for_expected": 2,
+        "top_k_values_below_expected": [
+          1
+        ],
+        "top_k_values_above_expected": [],
+        "plateau_start": 2,
+        "is_plateau": true,
+        "expected": 2,
+        "total_target_chunks": 2
+      },
+      "prompt_invariance": {
+        "declared": {
+          "top_k": 5,
+          "min_score": 0.25,
+          "ok": true,
+          "errors": [],
+          "knowledge_context_count": 2,
+          "knowledge_context_sources": [
+            "handbook://mysql/index"
+          ],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 3207,
+          "retriever_kwargs_received": {
+            "top_k": 5,
+            "min_score": 0.25
+          },
+          "built_top_k": 5,
+          "built_min_score": 0.25,
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "generate_question": true
+          }
+        },
+        "truncated": {
+          "top_k": 1,
+          "min_score": 0.25,
+          "ok": true,
+          "errors": [],
+          "knowledge_context_count": 1,
+          "knowledge_context_sources": [
+            "handbook://mysql/index"
+          ],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 2915,
+          "retriever_kwargs_received": {
+            "top_k": 1,
+            "min_score": 0.25
+          },
+          "built_top_k": 1,
+          "built_min_score": 0.25,
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "generate_question": true
+          }
+        },
+        "recommended": {
+          "top_k": 8,
+          "min_score": 0.25,
+          "ok": true,
+          "errors": [],
+          "knowledge_context_count": 2,
+          "knowledge_context_sources": [
+            "handbook://mysql/index"
+          ],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 3207,
+          "retriever_kwargs_received": {
+            "top_k": 8,
+            "min_score": 0.25
+          },
+          "built_top_k": 8,
+          "built_min_score": 0.25,
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "generate_question": true
+          }
+        },
+        "full": {
+          "top_k": 100,
+          "min_score": 0.25,
+          "ok": true,
+          "errors": [],
+          "knowledge_context_count": 2,
+          "knowledge_context_sources": [
+            "handbook://mysql/index"
+          ],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 3207,
+          "retriever_kwargs_received": {
+            "top_k": 100,
+            "min_score": 0.25
+          },
+          "built_top_k": 100,
+          "built_min_score": 0.25,
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "generate_question": true
+          }
+        },
+        "_cases": [
+          "declared",
+          "truncated",
+          "recommended",
+          "full"
+        ],
+        "_truncation_demonstrable": true
+      },
+      "checks": [
+        {
+          "name": "★ 完整候选池 == 32 片",
+          "passed": true
+        },
+        {
+          "name": "★ 目标片数与全量扫描一致（> 0）",
+          "passed": true
+        },
+        {
+          "name": "★ 设阈值时 top_k=5 的条数 == 期望（2）",
+          "passed": true
+        },
+        {
+          "name": "★ 设阈值时 top_k 小于「目标片数」会截掉目标",
+          "passed": true
+        },
+        {
+          "name": "★ 设阈值时 top_k >= 目标片数 ⇒ 条数恒等于期望（平台区成立）",
+          "passed": true
+        },
+        {
+          "name": "★ 平台区起点 == 目标片数（结果不再随 top_k 变化）",
+          "passed": true
+        },
+        {
+          "name": "★ 推荐 top_k 落在平台区内",
+          "passed": true
+        },
+        {
+          "name": "★ 不设阈值时条数恒等于 top_k（阈值才是分离手段）",
+          "passed": true
+        },
+        {
+          "name": "★ 反证：不设阈值、top_k == 期望条数时恰好干净（巧合）",
+          "passed": true
+        },
+        {
+          "name": "★ 反证：不设阈值、top_k == 期望条数 + 1 立刻混入噪声",
+          "passed": true
+        },
+        {
+          "name": "★ 不设阈值时目标并非全在头部（top_k 不可迁移）",
+          "passed": true
+        },
+        {
+          "name": "★ Prompt：declared / recommended / full 三档字符数完全相同",
+          "passed": true
+        },
+        {
+          "name": "★ Prompt：三档的注入条数与来源也完全相同",
+          "passed": true
+        },
+        {
+          "name": "★ Prompt：top_k 截到「期望条数 - 1」时目标被截掉 ⇒ 条数 < 期望",
+          "passed": true
+        },
+        {
+          "name": "★ Prompt：截断档的字符数 < 未截断档（确实少注入了内容）",
+          "passed": true
+        },
+        {
+          "name": "★ 组装器实收 retriever_kwargs == 传入值（每一档）",
+          "passed": true
+        },
+        {
+          "name": "每档只调用一次大模型 / 一次 Agent",
+          "passed": true
+        },
+        {
+          "name": "替身与被替换函数同签名",
+          "passed": true
+        },
+        {
+          "name": "★ declared 档用 question_knowledge 模板",
+          "passed": true
+        }
+      ],
+      "all_checks_passed": true,
+      "cross_checks": [
+        {
+          "name": "declared 档 Prompt 字符数 == 有 RAG 基准（真实星火）记录",
+          "expected": 4433,
+          "actual": 3207,
+          "match": false
+        },
+        {
+          "name": "无 RAG 基准 Prompt 字符数可用（对照，不参与本任务判定）",
+          "expected": 2426,
+          "actual": 2426,
+          "match": true
+        }
+      ]
+    },
+    {
+      "scenario_id": "s2-spring-boot-senior",
+      "label": "后端开发工程师（Java）· Spring Boot 自动配置 · 高级 · 技术阶段",
+      "declared": {
+        "top_k": 5,
+        "min_score": 0.25,
+        "expected_chunk_count": 2
+      },
+      "sweep": {
+        "topic": "Spring Boot 自动配置",
+        "corpus_chunks": 32,
+        "total_target_chunks": 2,
+        "with_declared_threshold": [
+          {
+            "top_k": 1,
+            "min_score": 0.25,
+            "count": 1,
+            "target_count": 1,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://spring/auto-configuration"
+            ],
+            "scores": [
+              0.542934
+            ]
+          },
+          {
+            "top_k": 2,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "scores": [
+              0.542934,
+              0.339153
+            ]
+          },
+          {
+            "top_k": 3,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "scores": [
+              0.542934,
+              0.339153
+            ]
+          },
+          {
+            "top_k": 4,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "scores": [
+              0.542934,
+              0.339153
+            ]
+          },
+          {
+            "top_k": 5,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "scores": [
+              0.542934,
+              0.339153
+            ]
+          },
+          {
+            "top_k": 6,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "scores": [
+              0.542934,
+              0.339153
+            ]
+          },
+          {
+            "top_k": 8,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "scores": [
+              0.542934,
+              0.339153
+            ]
+          },
+          {
+            "top_k": 10,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "scores": [
+              0.542934,
+              0.339153
+            ]
+          },
+          {
+            "top_k": 16,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "scores": [
+              0.542934,
+              0.339153
+            ]
+          },
+          {
+            "top_k": 32,
+            "min_score": 0.25,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "scores": [
+              0.542934,
+              0.339153
+            ]
+          }
+        ],
+        "without_threshold": [
+          {
+            "top_k": 1,
+            "min_score": null,
+            "count": 1,
+            "target_count": 1,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://spring/auto-configuration"
+            ],
+            "scores": [
+              0.542934
+            ]
+          },
+          {
+            "top_k": 2,
+            "min_score": null,
+            "count": 2,
+            "target_count": 2,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "scores": [
+              0.542934,
+              0.339153
+            ]
+          },
+          {
+            "top_k": 3,
+            "min_score": null,
+            "count": 3,
+            "target_count": 2,
+            "non_target_count": 1,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration",
+              "company://career-ai/about"
+            ],
+            "scores": [
+              0.542934,
+              0.339153,
+              0.138212
+            ]
+          },
+          {
+            "top_k": 4,
+            "min_score": null,
+            "count": 4,
+            "target_count": 2,
+            "non_target_count": 2,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration",
+              "company://career-ai/about",
+              "handbook://network/http-and-https"
+            ],
+            "scores": [
+              0.542934,
+              0.339153,
+              0.138212,
+              0.123463
+            ]
+          },
+          {
+            "top_k": 5,
+            "min_score": null,
+            "count": 5,
+            "target_count": 2,
+            "non_target_count": 3,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration",
+              "company://career-ai/about",
+              "handbook://network/http-and-https",
+              "handbook://spring/transaction"
+            ],
+            "scores": [
+              0.542934,
+              0.339153,
+              0.138212,
+              0.123463,
+              0.100504
+            ]
+          },
+          {
+            "top_k": 6,
+            "min_score": null,
+            "count": 6,
+            "target_count": 2,
+            "non_target_count": 4,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration",
+              "company://career-ai/about",
+              "handbook://network/http-and-https",
+              "handbook://spring/transaction",
+              "resume://project/seckill"
+            ],
+            "scores": [
+              0.542934,
+              0.339153,
+              0.138212,
+              0.123463,
+              0.100504,
+              0.097786
+            ]
+          },
+          {
+            "top_k": 8,
+            "min_score": null,
+            "count": 8,
+            "target_count": 2,
+            "non_target_count": 6,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration",
+              "company://career-ai/about",
+              "handbook://network/http-and-https",
+              "handbook://spring/transaction",
+              "resume://project/seckill",
+              "jd://career-ai/sdet",
+              "resume://project/order-middle-cache"
+            ],
+            "scores": [
+              0.542934,
+              0.339153,
+              0.138212,
+              0.123463,
+              0.100504,
+              0.097786,
+              0.085097,
+              0.080051
+            ]
+          },
+          {
+            "top_k": 10,
+            "min_score": null,
+            "count": 10,
+            "target_count": 2,
+            "non_target_count": 8,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration",
+              "company://career-ai/about",
+              "handbook://network/http-and-https",
+              "handbook://spring/transaction",
+              "resume://project/seckill",
+              "jd://career-ai/sdet",
+              "resume://project/order-middle-cache",
+              "company://career-ai/interview-process",
+              "company://career-ai/engineering-culture"
+            ],
+            "scores": [
+              0.542934,
+              0.339153,
+              0.138212,
+              0.123463,
+              0.100504,
+              0.097786,
+              0.085097,
+              0.080051,
+              0.068333,
+              0.065795
+            ]
+          },
+          {
+            "top_k": 16,
+            "min_score": null,
+            "count": 16,
+            "target_count": 2,
+            "non_target_count": 14,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration",
+              "company://career-ai/about",
+              "handbook://network/http-and-https",
+              "handbook://spring/transaction",
+              "resume://project/seckill",
+              "jd://career-ai/sdet",
+              "resume://project/order-middle-cache",
+              "company://career-ai/interview-process",
+              "company://career-ai/engineering-culture",
+              "resume://project/payment-gateway",
+              "handbook://spring/transaction",
+              "handbook://redis/data-structures",
+              "resume://project/log-platform",
+              "handbook://jvm/memory-and-gc",
+              "jd://career-ai/java-backend-senior"
+            ],
+            "scores": [
+              0.542934,
+              0.339153,
+              0.138212,
+              0.123463,
+              0.100504,
+              0.097786,
+              0.085097,
+              0.080051,
+              0.068333,
+              0.065795,
+              0.058242,
+              0.041606,
+              0.030401,
+              0.029894,
+              0.021744,
+              0.01867
+            ]
+          },
+          {
+            "top_k": 32,
+            "min_score": null,
+            "count": 32,
+            "target_count": 2,
+            "non_target_count": 30,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration",
+              "company://career-ai/about",
+              "handbook://network/http-and-https",
+              "handbook://spring/transaction",
+              "resume://project/seckill",
+              "jd://career-ai/sdet",
+              "resume://project/order-middle-cache",
+              "company://career-ai/interview-process",
+              "company://career-ai/engineering-culture",
+              "resume://project/payment-gateway",
+              "handbook://spring/transaction",
+              "handbook://redis/data-structures",
+              "resume://project/log-platform",
+              "handbook://jvm/memory-and-gc",
+              "jd://career-ai/java-backend-senior",
+              "handbook://jvm/troubleshooting",
+              "handbook://architecture/cache-consistency",
+              "handbook://jvm/memory-and-gc",
+              "handbook://java/concurrency",
+              "handbook://kafka/reliability-and-idempotence",
+              "resume://project/order-middle-cache",
+              "handbook://network/http-and-https",
+              "handbook://mysql/index",
+              "handbook://kafka/reliability-and-idempotence",
+              "handbook://jvm/troubleshooting",
+              "jd://career-ai/bigdata-engineer",
+              "handbook://redis/persistence-and-ha",
+              "handbook://mysql/index",
+              "handbook://redis/persistence-and-ha",
+              "handbook://mysql/isolation-and-lock",
+              "handbook://java/concurrency"
+            ],
+            "scores": [
+              0.542934,
+              0.339153,
+              0.138212,
+              0.123463,
+              0.100504,
+              0.097786,
+              0.085097,
+              0.080051,
+              0.068333,
+              0.065795,
+              0.058242,
+              0.041606,
+              0.030401,
+              0.029894,
+              0.021744,
+              0.01867,
+              0.012936,
+              0.006082,
+              0.0,
+              0.0,
+              0.0,
+              -0.0,
+              -0.0,
+              -0.016594,
+              -0.018737,
+              -0.018811,
+              -0.019608,
+              -0.032686,
+              -0.035997,
+              -0.050189,
+              -0.069862,
+              -0.081422
+            ]
+          }
+        ]
+      },
+      "plateau": {
+        "min_top_k_for_expected": 2,
+        "top_k_values_below_expected": [
+          1
+        ],
+        "top_k_values_above_expected": [],
+        "plateau_start": 2,
+        "is_plateau": true,
+        "expected": 2,
+        "total_target_chunks": 2
+      },
+      "prompt_invariance": {
+        "declared": {
+          "top_k": 5,
+          "min_score": 0.25,
+          "ok": true,
+          "errors": [],
+          "knowledge_context_count": 2,
+          "knowledge_context_sources": [
+            "handbook://spring/auto-configuration"
+          ],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 3574,
+          "retriever_kwargs_received": {
+            "top_k": 5,
+            "min_score": 0.25
+          },
+          "built_top_k": 5,
+          "built_min_score": 0.25,
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "generate_question": true
+          }
+        },
+        "truncated": {
+          "top_k": 1,
+          "min_score": 0.25,
+          "ok": true,
+          "errors": [],
+          "knowledge_context_count": 1,
+          "knowledge_context_sources": [
+            "handbook://spring/auto-configuration"
+          ],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 3067,
+          "retriever_kwargs_received": {
+            "top_k": 1,
+            "min_score": 0.25
+          },
+          "built_top_k": 1,
+          "built_min_score": 0.25,
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "generate_question": true
+          }
+        },
+        "recommended": {
+          "top_k": 8,
+          "min_score": 0.25,
+          "ok": true,
+          "errors": [],
+          "knowledge_context_count": 2,
+          "knowledge_context_sources": [
+            "handbook://spring/auto-configuration"
+          ],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 3574,
+          "retriever_kwargs_received": {
+            "top_k": 8,
+            "min_score": 0.25
+          },
+          "built_top_k": 8,
+          "built_min_score": 0.25,
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "generate_question": true
+          }
+        },
+        "full": {
+          "top_k": 100,
+          "min_score": 0.25,
+          "ok": true,
+          "errors": [],
+          "knowledge_context_count": 2,
+          "knowledge_context_sources": [
+            "handbook://spring/auto-configuration"
+          ],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 3574,
+          "retriever_kwargs_received": {
+            "top_k": 100,
+            "min_score": 0.25
+          },
+          "built_top_k": 100,
+          "built_min_score": 0.25,
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "generate_question": true
+          }
+        },
+        "_cases": [
+          "declared",
+          "truncated",
+          "recommended",
+          "full"
+        ],
+        "_truncation_demonstrable": true
+      },
+      "checks": [
+        {
+          "name": "★ 完整候选池 == 32 片",
+          "passed": true
+        },
+        {
+          "name": "★ 目标片数与全量扫描一致（> 0）",
+          "passed": true
+        },
+        {
+          "name": "★ 设阈值时 top_k=5 的条数 == 期望（2）",
+          "passed": true
+        },
+        {
+          "name": "★ 设阈值时 top_k 小于「目标片数」会截掉目标",
+          "passed": true
+        },
+        {
+          "name": "★ 设阈值时 top_k >= 目标片数 ⇒ 条数恒等于期望（平台区成立）",
+          "passed": true
+        },
+        {
+          "name": "★ 平台区起点 == 目标片数（结果不再随 top_k 变化）",
+          "passed": true
+        },
+        {
+          "name": "★ 推荐 top_k 落在平台区内",
+          "passed": true
+        },
+        {
+          "name": "★ 不设阈值时条数恒等于 top_k（阈值才是分离手段）",
+          "passed": true
+        },
+        {
+          "name": "★ 反证：不设阈值、top_k == 期望条数时恰好干净（巧合）",
+          "passed": true
+        },
+        {
+          "name": "★ 反证：不设阈值、top_k == 期望条数 + 1 立刻混入噪声",
+          "passed": true
+        },
+        {
+          "name": "★ 不设阈值时目标并非全在头部（top_k 不可迁移）",
+          "passed": true
+        },
+        {
+          "name": "★ Prompt：declared / recommended / full 三档字符数完全相同",
+          "passed": true
+        },
+        {
+          "name": "★ Prompt：三档的注入条数与来源也完全相同",
+          "passed": true
+        },
+        {
+          "name": "★ Prompt：top_k 截到「期望条数 - 1」时目标被截掉 ⇒ 条数 < 期望",
+          "passed": true
+        },
+        {
+          "name": "★ Prompt：截断档的字符数 < 未截断档（确实少注入了内容）",
+          "passed": true
+        },
+        {
+          "name": "★ 组装器实收 retriever_kwargs == 传入值（每一档）",
+          "passed": true
+        },
+        {
+          "name": "每档只调用一次大模型 / 一次 Agent",
+          "passed": true
+        },
+        {
+          "name": "替身与被替换函数同签名",
+          "passed": true
+        },
+        {
+          "name": "★ declared 档用 question_knowledge 模板",
+          "passed": true
+        }
+      ],
+      "all_checks_passed": true,
+      "cross_checks": [
+        {
+          "name": "declared 档 Prompt 字符数 == 有 RAG 基准（真实星火）记录",
+          "expected": 4625,
+          "actual": 3574,
+          "match": false
+        },
+        {
+          "name": "无 RAG 基准 Prompt 字符数可用（对照，不参与本任务判定）",
+          "expected": 2457,
+          "actual": 2457,
+          "match": true
+        }
+      ]
+    },
+    {
+      "scenario_id": "s3-cache-consistency-senior",
+      "label": "后端架构师 · 分布式缓存一致性 · 高级 · 场景阶段",
+      "declared": {
+        "top_k": 5,
+        "min_score": 0.4,
+        "expected_chunk_count": 1
+      },
+      "sweep": {
+        "topic": "分布式缓存一致性",
+        "corpus_chunks": 32,
+        "total_target_chunks": 1,
+        "with_declared_threshold": [
+          {
+            "top_k": 1,
+            "min_score": 0.4,
+            "count": 1,
+            "target_count": 1,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "scores": [
+              0.423982
+            ]
+          },
+          {
+            "top_k": 2,
+            "min_score": 0.4,
+            "count": 1,
+            "target_count": 1,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "scores": [
+              0.423982
+            ]
+          },
+          {
+            "top_k": 3,
+            "min_score": 0.4,
+            "count": 1,
+            "target_count": 1,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "scores": [
+              0.423982
+            ]
+          },
+          {
+            "top_k": 4,
+            "min_score": 0.4,
+            "count": 1,
+            "target_count": 1,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "scores": [
+              0.423982
+            ]
+          },
+          {
+            "top_k": 5,
+            "min_score": 0.4,
+            "count": 1,
+            "target_count": 1,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "scores": [
+              0.423982
+            ]
+          },
+          {
+            "top_k": 6,
+            "min_score": 0.4,
+            "count": 1,
+            "target_count": 1,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "scores": [
+              0.423982
+            ]
+          },
+          {
+            "top_k": 8,
+            "min_score": 0.4,
+            "count": 1,
+            "target_count": 1,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "scores": [
+              0.423982
+            ]
+          },
+          {
+            "top_k": 10,
+            "min_score": 0.4,
+            "count": 1,
+            "target_count": 1,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "scores": [
+              0.423982
+            ]
+          },
+          {
+            "top_k": 16,
+            "min_score": 0.4,
+            "count": 1,
+            "target_count": 1,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "scores": [
+              0.423982
+            ]
+          },
+          {
+            "top_k": 32,
+            "min_score": 0.4,
+            "count": 1,
+            "target_count": 1,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "scores": [
+              0.423982
+            ]
+          }
+        ],
+        "without_threshold": [
+          {
+            "top_k": 1,
+            "min_score": null,
+            "count": 1,
+            "target_count": 1,
+            "non_target_count": 0,
+            "sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "scores": [
+              0.423982
+            ]
+          },
+          {
+            "top_k": 2,
+            "min_score": null,
+            "count": 2,
+            "target_count": 1,
+            "non_target_count": 1,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache"
+            ],
+            "scores": [
+              0.423982,
+              0.360771
+            ]
+          },
+          {
+            "top_k": 3,
+            "min_score": null,
+            "count": 3,
+            "target_count": 1,
+            "non_target_count": 2,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache",
+              "handbook://redis/data-structures"
+            ],
+            "scores": [
+              0.423982,
+              0.360771,
+              0.30613
+            ]
+          },
+          {
+            "top_k": 4,
+            "min_score": null,
+            "count": 4,
+            "target_count": 1,
+            "non_target_count": 3,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache",
+              "handbook://redis/data-structures",
+              "resume://project/payment-gateway"
+            ],
+            "scores": [
+              0.423982,
+              0.360771,
+              0.30613,
+              0.251351
+            ]
+          },
+          {
+            "top_k": 5,
+            "min_score": null,
+            "count": 5,
+            "target_count": 1,
+            "non_target_count": 4,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache",
+              "handbook://redis/data-structures",
+              "resume://project/payment-gateway",
+              "resume://project/order-middle-cache"
+            ],
+            "scores": [
+              0.423982,
+              0.360771,
+              0.30613,
+              0.251351,
+              0.249029
+            ]
+          },
+          {
+            "top_k": 6,
+            "min_score": null,
+            "count": 6,
+            "target_count": 1,
+            "non_target_count": 5,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache",
+              "handbook://redis/data-structures",
+              "resume://project/payment-gateway",
+              "resume://project/order-middle-cache",
+              "handbook://network/http-and-https"
+            ],
+            "scores": [
+              0.423982,
+              0.360771,
+              0.30613,
+              0.251351,
+              0.249029,
+              0.243432
+            ]
+          },
+          {
+            "top_k": 8,
+            "min_score": null,
+            "count": 8,
+            "target_count": 1,
+            "non_target_count": 7,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache",
+              "handbook://redis/data-structures",
+              "resume://project/payment-gateway",
+              "resume://project/order-middle-cache",
+              "handbook://network/http-and-https",
+              "resume://project/log-platform",
+              "resume://project/seckill"
+            ],
+            "scores": [
+              0.423982,
+              0.360771,
+              0.30613,
+              0.251351,
+              0.249029,
+              0.243432,
+              0.231558,
+              0.15149
+            ]
+          },
+          {
+            "top_k": 10,
+            "min_score": null,
+            "count": 10,
+            "target_count": 1,
+            "non_target_count": 9,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache",
+              "handbook://redis/data-structures",
+              "resume://project/payment-gateway",
+              "resume://project/order-middle-cache",
+              "handbook://network/http-and-https",
+              "resume://project/log-platform",
+              "resume://project/seckill",
+              "handbook://jvm/memory-and-gc",
+              "company://career-ai/about"
+            ],
+            "scores": [
+              0.423982,
+              0.360771,
+              0.30613,
+              0.251351,
+              0.249029,
+              0.243432,
+              0.231558,
+              0.15149,
+              0.125378,
+              0.123529
+            ]
+          },
+          {
+            "top_k": 16,
+            "min_score": null,
+            "count": 16,
+            "target_count": 1,
+            "non_target_count": 15,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache",
+              "handbook://redis/data-structures",
+              "resume://project/payment-gateway",
+              "resume://project/order-middle-cache",
+              "handbook://network/http-and-https",
+              "resume://project/log-platform",
+              "resume://project/seckill",
+              "handbook://jvm/memory-and-gc",
+              "company://career-ai/about",
+              "handbook://jvm/troubleshooting",
+              "handbook://mysql/index",
+              "handbook://java/concurrency",
+              "jd://career-ai/java-backend-senior",
+              "handbook://kafka/reliability-and-idempotence",
+              "handbook://redis/persistence-and-ha"
+            ],
+            "scores": [
+              0.423982,
+              0.360771,
+              0.30613,
+              0.251351,
+              0.249029,
+              0.243432,
+              0.231558,
+              0.15149,
+              0.125378,
+              0.123529,
+              0.090181,
+              0.089977,
+              0.088297,
+              0.086772,
+              0.07624,
+              0.075955
+            ]
+          },
+          {
+            "top_k": 32,
+            "min_score": null,
+            "count": 32,
+            "target_count": 1,
+            "non_target_count": 31,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache",
+              "handbook://redis/data-structures",
+              "resume://project/payment-gateway",
+              "resume://project/order-middle-cache",
+              "handbook://network/http-and-https",
+              "resume://project/log-platform",
+              "resume://project/seckill",
+              "handbook://jvm/memory-and-gc",
+              "company://career-ai/about",
+              "handbook://jvm/troubleshooting",
+              "handbook://mysql/index",
+              "handbook://java/concurrency",
+              "jd://career-ai/java-backend-senior",
+              "handbook://kafka/reliability-and-idempotence",
+              "handbook://redis/persistence-and-ha",
+              "handbook://jvm/troubleshooting",
+              "handbook://java/concurrency",
+              "handbook://jvm/memory-and-gc",
+              "company://career-ai/interview-process",
+              "handbook://kafka/reliability-and-idempotence",
+              "handbook://spring/transaction",
+              "handbook://mysql/isolation-and-lock",
+              "handbook://mysql/index",
+              "handbook://redis/persistence-and-ha",
+              "handbook://spring/auto-configuration",
+              "jd://career-ai/bigdata-engineer",
+              "company://career-ai/engineering-culture",
+              "handbook://spring/transaction",
+              "handbook://network/http-and-https",
+              "jd://career-ai/sdet",
+              "handbook://spring/auto-configuration"
+            ],
+            "scores": [
+              0.423982,
+              0.360771,
+              0.30613,
+              0.251351,
+              0.249029,
+              0.243432,
+              0.231558,
+              0.15149,
+              0.125378,
+              0.123529,
+              0.090181,
+              0.089977,
+              0.088297,
+              0.086772,
+              0.07624,
+              0.075955,
+              0.072855,
+              0.063992,
+              0.050529,
+              0.045369,
+              0.04354,
+              0.038925,
+              0.036077,
+              0.027883,
+              0.025917,
+              0.020208,
+              0.015188,
+              0.0,
+              -0.008057,
+              -0.017388,
+              -0.041197,
+              -0.072509
+            ]
+          }
+        ]
+      },
+      "plateau": {
+        "min_top_k_for_expected": 1,
+        "top_k_values_below_expected": [],
+        "top_k_values_above_expected": [],
+        "plateau_start": 1,
+        "is_plateau": true,
+        "expected": 1,
+        "total_target_chunks": 1
+      },
+      "prompt_invariance": {
+        "declared": {
+          "top_k": 5,
+          "min_score": 0.4,
+          "ok": true,
+          "errors": [],
+          "knowledge_context_count": 1,
+          "knowledge_context_sources": [
+            "handbook://architecture/cache-consistency"
+          ],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 3071,
+          "retriever_kwargs_received": {
+            "top_k": 5,
+            "min_score": 0.4
+          },
+          "built_top_k": 5,
+          "built_min_score": 0.4,
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "generate_question": true
+          }
+        },
+        "recommended": {
+          "top_k": 8,
+          "min_score": 0.4,
+          "ok": true,
+          "errors": [],
+          "knowledge_context_count": 1,
+          "knowledge_context_sources": [
+            "handbook://architecture/cache-consistency"
+          ],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 3071,
+          "retriever_kwargs_received": {
+            "top_k": 8,
+            "min_score": 0.4
+          },
+          "built_top_k": 8,
+          "built_min_score": 0.4,
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "generate_question": true
+          }
+        },
+        "full": {
+          "top_k": 100,
+          "min_score": 0.4,
+          "ok": true,
+          "errors": [],
+          "knowledge_context_count": 1,
+          "knowledge_context_sources": [
+            "handbook://architecture/cache-consistency"
+          ],
+          "prompt_template": "question_knowledge",
+          "prompt_chars": 3071,
+          "retriever_kwargs_received": {
+            "top_k": 100,
+            "min_score": 0.4
+          },
+          "built_top_k": 100,
+          "built_min_score": 0.4,
+          "agent_calls": 1,
+          "spark_calls": 1,
+          "signatures_preserved": {
+            "resolve_retriever": true,
+            "generate_question": true
+          }
+        },
+        "_cases": [
+          "declared",
+          "recommended",
+          "full"
+        ],
+        "_truncation_demonstrable": false
+      },
+      "checks": [
+        {
+          "name": "★ 完整候选池 == 32 片",
+          "passed": true
+        },
+        {
+          "name": "★ 目标片数与全量扫描一致（> 0）",
+          "passed": true
+        },
+        {
+          "name": "★ 设阈值时 top_k=5 的条数 == 期望（1）",
+          "passed": true
+        },
+        {
+          "name": "★ 设阈值时 top_k 小于「目标片数」会截掉目标",
+          "passed": true
+        },
+        {
+          "name": "★ 设阈值时 top_k >= 目标片数 ⇒ 条数恒等于期望（平台区成立）",
+          "passed": true
+        },
+        {
+          "name": "★ 平台区起点 == 目标片数（结果不再随 top_k 变化）",
+          "passed": true
+        },
+        {
+          "name": "★ 推荐 top_k 落在平台区内",
+          "passed": true
+        },
+        {
+          "name": "★ 不设阈值时条数恒等于 top_k（阈值才是分离手段）",
+          "passed": true
+        },
+        {
+          "name": "★ 反证：不设阈值、top_k == 期望条数时恰好干净（巧合）",
+          "passed": true
+        },
+        {
+          "name": "★ 反证：不设阈值、top_k == 期望条数 + 1 立刻混入噪声",
+          "passed": true
+        },
+        {
+          "name": "★ 不设阈值时目标并非全在头部（top_k 不可迁移）",
+          "passed": true
+        },
+        {
+          "name": "★ Prompt：declared / recommended / full 三档字符数完全相同",
+          "passed": true
+        },
+        {
+          "name": "★ Prompt：三档的注入条数与来源也完全相同",
+          "passed": true
+        },
+        {
+          "name": "★ Prompt：top_k 截到「期望条数 - 1」时目标被截掉 ⇒ 条数 < 期望",
+          "passed": true
+        },
+        {
+          "name": "★ Prompt：截断档的字符数 < 未截断档（确实少注入了内容）",
+          "passed": true
+        },
+        {
+          "name": "★ 组装器实收 retriever_kwargs == 传入值（每一档）",
+          "passed": true
+        },
+        {
+          "name": "每档只调用一次大模型 / 一次 Agent",
+          "passed": true
+        },
+        {
+          "name": "替身与被替换函数同签名",
+          "passed": true
+        },
+        {
+          "name": "★ declared 档用 question_knowledge 模板",
+          "passed": true
+        }
+      ],
+      "all_checks_passed": true,
+      "cross_checks": [
+        {
+          "name": "declared 档 Prompt 字符数 == 有 RAG 基准（真实星火）记录",
+          "expected": 4752,
+          "actual": 3071,
+          "match": false
+        },
+        {
+          "name": "无 RAG 基准 Prompt 字符数可用（对照，不参与本任务判定）",
+          "expected": 2449,
+          "actual": 2449,
+          "match": true
+        }
+      ]
+    }
+  ],
+  "aggregate": {
+    "scenarios": 3,
+    "total_target_chunks": {
+      "s1-mysql-index-mid": 2,
+      "s2-spring-boot-senior": 2,
+      "s3-cache-consistency-senior": 1
+    },
+    "min_top_k_for_expected": {
+      "s1-mysql-index-mid": 2,
+      "s2-spring-boot-senior": 2,
+      "s3-cache-consistency-senior": 1
+    },
+    "plateau_start": {
+      "s1-mysql-index-mid": 2,
+      "s2-spring-boot-senior": 2,
+      "s3-cache-consistency-senior": 1
+    },
+    "declared_top_k": {
+      "s1-mysql-index-mid": 5,
+      "s2-spring-boot-senior": 5,
+      "s3-cache-consistency-senior": 5
+    },
+    "recommended_top_k": 8,
+    "recommended_in_all_plateaus": true,
+    "prompt_chars_invariant_over_top_k": true,
+    "topk_only_cannot_separate": true,
+    "hard_floor_top_k": {
+      "s1-mysql-index-mid": 2,
+      "s2-spring-boot-senior": 2,
+      "s3-cache-consistency-senior": 1
+    }
+  },
+  "integrity": {
+    "checks_passed": true,
+    "problems": []
+  }
+}

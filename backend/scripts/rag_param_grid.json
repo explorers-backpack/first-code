@@ -1,0 +1,6337 @@
+{
+  "name": "rag-param-grid",
+  "version": 1,
+  "purpose": "评估 top_k × min_score 的组合策略，确定检索层配置。只测检索层，**不评价大模型生成质量**。",
+  "scope": "只读：通过 RAG_TOP_K / RAG_MIN_SCORE 环境变量驱动生产组装路径；不修改任何生产代码、不改任何默认值、不改基准文件。",
+  "grid": {
+    "top_k": [
+      3,
+      5,
+      8
+    ],
+    "min_score": [
+      0.15,
+      0.25,
+      0.35
+    ],
+    "combos": [
+      {
+        "top_k": 3,
+        "min_score": 0.15
+      },
+      {
+        "top_k": 3,
+        "min_score": 0.25
+      },
+      {
+        "top_k": 3,
+        "min_score": 0.35
+      },
+      {
+        "top_k": 5,
+        "min_score": 0.15
+      },
+      {
+        "top_k": 5,
+        "min_score": 0.25
+      },
+      {
+        "top_k": 5,
+        "min_score": 0.35
+      },
+      {
+        "top_k": 8,
+        "min_score": 0.15
+      },
+      {
+        "top_k": 8,
+        "min_score": 0.25
+      },
+      {
+        "top_k": 8,
+        "min_score": 0.35
+      }
+    ],
+    "count": 9
+  },
+  "driving": {
+    "mechanism": "环境变量注入（RAG_TOP_K / RAG_MIN_SCORE）",
+    "note": "全程不传 retriever_kwargs ⇒ 测的就是「接入 min_score 之后」的生产组装路径（interview_core.resolve_retriever -> knowledge_rag.build_vector_retriever）。"
+  },
+  "part_a_query_level": {
+    "corpus": {
+      "documents": 16,
+      "chunks_in_store": 16
+    },
+    "target_rule": "正文包含该 query 的**全部** expected_keywords（取自 rag_query_set.json 的 expectation_contract 第 4 条）",
+    "rows": [
+      {
+        "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+        "top_k": 3,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 493,
+        "chunk_count": 1,
+        "scores": [
+          0.3898578784595568
+        ],
+        "avg_score": 0.3898578784595568,
+        "min_score_observed": 0.3898578784595568
+      },
+      {
+        "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+        "top_k": 3,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 493,
+        "chunk_count": 1,
+        "scores": [
+          0.3898578784595568
+        ],
+        "avg_score": 0.3898578784595568,
+        "min_score_observed": 0.3898578784595568
+      },
+      {
+        "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+        "top_k": 3,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 493,
+        "chunk_count": 1,
+        "scores": [
+          0.3898578784595568
+        ],
+        "avg_score": 0.3898578784595568,
+        "min_score_observed": 0.3898578784595568
+      },
+      {
+        "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+        "top_k": 5,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 493,
+        "chunk_count": 1,
+        "scores": [
+          0.3898578784595568
+        ],
+        "avg_score": 0.3898578784595568,
+        "min_score_observed": 0.3898578784595568
+      },
+      {
+        "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+        "top_k": 5,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 493,
+        "chunk_count": 1,
+        "scores": [
+          0.3898578784595568
+        ],
+        "avg_score": 0.3898578784595568,
+        "min_score_observed": 0.3898578784595568
+      },
+      {
+        "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+        "top_k": 5,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 493,
+        "chunk_count": 1,
+        "scores": [
+          0.3898578784595568
+        ],
+        "avg_score": 0.3898578784595568,
+        "min_score_observed": 0.3898578784595568
+      },
+      {
+        "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+        "top_k": 8,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 493,
+        "chunk_count": 1,
+        "scores": [
+          0.3898578784595568
+        ],
+        "avg_score": 0.3898578784595568,
+        "min_score_observed": 0.3898578784595568
+      },
+      {
+        "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+        "top_k": 8,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 493,
+        "chunk_count": 1,
+        "scores": [
+          0.3898578784595568
+        ],
+        "avg_score": 0.3898578784595568,
+        "min_score_observed": 0.3898578784595568
+      },
+      {
+        "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+        "top_k": 8,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 493,
+        "chunk_count": 1,
+        "scores": [
+          0.3898578784595568
+        ],
+        "avg_score": 0.3898578784595568,
+        "min_score_observed": 0.3898578784595568
+      },
+      {
+        "query": "Java 线程池的核心参数和拒绝策略",
+        "top_k": 3,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 535,
+        "chunk_count": 1,
+        "scores": [
+          0.4786245852387709
+        ],
+        "avg_score": 0.4786245852387709,
+        "min_score_observed": 0.4786245852387709
+      },
+      {
+        "query": "Java 线程池的核心参数和拒绝策略",
+        "top_k": 3,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 535,
+        "chunk_count": 1,
+        "scores": [
+          0.4786245852387709
+        ],
+        "avg_score": 0.4786245852387709,
+        "min_score_observed": 0.4786245852387709
+      },
+      {
+        "query": "Java 线程池的核心参数和拒绝策略",
+        "top_k": 3,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 535,
+        "chunk_count": 1,
+        "scores": [
+          0.4786245852387709
+        ],
+        "avg_score": 0.4786245852387709,
+        "min_score_observed": 0.4786245852387709
+      },
+      {
+        "query": "Java 线程池的核心参数和拒绝策略",
+        "top_k": 5,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 535,
+        "chunk_count": 1,
+        "scores": [
+          0.4786245852387709
+        ],
+        "avg_score": 0.4786245852387709,
+        "min_score_observed": 0.4786245852387709
+      },
+      {
+        "query": "Java 线程池的核心参数和拒绝策略",
+        "top_k": 5,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 535,
+        "chunk_count": 1,
+        "scores": [
+          0.4786245852387709
+        ],
+        "avg_score": 0.4786245852387709,
+        "min_score_observed": 0.4786245852387709
+      },
+      {
+        "query": "Java 线程池的核心参数和拒绝策略",
+        "top_k": 5,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 535,
+        "chunk_count": 1,
+        "scores": [
+          0.4786245852387709
+        ],
+        "avg_score": 0.4786245852387709,
+        "min_score_observed": 0.4786245852387709
+      },
+      {
+        "query": "Java 线程池的核心参数和拒绝策略",
+        "top_k": 8,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 535,
+        "chunk_count": 1,
+        "scores": [
+          0.4786245852387709
+        ],
+        "avg_score": 0.4786245852387709,
+        "min_score_observed": 0.4786245852387709
+      },
+      {
+        "query": "Java 线程池的核心参数和拒绝策略",
+        "top_k": 8,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 535,
+        "chunk_count": 1,
+        "scores": [
+          0.4786245852387709
+        ],
+        "avg_score": 0.4786245852387709,
+        "min_score_observed": 0.4786245852387709
+      },
+      {
+        "query": "Java 线程池的核心参数和拒绝策略",
+        "top_k": 8,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 535,
+        "chunk_count": 1,
+        "scores": [
+          0.4786245852387709
+        ],
+        "avg_score": 0.4786245852387709,
+        "min_score_observed": 0.4786245852387709
+      },
+      {
+        "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+        "top_k": 3,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 810,
+        "chunk_count": 2,
+        "scores": [
+          0.2458159765968893,
+          0.15913098741604195
+        ],
+        "avg_score": 0.20247348200646564,
+        "min_score_observed": 0.15913098741604195
+      },
+      {
+        "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+        "top_k": 3,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+        "top_k": 3,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+        "top_k": 5,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 810,
+        "chunk_count": 2,
+        "scores": [
+          0.2458159765968893,
+          0.15913098741604195
+        ],
+        "avg_score": 0.20247348200646564,
+        "min_score_observed": 0.15913098741604195
+      },
+      {
+        "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+        "top_k": 5,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+        "top_k": 5,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+        "top_k": 8,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 810,
+        "chunk_count": 2,
+        "scores": [
+          0.2458159765968893,
+          0.15913098741604195
+        ],
+        "avg_score": 0.20247348200646564,
+        "min_score_observed": 0.15913098741604195
+      },
+      {
+        "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+        "top_k": 8,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+        "top_k": 8,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+        "top_k": 3,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 452,
+        "chunk_count": 1,
+        "scores": [
+          0.2525381361380526
+        ],
+        "avg_score": 0.2525381361380526,
+        "min_score_observed": 0.2525381361380526
+      },
+      {
+        "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+        "top_k": 3,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 452,
+        "chunk_count": 1,
+        "scores": [
+          0.2525381361380526
+        ],
+        "avg_score": 0.2525381361380526,
+        "min_score_observed": 0.2525381361380526
+      },
+      {
+        "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+        "top_k": 3,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+        "top_k": 5,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 452,
+        "chunk_count": 1,
+        "scores": [
+          0.2525381361380526
+        ],
+        "avg_score": 0.2525381361380526,
+        "min_score_observed": 0.2525381361380526
+      },
+      {
+        "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+        "top_k": 5,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 452,
+        "chunk_count": 1,
+        "scores": [
+          0.2525381361380526
+        ],
+        "avg_score": 0.2525381361380526,
+        "min_score_observed": 0.2525381361380526
+      },
+      {
+        "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+        "top_k": 5,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+        "top_k": 8,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 452,
+        "chunk_count": 1,
+        "scores": [
+          0.2525381361380526
+        ],
+        "avg_score": 0.2525381361380526,
+        "min_score_observed": 0.2525381361380526
+      },
+      {
+        "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+        "top_k": 8,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 452,
+        "chunk_count": 1,
+        "scores": [
+          0.2525381361380526
+        ],
+        "avg_score": 0.2525381361380526,
+        "min_score_observed": 0.2525381361380526
+      },
+      {
+        "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+        "top_k": 8,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "top_k": 3,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 526,
+        "chunk_count": 1,
+        "scores": [
+          0.18843715532962013
+        ],
+        "avg_score": 0.18843715532962013,
+        "min_score_observed": 0.18843715532962013
+      },
+      {
+        "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "top_k": 3,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "top_k": 3,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "top_k": 5,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 526,
+        "chunk_count": 1,
+        "scores": [
+          0.18843715532962013
+        ],
+        "avg_score": 0.18843715532962013,
+        "min_score_observed": 0.18843715532962013
+      },
+      {
+        "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "top_k": 5,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "top_k": 5,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "top_k": 8,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 526,
+        "chunk_count": 1,
+        "scores": [
+          0.18843715532962013
+        ],
+        "avg_score": 0.18843715532962013,
+        "min_score_observed": 0.18843715532962013
+      },
+      {
+        "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "top_k": 8,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "top_k": 8,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "MySQL 的可重复读隔离级别和间隙锁",
+        "top_k": 3,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 856,
+        "chunk_count": 2,
+        "scores": [
+          0.4056812866430596,
+          0.17173785778784112
+        ],
+        "avg_score": 0.28870957221545035,
+        "min_score_observed": 0.17173785778784112
+      },
+      {
+        "query": "MySQL 的可重复读隔离级别和间隙锁",
+        "top_k": 3,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 482,
+        "chunk_count": 1,
+        "scores": [
+          0.4056812866430596
+        ],
+        "avg_score": 0.4056812866430596,
+        "min_score_observed": 0.4056812866430596
+      },
+      {
+        "query": "MySQL 的可重复读隔离级别和间隙锁",
+        "top_k": 3,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 482,
+        "chunk_count": 1,
+        "scores": [
+          0.4056812866430596
+        ],
+        "avg_score": 0.4056812866430596,
+        "min_score_observed": 0.4056812866430596
+      },
+      {
+        "query": "MySQL 的可重复读隔离级别和间隙锁",
+        "top_k": 5,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 856,
+        "chunk_count": 2,
+        "scores": [
+          0.4056812866430596,
+          0.17173785778784112
+        ],
+        "avg_score": 0.28870957221545035,
+        "min_score_observed": 0.17173785778784112
+      },
+      {
+        "query": "MySQL 的可重复读隔离级别和间隙锁",
+        "top_k": 5,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 482,
+        "chunk_count": 1,
+        "scores": [
+          0.4056812866430596
+        ],
+        "avg_score": 0.4056812866430596,
+        "min_score_observed": 0.4056812866430596
+      },
+      {
+        "query": "MySQL 的可重复读隔离级别和间隙锁",
+        "top_k": 5,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 482,
+        "chunk_count": 1,
+        "scores": [
+          0.4056812866430596
+        ],
+        "avg_score": 0.4056812866430596,
+        "min_score_observed": 0.4056812866430596
+      },
+      {
+        "query": "MySQL 的可重复读隔离级别和间隙锁",
+        "top_k": 8,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 856,
+        "chunk_count": 2,
+        "scores": [
+          0.4056812866430596,
+          0.17173785778784112
+        ],
+        "avg_score": 0.28870957221545035,
+        "min_score_observed": 0.17173785778784112
+      },
+      {
+        "query": "MySQL 的可重复读隔离级别和间隙锁",
+        "top_k": 8,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 482,
+        "chunk_count": 1,
+        "scores": [
+          0.4056812866430596
+        ],
+        "avg_score": 0.4056812866430596,
+        "min_score_observed": 0.4056812866430596
+      },
+      {
+        "query": "MySQL 的可重复读隔离级别和间隙锁",
+        "top_k": 8,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 482,
+        "chunk_count": 1,
+        "scores": [
+          0.4056812866430596
+        ],
+        "avg_score": 0.4056812866430596,
+        "min_score_observed": 0.4056812866430596
+      },
+      {
+        "query": "JVM 垃圾回收算法和常见收集器",
+        "top_k": 3,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 550,
+        "chunk_count": 1,
+        "scores": [
+          0.29324641512099353
+        ],
+        "avg_score": 0.29324641512099353,
+        "min_score_observed": 0.29324641512099353
+      },
+      {
+        "query": "JVM 垃圾回收算法和常见收集器",
+        "top_k": 3,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 550,
+        "chunk_count": 1,
+        "scores": [
+          0.29324641512099353
+        ],
+        "avg_score": 0.29324641512099353,
+        "min_score_observed": 0.29324641512099353
+      },
+      {
+        "query": "JVM 垃圾回收算法和常见收集器",
+        "top_k": 3,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "JVM 垃圾回收算法和常见收集器",
+        "top_k": 5,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 550,
+        "chunk_count": 1,
+        "scores": [
+          0.29324641512099353
+        ],
+        "avg_score": 0.29324641512099353,
+        "min_score_observed": 0.29324641512099353
+      },
+      {
+        "query": "JVM 垃圾回收算法和常见收集器",
+        "top_k": 5,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 550,
+        "chunk_count": 1,
+        "scores": [
+          0.29324641512099353
+        ],
+        "avg_score": 0.29324641512099353,
+        "min_score_observed": 0.29324641512099353
+      },
+      {
+        "query": "JVM 垃圾回收算法和常见收集器",
+        "top_k": 5,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "JVM 垃圾回收算法和常见收集器",
+        "top_k": 8,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 550,
+        "chunk_count": 1,
+        "scores": [
+          0.29324641512099353
+        ],
+        "avg_score": 0.29324641512099353,
+        "min_score_observed": 0.29324641512099353
+      },
+      {
+        "query": "JVM 垃圾回收算法和常见收集器",
+        "top_k": 8,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 550,
+        "chunk_count": 1,
+        "scores": [
+          0.29324641512099353
+        ],
+        "avg_score": 0.29324641512099353,
+        "min_score_observed": 0.29324641512099353
+      },
+      {
+        "query": "JVM 垃圾回收算法和常见收集器",
+        "top_k": 8,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+        "top_k": 3,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 1309,
+        "chunk_count": 3,
+        "scores": [
+          0.3482698178549329,
+          0.2319458086422002,
+          0.1695044603103275
+        ],
+        "avg_score": 0.24990669560248688,
+        "min_score_observed": 0.1695044603103275
+      },
+      {
+        "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+        "top_k": 3,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 513,
+        "chunk_count": 1,
+        "scores": [
+          0.3482698178549329
+        ],
+        "avg_score": 0.3482698178549329,
+        "min_score_observed": 0.3482698178549329
+      },
+      {
+        "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+        "top_k": 3,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+        "top_k": 5,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 2024,
+        "chunk_count": 5,
+        "scores": [
+          0.3482698178549329,
+          0.2319458086422002,
+          0.1695044603103275,
+          0.16483267673842686,
+          0.16333635810871328
+        ],
+        "avg_score": 0.21557782433092015,
+        "min_score_observed": 0.16333635810871328
+      },
+      {
+        "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+        "top_k": 5,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 513,
+        "chunk_count": 1,
+        "scores": [
+          0.3482698178549329
+        ],
+        "avg_score": 0.3482698178549329,
+        "min_score_observed": 0.3482698178549329
+      },
+      {
+        "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+        "top_k": 5,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+        "top_k": 8,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 2756,
+        "chunk_count": 7,
+        "scores": [
+          0.3482698178549329,
+          0.2319458086422002,
+          0.1695044603103275,
+          0.16483267673842686,
+          0.16333635810871328,
+          0.1587472773948556,
+          0.15234162830059084
+        ],
+        "avg_score": 0.1984254324785782,
+        "min_score_observed": 0.15234162830059084
+      },
+      {
+        "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+        "top_k": 8,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 513,
+        "chunk_count": 1,
+        "scores": [
+          0.3482698178549329
+        ],
+        "avg_score": 0.3482698178549329,
+        "min_score_observed": 0.3482698178549329
+      },
+      {
+        "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+        "top_k": 8,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+        "top_k": 3,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 578,
+        "chunk_count": 1,
+        "scores": [
+          0.34352977188917566
+        ],
+        "avg_score": 0.34352977188917566,
+        "min_score_observed": 0.34352977188917566
+      },
+      {
+        "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+        "top_k": 3,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 578,
+        "chunk_count": 1,
+        "scores": [
+          0.34352977188917566
+        ],
+        "avg_score": 0.34352977188917566,
+        "min_score_observed": 0.34352977188917566
+      },
+      {
+        "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+        "top_k": 3,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+        "top_k": 5,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 578,
+        "chunk_count": 1,
+        "scores": [
+          0.34352977188917566
+        ],
+        "avg_score": 0.34352977188917566,
+        "min_score_observed": 0.34352977188917566
+      },
+      {
+        "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+        "top_k": 5,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 578,
+        "chunk_count": 1,
+        "scores": [
+          0.34352977188917566
+        ],
+        "avg_score": 0.34352977188917566,
+        "min_score_observed": 0.34352977188917566
+      },
+      {
+        "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+        "top_k": 5,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+        "top_k": 8,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 578,
+        "chunk_count": 1,
+        "scores": [
+          0.34352977188917566
+        ],
+        "avg_score": 0.34352977188917566,
+        "min_score_observed": 0.34352977188917566
+      },
+      {
+        "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+        "top_k": 8,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 578,
+        "chunk_count": 1,
+        "scores": [
+          0.34352977188917566
+        ],
+        "avg_score": 0.34352977188917566,
+        "min_score_observed": 0.34352977188917566
+      },
+      {
+        "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+        "top_k": 8,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+        "top_k": 3,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 437,
+        "chunk_count": 1,
+        "scores": [
+          0.23568791411226836
+        ],
+        "avg_score": 0.23568791411226836,
+        "min_score_observed": 0.23568791411226836
+      },
+      {
+        "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+        "top_k": 3,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+        "top_k": 3,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+        "top_k": 5,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 437,
+        "chunk_count": 1,
+        "scores": [
+          0.23568791411226836
+        ],
+        "avg_score": 0.23568791411226836,
+        "min_score_observed": 0.23568791411226836
+      },
+      {
+        "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+        "top_k": 5,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+        "top_k": 5,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+        "top_k": 8,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 437,
+        "chunk_count": 1,
+        "scores": [
+          0.23568791411226836
+        ],
+        "avg_score": 0.23568791411226836,
+        "min_score_observed": 0.23568791411226836
+      },
+      {
+        "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+        "top_k": 8,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+        "top_k": 8,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "HTTP 的强缓存和协商缓存有什么区别",
+        "top_k": 3,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 1228,
+        "chunk_count": 3,
+        "scores": [
+          0.42699324622671986,
+          0.30899874755199314,
+          0.2671027396298781
+        ],
+        "avg_score": 0.33436491113619704,
+        "min_score_observed": 0.2671027396298781
+      },
+      {
+        "query": "HTTP 的强缓存和协商缓存有什么区别",
+        "top_k": 3,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 1228,
+        "chunk_count": 3,
+        "scores": [
+          0.42699324622671986,
+          0.30899874755199314,
+          0.2671027396298781
+        ],
+        "avg_score": 0.33436491113619704,
+        "min_score_observed": 0.2671027396298781
+      },
+      {
+        "query": "HTTP 的强缓存和协商缓存有什么区别",
+        "top_k": 3,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 502,
+        "chunk_count": 1,
+        "scores": [
+          0.42699324622671986
+        ],
+        "avg_score": 0.42699324622671986,
+        "min_score_observed": 0.42699324622671986
+      },
+      {
+        "query": "HTTP 的强缓存和协商缓存有什么区别",
+        "top_k": 5,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 1228,
+        "chunk_count": 3,
+        "scores": [
+          0.42699324622671986,
+          0.30899874755199314,
+          0.2671027396298781
+        ],
+        "avg_score": 0.33436491113619704,
+        "min_score_observed": 0.2671027396298781
+      },
+      {
+        "query": "HTTP 的强缓存和协商缓存有什么区别",
+        "top_k": 5,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 1228,
+        "chunk_count": 3,
+        "scores": [
+          0.42699324622671986,
+          0.30899874755199314,
+          0.2671027396298781
+        ],
+        "avg_score": 0.33436491113619704,
+        "min_score_observed": 0.2671027396298781
+      },
+      {
+        "query": "HTTP 的强缓存和协商缓存有什么区别",
+        "top_k": 5,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 502,
+        "chunk_count": 1,
+        "scores": [
+          0.42699324622671986
+        ],
+        "avg_score": 0.42699324622671986,
+        "min_score_observed": 0.42699324622671986
+      },
+      {
+        "query": "HTTP 的强缓存和协商缓存有什么区别",
+        "top_k": 8,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 1228,
+        "chunk_count": 3,
+        "scores": [
+          0.42699324622671986,
+          0.30899874755199314,
+          0.2671027396298781
+        ],
+        "avg_score": 0.33436491113619704,
+        "min_score_observed": 0.2671027396298781
+      },
+      {
+        "query": "HTTP 的强缓存和协商缓存有什么区别",
+        "top_k": 8,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 1228,
+        "chunk_count": 3,
+        "scores": [
+          0.42699324622671986,
+          0.30899874755199314,
+          0.2671027396298781
+        ],
+        "avg_score": 0.33436491113619704,
+        "min_score_observed": 0.2671027396298781
+      },
+      {
+        "query": "HTTP 的强缓存和协商缓存有什么区别",
+        "top_k": 8,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 502,
+        "chunk_count": 1,
+        "scores": [
+          0.42699324622671986
+        ],
+        "avg_score": 0.42699324622671986,
+        "min_score_observed": 0.42699324622671986
+      },
+      {
+        "query": "Java 后端工程师的岗位职责和任职要求",
+        "top_k": 3,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 834,
+        "chunk_count": 2,
+        "scores": [
+          0.3260604928938463,
+          0.23396915553966652
+        ],
+        "avg_score": 0.2800148242167564,
+        "min_score_observed": 0.23396915553966652
+      },
+      {
+        "query": "Java 后端工程师的岗位职责和任职要求",
+        "top_k": 3,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 498,
+        "chunk_count": 1,
+        "scores": [
+          0.3260604928938463
+        ],
+        "avg_score": 0.3260604928938463,
+        "min_score_observed": 0.3260604928938463
+      },
+      {
+        "query": "Java 后端工程师的岗位职责和任职要求",
+        "top_k": 3,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "Java 后端工程师的岗位职责和任职要求",
+        "top_k": 5,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 834,
+        "chunk_count": 2,
+        "scores": [
+          0.3260604928938463,
+          0.23396915553966652
+        ],
+        "avg_score": 0.2800148242167564,
+        "min_score_observed": 0.23396915553966652
+      },
+      {
+        "query": "Java 后端工程师的岗位职责和任职要求",
+        "top_k": 5,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 498,
+        "chunk_count": 1,
+        "scores": [
+          0.3260604928938463
+        ],
+        "avg_score": 0.3260604928938463,
+        "min_score_observed": 0.3260604928938463
+      },
+      {
+        "query": "Java 后端工程师的岗位职责和任职要求",
+        "top_k": 5,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "Java 后端工程师的岗位职责和任职要求",
+        "top_k": 8,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 834,
+        "chunk_count": 2,
+        "scores": [
+          0.3260604928938463,
+          0.23396915553966652
+        ],
+        "avg_score": 0.2800148242167564,
+        "min_score_observed": 0.23396915553966652
+      },
+      {
+        "query": "Java 后端工程师的岗位职责和任职要求",
+        "top_k": 8,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 498,
+        "chunk_count": 1,
+        "scores": [
+          0.3260604928938463
+        ],
+        "avg_score": 0.3260604928938463,
+        "min_score_observed": 0.3260604928938463
+      },
+      {
+        "query": "Java 后端工程师的岗位职责和任职要求",
+        "top_k": 8,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "大数据开发工程师需要熟悉哪些计算引擎",
+        "top_k": 3,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 1236,
+        "chunk_count": 3,
+        "scores": [
+          0.3191274459456938,
+          0.21811287829456505,
+          0.16837874094498143
+        ],
+        "avg_score": 0.23520635506174672,
+        "min_score_observed": 0.16837874094498143
+      },
+      {
+        "query": "大数据开发工程师需要熟悉哪些计算引擎",
+        "top_k": 3,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 460,
+        "chunk_count": 1,
+        "scores": [
+          0.3191274459456938
+        ],
+        "avg_score": 0.3191274459456938,
+        "min_score_observed": 0.3191274459456938
+      },
+      {
+        "query": "大数据开发工程师需要熟悉哪些计算引擎",
+        "top_k": 3,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "大数据开发工程师需要熟悉哪些计算引擎",
+        "top_k": 5,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 1236,
+        "chunk_count": 3,
+        "scores": [
+          0.3191274459456938,
+          0.21811287829456505,
+          0.16837874094498143
+        ],
+        "avg_score": 0.23520635506174672,
+        "min_score_observed": 0.16837874094498143
+      },
+      {
+        "query": "大数据开发工程师需要熟悉哪些计算引擎",
+        "top_k": 5,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 460,
+        "chunk_count": 1,
+        "scores": [
+          0.3191274459456938
+        ],
+        "avg_score": 0.3191274459456938,
+        "min_score_observed": 0.3191274459456938
+      },
+      {
+        "query": "大数据开发工程师需要熟悉哪些计算引擎",
+        "top_k": 5,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "大数据开发工程师需要熟悉哪些计算引擎",
+        "top_k": 8,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 1236,
+        "chunk_count": 3,
+        "scores": [
+          0.3191274459456938,
+          0.21811287829456505,
+          0.16837874094498143
+        ],
+        "avg_score": 0.23520635506174672,
+        "min_score_observed": 0.16837874094498143
+      },
+      {
+        "query": "大数据开发工程师需要熟悉哪些计算引擎",
+        "top_k": 8,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 460,
+        "chunk_count": 1,
+        "scores": [
+          0.3191274459456938
+        ],
+        "avg_score": 0.3191274459456938,
+        "min_score_observed": 0.3191274459456938
+      },
+      {
+        "query": "大数据开发工程师需要熟悉哪些计算引擎",
+        "top_k": 8,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "订单中台的缓存击穿是怎么治理的",
+        "top_k": 3,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 1228,
+        "chunk_count": 3,
+        "scores": [
+          0.28596729388445097,
+          0.278017949292091,
+          0.19809847238241424
+        ],
+        "avg_score": 0.25402790518631874,
+        "min_score_observed": 0.19809847238241424
+      },
+      {
+        "query": "订单中台的缓存击穿是怎么治理的",
+        "top_k": 3,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 850,
+        "chunk_count": 2,
+        "scores": [
+          0.28596729388445097,
+          0.278017949292091
+        ],
+        "avg_score": 0.281992621588271,
+        "min_score_observed": 0.278017949292091
+      },
+      {
+        "query": "订单中台的缓存击穿是怎么治理的",
+        "top_k": 3,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "订单中台的缓存击穿是怎么治理的",
+        "top_k": 5,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 1564,
+        "chunk_count": 4,
+        "scores": [
+          0.28596729388445097,
+          0.278017949292091,
+          0.19809847238241424,
+          0.16931045539672382
+        ],
+        "avg_score": 0.23284854273892,
+        "min_score_observed": 0.16931045539672382
+      },
+      {
+        "query": "订单中台的缓存击穿是怎么治理的",
+        "top_k": 5,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 850,
+        "chunk_count": 2,
+        "scores": [
+          0.28596729388445097,
+          0.278017949292091
+        ],
+        "avg_score": 0.281992621588271,
+        "min_score_observed": 0.278017949292091
+      },
+      {
+        "query": "订单中台的缓存击穿是怎么治理的",
+        "top_k": 5,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "订单中台的缓存击穿是怎么治理的",
+        "top_k": 8,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 1564,
+        "chunk_count": 4,
+        "scores": [
+          0.28596729388445097,
+          0.278017949292091,
+          0.19809847238241424,
+          0.16931045539672382
+        ],
+        "avg_score": 0.23284854273892,
+        "min_score_observed": 0.16931045539672382
+      },
+      {
+        "query": "订单中台的缓存击穿是怎么治理的",
+        "top_k": 8,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 850,
+        "chunk_count": 2,
+        "scores": [
+          0.28596729388445097,
+          0.278017949292091
+        ],
+        "avg_score": 0.281992621588271,
+        "min_score_observed": 0.278017949292091
+      },
+      {
+        "query": "订单中台的缓存击穿是怎么治理的",
+        "top_k": 8,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "支付网关怎么做到幂等和日终对账",
+        "top_k": 3,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 531,
+        "chunk_count": 1,
+        "scores": [
+          0.20217792265417858
+        ],
+        "avg_score": 0.20217792265417858,
+        "min_score_observed": 0.20217792265417858
+      },
+      {
+        "query": "支付网关怎么做到幂等和日终对账",
+        "top_k": 3,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "支付网关怎么做到幂等和日终对账",
+        "top_k": 3,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "支付网关怎么做到幂等和日终对账",
+        "top_k": 5,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 531,
+        "chunk_count": 1,
+        "scores": [
+          0.20217792265417858
+        ],
+        "avg_score": 0.20217792265417858,
+        "min_score_observed": 0.20217792265417858
+      },
+      {
+        "query": "支付网关怎么做到幂等和日终对账",
+        "top_k": 5,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "支付网关怎么做到幂等和日终对账",
+        "top_k": 5,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "支付网关怎么做到幂等和日终对账",
+        "top_k": 8,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 1,
+        "target_hit": true,
+        "target_full": true,
+        "knowledge_context_chars": 531,
+        "chunk_count": 1,
+        "scores": [
+          0.20217792265417858
+        ],
+        "avg_score": 0.20217792265417858,
+        "min_score_observed": 0.20217792265417858
+      },
+      {
+        "query": "支付网关怎么做到幂等和日终对账",
+        "top_k": 8,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "支付网关怎么做到幂等和日终对账",
+        "top_k": 8,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "秒杀系统怎么做限流和降级",
+        "top_k": 3,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "秒杀系统怎么做限流和降级",
+        "top_k": 3,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "秒杀系统怎么做限流和降级",
+        "top_k": 3,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "秒杀系统怎么做限流和降级",
+        "top_k": 5,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "秒杀系统怎么做限流和降级",
+        "top_k": 5,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "秒杀系统怎么做限流和降级",
+        "top_k": 5,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "秒杀系统怎么做限流和降级",
+        "top_k": 8,
+        "min_score": 0.15,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "秒杀系统怎么做限流和降级",
+        "top_k": 8,
+        "min_score": 0.25,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      },
+      {
+        "query": "秒杀系统怎么做限流和降级",
+        "top_k": 8,
+        "min_score": 0.35,
+        "target_count_in_corpus": 1,
+        "target_chunks_present": 0,
+        "target_hit": false,
+        "target_full": false,
+        "knowledge_context_chars": 0,
+        "chunk_count": 0,
+        "scores": [],
+        "avg_score": null,
+        "min_score_observed": null
+      }
+    ],
+    "combos": [
+      {
+        "top_k": 3,
+        "min_score": 0.15,
+        "total_chunks": 26,
+        "mean_chunks": 1.625,
+        "queries_empty": 1,
+        "mean_avg_score": 0.28192,
+        "mean_min_score": 0.250135,
+        "global_min_score": 0.159131,
+        "target_hit_queries": 15,
+        "target_full_queries": 15,
+        "target_miss_queries": [
+          "秒杀系统怎么做限流和降级"
+        ],
+        "total_knowledge_context_chars": 11603,
+        "queries": 16
+      },
+      {
+        "top_k": 3,
+        "min_score": 0.25,
+        "total_chunks": 14,
+        "mean_chunks": 0.875,
+        "queries_empty": 5,
+        "mean_avg_score": 0.343027,
+        "mean_min_score": 0.336551,
+        "global_min_score": 0.252538,
+        "target_hit_queries": 11,
+        "target_full_queries": 11,
+        "target_miss_queries": [
+          "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "支付网关怎么做到幂等和日终对账",
+          "秒杀系统怎么做限流和降级"
+        ],
+        "total_knowledge_context_chars": 6639,
+        "queries": 16
+      },
+      {
+        "top_k": 3,
+        "min_score": 0.35,
+        "total_chunks": 4,
+        "mean_chunks": 0.25,
+        "queries_empty": 12,
+        "mean_avg_score": 0.425289,
+        "mean_min_score": 0.425289,
+        "global_min_score": 0.389858,
+        "target_hit_queries": 4,
+        "target_full_queries": 4,
+        "target_miss_queries": [
+          "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "JVM 垃圾回收算法和常见收集器",
+          "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "Kafka 怎么保证消息不重复消费、幂等生产",
+          "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "Java 后端工程师的岗位职责和任职要求",
+          "大数据开发工程师需要熟悉哪些计算引擎",
+          "订单中台的缓存击穿是怎么治理的",
+          "支付网关怎么做到幂等和日终对账",
+          "秒杀系统怎么做限流和降级"
+        ],
+        "total_knowledge_context_chars": 2012,
+        "queries": 16
+      },
+      {
+        "top_k": 5,
+        "min_score": 0.15,
+        "total_chunks": 29,
+        "mean_chunks": 1.812,
+        "queries_empty": 1,
+        "mean_avg_score": 0.27822,
+        "mean_min_score": 0.247804,
+        "global_min_score": 0.159131,
+        "target_hit_queries": 15,
+        "target_full_queries": 15,
+        "target_miss_queries": [
+          "秒杀系统怎么做限流和降级"
+        ],
+        "total_knowledge_context_chars": 12654,
+        "queries": 16
+      },
+      {
+        "top_k": 5,
+        "min_score": 0.25,
+        "total_chunks": 14,
+        "mean_chunks": 0.875,
+        "queries_empty": 5,
+        "mean_avg_score": 0.343027,
+        "mean_min_score": 0.336551,
+        "global_min_score": 0.252538,
+        "target_hit_queries": 11,
+        "target_full_queries": 11,
+        "target_miss_queries": [
+          "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "支付网关怎么做到幂等和日终对账",
+          "秒杀系统怎么做限流和降级"
+        ],
+        "total_knowledge_context_chars": 6639,
+        "queries": 16
+      },
+      {
+        "top_k": 5,
+        "min_score": 0.35,
+        "total_chunks": 4,
+        "mean_chunks": 0.25,
+        "queries_empty": 12,
+        "mean_avg_score": 0.425289,
+        "mean_min_score": 0.425289,
+        "global_min_score": 0.389858,
+        "target_hit_queries": 4,
+        "target_full_queries": 4,
+        "target_miss_queries": [
+          "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "JVM 垃圾回收算法和常见收集器",
+          "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "Kafka 怎么保证消息不重复消费、幂等生产",
+          "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "Java 后端工程师的岗位职责和任职要求",
+          "大数据开发工程师需要熟悉哪些计算引擎",
+          "订单中台的缓存击穿是怎么治理的",
+          "支付网关怎么做到幂等和日终对账",
+          "秒杀系统怎么做限流和降级"
+        ],
+        "total_knowledge_context_chars": 2012,
+        "queries": 16
+      },
+      {
+        "top_k": 8,
+        "min_score": 0.15,
+        "total_chunks": 31,
+        "mean_chunks": 1.938,
+        "queries_empty": 1,
+        "mean_avg_score": 0.277076,
+        "mean_min_score": 0.247071,
+        "global_min_score": 0.152342,
+        "target_hit_queries": 15,
+        "target_full_queries": 15,
+        "target_miss_queries": [
+          "秒杀系统怎么做限流和降级"
+        ],
+        "total_knowledge_context_chars": 13386,
+        "queries": 16
+      },
+      {
+        "top_k": 8,
+        "min_score": 0.25,
+        "total_chunks": 14,
+        "mean_chunks": 0.875,
+        "queries_empty": 5,
+        "mean_avg_score": 0.343027,
+        "mean_min_score": 0.336551,
+        "global_min_score": 0.252538,
+        "target_hit_queries": 11,
+        "target_full_queries": 11,
+        "target_miss_queries": [
+          "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "支付网关怎么做到幂等和日终对账",
+          "秒杀系统怎么做限流和降级"
+        ],
+        "total_knowledge_context_chars": 6639,
+        "queries": 16
+      },
+      {
+        "top_k": 8,
+        "min_score": 0.35,
+        "total_chunks": 4,
+        "mean_chunks": 0.25,
+        "queries_empty": 12,
+        "mean_avg_score": 0.425289,
+        "mean_min_score": 0.425289,
+        "global_min_score": 0.389858,
+        "target_hit_queries": 4,
+        "target_full_queries": 4,
+        "target_miss_queries": [
+          "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "JVM 垃圾回收算法和常见收集器",
+          "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "Kafka 怎么保证消息不重复消费、幂等生产",
+          "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "Java 后端工程师的岗位职责和任职要求",
+          "大数据开发工程师需要熟悉哪些计算引擎",
+          "订单中台的缓存击穿是怎么治理的",
+          "支付网关怎么做到幂等和日终对账",
+          "秒杀系统怎么做限流和降级"
+        ],
+        "total_knowledge_context_chars": 2012,
+        "queries": 16
+      }
+    ],
+    "full_scan": [
+      {
+        "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+        "candidate_count": 16,
+        "ordered": [
+          {
+            "score": 0.3898578784595568,
+            "is_target": true
+          },
+          {
+            "score": 0.10198341204735069,
+            "is_target": false
+          },
+          {
+            "score": 0.07753407204140506,
+            "is_target": false
+          },
+          {
+            "score": 0.06255113291419874,
+            "is_target": false
+          },
+          {
+            "score": 0.05453234541448247,
+            "is_target": false
+          },
+          {
+            "score": 0.043928865377190277,
+            "is_target": false
+          },
+          {
+            "score": 0.03243432784663728,
+            "is_target": false
+          },
+          {
+            "score": 0.026219369088605084,
+            "is_target": false
+          },
+          {
+            "score": 0.02488856205812508,
+            "is_target": false
+          },
+          {
+            "score": 0.02047972423008211,
+            "is_target": false
+          },
+          {
+            "score": 0.015728053787519434,
+            "is_target": false
+          },
+          {
+            "score": 0.012628920507068061,
+            "is_target": false
+          },
+          {
+            "score": 0.00617389822147196,
+            "is_target": false
+          },
+          {
+            "score": -0.006020601623022939,
+            "is_target": false
+          },
+          {
+            "score": -0.02142747821777417,
+            "is_target": false
+          },
+          {
+            "score": -0.0506971859618017,
+            "is_target": false
+          }
+        ]
+      },
+      {
+        "query": "Java 线程池的核心参数和拒绝策略",
+        "candidate_count": 16,
+        "ordered": [
+          {
+            "score": 0.4786245852387709,
+            "is_target": true
+          },
+          {
+            "score": 0.12550074222957622,
+            "is_target": false
+          },
+          {
+            "score": 0.12043663197215837,
+            "is_target": false
+          },
+          {
+            "score": 0.10234676514280033,
+            "is_target": false
+          },
+          {
+            "score": 0.09005476995526394,
+            "is_target": false
+          },
+          {
+            "score": 0.08906507024044026,
+            "is_target": false
+          },
+          {
+            "score": 0.0564782494724905,
+            "is_target": false
+          },
+          {
+            "score": 0.05314940034527335,
+            "is_target": false
+          },
+          {
+            "score": 0.051952433346613064,
+            "is_target": false
+          },
+          {
+            "score": 0.050676761655691425,
+            "is_target": false
+          },
+          {
+            "score": 0.033501260508640385,
+            "is_target": false
+          },
+          {
+            "score": 0.027664166758624407,
+            "is_target": false
+          },
+          {
+            "score": 0.01287779015477093,
+            "is_target": false
+          },
+          {
+            "score": -0.012297974198582055,
+            "is_target": false
+          },
+          {
+            "score": -0.02221308291596599,
+            "is_target": false
+          },
+          {
+            "score": -0.08138434574843478,
+            "is_target": false
+          }
+        ]
+      },
+      {
+        "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+        "candidate_count": 16,
+        "ordered": [
+          {
+            "score": 0.2458159765968893,
+            "is_target": true
+          },
+          {
+            "score": 0.15913098741604195,
+            "is_target": false
+          },
+          {
+            "score": 0.14145628802893456,
+            "is_target": false
+          },
+          {
+            "score": 0.11590011139293852,
+            "is_target": false
+          },
+          {
+            "score": 0.09882384840881367,
+            "is_target": false
+          },
+          {
+            "score": 0.09091675835657287,
+            "is_target": false
+          },
+          {
+            "score": 0.04202555931245652,
+            "is_target": false
+          },
+          {
+            "score": 0.03411558838093344,
+            "is_target": false
+          },
+          {
+            "score": 0.03074493549645514,
+            "is_target": false
+          },
+          {
+            "score": 0.00922138891954147,
+            "is_target": false
+          },
+          {
+            "score": 0.007404360971988665,
+            "is_target": false
+          },
+          {
+            "score": -0.0066053022226092726,
+            "is_target": false
+          },
+          {
+            "score": -0.014119562368122614,
+            "is_target": false
+          },
+          {
+            "score": -0.029184425929193344,
+            "is_target": false
+          },
+          {
+            "score": -0.038032620622786846,
+            "is_target": false
+          },
+          {
+            "score": -0.050676761655691446,
+            "is_target": false
+          }
+        ]
+      },
+      {
+        "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+        "candidate_count": 16,
+        "ordered": [
+          {
+            "score": 0.2525381361380526,
+            "is_target": true
+          },
+          {
+            "score": 0.14581926965295566,
+            "is_target": false
+          },
+          {
+            "score": 0.11958961484030967,
+            "is_target": false
+          },
+          {
+            "score": 0.09248043889897663,
+            "is_target": false
+          },
+          {
+            "score": 0.09207338730881488,
+            "is_target": false
+          },
+          {
+            "score": 0.074094656681979,
+            "is_target": false
+          },
+          {
+            "score": 0.03093441124448727,
+            "is_target": false
+          },
+          {
+            "score": 0.029111125486979084,
+            "is_target": false
+          },
+          {
+            "score": 0.027524094128159003,
+            "is_target": false
+          },
+          {
+            "score": 0.019181962091109415,
+            "is_target": false
+          },
+          {
+            "score": 0.01910401799752174,
+            "is_target": false
+          },
+          {
+            "score": 0.017217511078754542,
+            "is_target": false
+          },
+          {
+            "score": -0.035267280792929935,
+            "is_target": false
+          },
+          {
+            "score": -0.03617873026462108,
+            "is_target": false
+          },
+          {
+            "score": -0.07299963950884324,
+            "is_target": false
+          },
+          {
+            "score": -0.11895773785772162,
+            "is_target": false
+          }
+        ]
+      },
+      {
+        "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "candidate_count": 16,
+        "ordered": [
+          {
+            "score": 0.18843715532962013,
+            "is_target": true
+          },
+          {
+            "score": 0.09446315179780784,
+            "is_target": false
+          },
+          {
+            "score": 0.09199165326047419,
+            "is_target": false
+          },
+          {
+            "score": 0.0684436003119127,
+            "is_target": false
+          },
+          {
+            "score": 0.06475103337403433,
+            "is_target": false
+          },
+          {
+            "score": 0.053518039556231585,
+            "is_target": false
+          },
+          {
+            "score": 0.04750556970506268,
+            "is_target": false
+          },
+          {
+            "score": 0.041819209070323486,
+            "is_target": false
+          },
+          {
+            "score": 0.028846487225567617,
+            "is_target": false
+          },
+          {
+            "score": 0.026534908905067767,
+            "is_target": false
+          },
+          {
+            "score": 0.014790488337295491,
+            "is_target": false
+          },
+          {
+            "score": 0.011924847920961984,
+            "is_target": false
+          },
+          {
+            "score": 1.7347234759768056e-18,
+            "is_target": false
+          },
+          {
+            "score": -1.040834085586085e-17,
+            "is_target": false
+          },
+          {
+            "score": -0.01883944209702249,
+            "is_target": false
+          },
+          {
+            "score": -0.03025445104080262,
+            "is_target": false
+          }
+        ]
+      },
+      {
+        "query": "MySQL 的可重复读隔离级别和间隙锁",
+        "candidate_count": 16,
+        "ordered": [
+          {
+            "score": 0.4056812866430596,
+            "is_target": true
+          },
+          {
+            "score": 0.17173785778784112,
+            "is_target": false
+          },
+          {
+            "score": 0.13327849749579598,
+            "is_target": false
+          },
+          {
+            "score": 0.10806572394631674,
+            "is_target": false
+          },
+          {
+            "score": 0.0753778361444409,
+            "is_target": false
+          },
+          {
+            "score": 0.05836885185838669,
+            "is_target": false
+          },
+          {
+            "score": 0.034879005320757765,
+            "is_target": false
+          },
+          {
+            "score": 0.028239124736245243,
+            "is_target": false
+          },
+          {
+            "score": 0.0194821625049799,
+            "is_target": false
+          },
+          {
+            "score": 3.4694469519536134e-18,
+            "is_target": false
+          },
+          {
+            "score": -3.4694469519536126e-18,
+            "is_target": false
+          },
+          {
+            "score": -0.0068231176761866935,
+            "is_target": false
+          },
+          {
+            "score": -0.03863337046431284,
+            "is_target": false
+          },
+          {
+            "score": -0.05979307538843253,
+            "is_target": false
+          },
+          {
+            "score": -0.061489870992910284,
+            "is_target": false
+          },
+          {
+            "score": -0.12307213544953637,
+            "is_target": false
+          }
+        ]
+      },
+      {
+        "query": "JVM 垃圾回收算法和常见收集器",
+        "candidate_count": 16,
+        "ordered": [
+          {
+            "score": 0.29324641512099353,
+            "is_target": true
+          },
+          {
+            "score": 0.12093595856020053,
+            "is_target": false
+          },
+          {
+            "score": 0.09135139987044212,
+            "is_target": false
+          },
+          {
+            "score": 0.06782818363629779,
+            "is_target": false
+          },
+          {
+            "score": 0.0444231837097046,
+            "is_target": false
+          },
+          {
+            "score": 0.044298119496145864,
+            "is_target": false
+          },
+          {
+            "score": 0.04023371246543897,
+            "is_target": false
+          },
+          {
+            "score": 0.039095775099995254,
+            "is_target": false
+          },
+          {
+            "score": 0.028840608108556487,
+            "is_target": false
+          },
+          {
+            "score": -0.006955522529782538,
+            "is_target": false
+          },
+          {
+            "score": -0.01682369367805096,
+            "is_target": false
+          },
+          {
+            "score": -0.020134341552172384,
+            "is_target": false
+          },
+          {
+            "score": -0.03933263652057469,
+            "is_target": false
+          },
+          {
+            "score": -0.05567661258946555,
+            "is_target": false
+          },
+          {
+            "score": -0.05744732863366857,
+            "is_target": false
+          },
+          {
+            "score": -0.094524091390154,
+            "is_target": false
+          }
+        ]
+      },
+      {
+        "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+        "candidate_count": 16,
+        "ordered": [
+          {
+            "score": 0.3482698178549329,
+            "is_target": true
+          },
+          {
+            "score": 0.2319458086422002,
+            "is_target": false
+          },
+          {
+            "score": 0.1695044603103275,
+            "is_target": false
+          },
+          {
+            "score": 0.16483267673842686,
+            "is_target": false
+          },
+          {
+            "score": 0.16333635810871328,
+            "is_target": false
+          },
+          {
+            "score": 0.1587472773948556,
+            "is_target": false
+          },
+          {
+            "score": 0.15234162830059084,
+            "is_target": false
+          },
+          {
+            "score": 0.14660333322756638,
+            "is_target": false
+          },
+          {
+            "score": 0.13445852909056277,
+            "is_target": false
+          },
+          {
+            "score": 0.09365858115816952,
+            "is_target": false
+          },
+          {
+            "score": 0.0808845395121326,
+            "is_target": false
+          },
+          {
+            "score": 0.059065125210065204,
+            "is_target": false
+          },
+          {
+            "score": 0.05750080677718342,
+            "is_target": false
+          },
+          {
+            "score": 0.05315859494794495,
+            "is_target": false
+          },
+          {
+            "score": 0.04665694748158434,
+            "is_target": false
+          },
+          {
+            "score": 0.043153185200210276,
+            "is_target": false
+          }
+        ]
+      },
+      {
+        "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+        "candidate_count": 16,
+        "ordered": [
+          {
+            "score": 0.34352977188917566,
+            "is_target": true
+          },
+          {
+            "score": 0.11681818473544502,
+            "is_target": false
+          },
+          {
+            "score": 0.09519014050432062,
+            "is_target": false
+          },
+          {
+            "score": 0.08786364769756365,
+            "is_target": false
+          },
+          {
+            "score": 0.06857254813237415,
+            "is_target": false
+          },
+          {
+            "score": 0.046131928458101386,
+            "is_target": false
+          },
+          {
+            "score": 0.04135428998319229,
+            "is_target": false
+          },
+          {
+            "score": 0.02403584012259587,
+            "is_target": false
+          },
+          {
+            "score": 0.011187684215914664,
+            "is_target": false
+          },
+          {
+            "score": -0.006422407564478441,
+            "is_target": false
+          },
+          {
+            "score": -0.009532243129481706,
+            "is_target": false
+          },
+          {
+            "score": -0.019757804845419804,
+            "is_target": false
+          },
+          {
+            "score": -0.02184651037377082,
+            "is_target": false
+          },
+          {
+            "score": -0.033555441115125914,
+            "is_target": false
+          },
+          {
+            "score": -0.0423070792401008,
+            "is_target": false
+          },
+          {
+            "score": -0.05586399534339821,
+            "is_target": false
+          }
+        ]
+      },
+      {
+        "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+        "candidate_count": 16,
+        "ordered": [
+          {
+            "score": 0.23568791411226836,
+            "is_target": true
+          },
+          {
+            "score": 0.13665914371885046,
+            "is_target": false
+          },
+          {
+            "score": 0.10039273363859967,
+            "is_target": false
+          },
+          {
+            "score": 0.07703661358927046,
+            "is_target": false
+          },
+          {
+            "score": 0.05230701979864824,
+            "is_target": false
+          },
+          {
+            "score": 0.04754257994826395,
+            "is_target": false
+          },
+          {
+            "score": 0.017142017554394897,
+            "is_target": false
+          },
+          {
+            "score": 0.016996416966427903,
+            "is_target": false
+          },
+          {
+            "score": 0.013029938101426095,
+            "is_target": false
+          },
+          {
+            "score": -0.006003543135983859,
+            "is_target": false
+          },
+          {
+            "score": -0.0092196251293657,
+            "is_target": false
+          },
+          {
+            "score": -0.014738589609512725,
+            "is_target": false
+          },
+          {
+            "score": -0.01623116193146188,
+            "is_target": false
+          },
+          {
+            "score": -0.02045962202041422,
+            "is_target": false
+          },
+          {
+            "score": -0.08183916537036717,
+            "is_target": false
+          },
+          {
+            "score": -0.1217061073386567,
+            "is_target": false
+          }
+        ]
+      },
+      {
+        "query": "HTTP 的强缓存和协商缓存有什么区别",
+        "candidate_count": 16,
+        "ordered": [
+          {
+            "score": 0.42699324622671986,
+            "is_target": true
+          },
+          {
+            "score": 0.30899874755199314,
+            "is_target": false
+          },
+          {
+            "score": 0.2671027396298781,
+            "is_target": false
+          },
+          {
+            "score": 0.14021363680319482,
+            "is_target": false
+          },
+          {
+            "score": 0.13821894809301777,
+            "is_target": false
+          },
+          {
+            "score": 0.12197763118753138,
+            "is_target": false
+          },
+          {
+            "score": 0.11549624643298549,
+            "is_target": false
+          },
+          {
+            "score": 0.1096340452401327,
+            "is_target": false
+          },
+          {
+            "score": 0.09638266175168002,
+            "is_target": false
+          },
+          {
+            "score": 0.08543894767762943,
+            "is_target": false
+          },
+          {
+            "score": 0.08208798329594223,
+            "is_target": false
+          },
+          {
+            "score": 0.0429586319611895,
+            "is_target": false
+          },
+          {
+            "score": 0.039735970711951375,
+            "is_target": false
+          },
+          {
+            "score": 0.029539809563369563,
+            "is_target": false
+          },
+          {
+            "score": 0.02599727562826373,
+            "is_target": false
+          },
+          {
+            "score": -0.012950478164763532,
+            "is_target": false
+          }
+        ]
+      },
+      {
+        "query": "Java 后端工程师的岗位职责和任职要求",
+        "candidate_count": 16,
+        "ordered": [
+          {
+            "score": 0.3260604928938463,
+            "is_target": true
+          },
+          {
+            "score": 0.23396915553966652,
+            "is_target": false
+          },
+          {
+            "score": 0.10037244076773096,
+            "is_target": false
+          },
+          {
+            "score": 0.09781105315169675,
+            "is_target": false
+          },
+          {
+            "score": 0.09170924775834718,
+            "is_target": false
+          },
+          {
+            "score": 0.0907442510800784,
+            "is_target": false
+          },
+          {
+            "score": 0.08336074110691888,
+            "is_target": false
+          },
+          {
+            "score": 0.0707684718987308,
+            "is_target": false
+          },
+          {
+            "score": 0.05318093916529483,
+            "is_target": false
+          },
+          {
+            "score": 0.037617739693163926,
+            "is_target": false
+          },
+          {
+            "score": 0.037276253248701714,
+            "is_target": false
+          },
+          {
+            "score": 0.036266178324103705,
+            "is_target": false
+          },
+          {
+            "score": 0.03374409529993853,
+            "is_target": false
+          },
+          {
+            "score": -0.005034350777751455,
+            "is_target": false
+          },
+          {
+            "score": -0.007985957062499247,
+            "is_target": false
+          },
+          {
+            "score": -0.05489535938638222,
+            "is_target": false
+          }
+        ]
+      },
+      {
+        "query": "大数据开发工程师需要熟悉哪些计算引擎",
+        "candidate_count": 16,
+        "ordered": [
+          {
+            "score": 0.3191274459456938,
+            "is_target": true
+          },
+          {
+            "score": 0.21811287829456505,
+            "is_target": false
+          },
+          {
+            "score": 0.16837874094498143,
+            "is_target": false
+          },
+          {
+            "score": 0.10701462561817372,
+            "is_target": false
+          },
+          {
+            "score": 0.10397504898200728,
+            "is_target": false
+          },
+          {
+            "score": 0.08094446585163531,
+            "is_target": false
+          },
+          {
+            "score": 0.07752391454091322,
+            "is_target": false
+          },
+          {
+            "score": 0.04707205680197118,
+            "is_target": false
+          },
+          {
+            "score": 0.04148643283272034,
+            "is_target": false
+          },
+          {
+            "score": 0.025525823626641176,
+            "is_target": false
+          },
+          {
+            "score": 0.025317131802324946,
+            "is_target": false
+          },
+          {
+            "score": 0.02340925562086875,
+            "is_target": false
+          },
+          {
+            "score": 0.023322524875786427,
+            "is_target": false
+          },
+          {
+            "score": -0.0056858578682025315,
+            "is_target": false
+          },
+          {
+            "score": -0.010990504185145298,
+            "is_target": false
+          },
+          {
+            "score": -0.01880381201311037,
+            "is_target": false
+          }
+        ]
+      },
+      {
+        "query": "订单中台的缓存击穿是怎么治理的",
+        "candidate_count": 16,
+        "ordered": [
+          {
+            "score": 0.28596729388445097,
+            "is_target": true
+          },
+          {
+            "score": 0.278017949292091,
+            "is_target": false
+          },
+          {
+            "score": 0.19809847238241424,
+            "is_target": false
+          },
+          {
+            "score": 0.16931045539672382,
+            "is_target": false
+          },
+          {
+            "score": 0.13655643306164006,
+            "is_target": false
+          },
+          {
+            "score": 0.1118768421591467,
+            "is_target": false
+          },
+          {
+            "score": 0.08073087480167743,
+            "is_target": false
+          },
+          {
+            "score": 0.06008960030648966,
+            "is_target": false
+          },
+          {
+            "score": 0.05780166808030597,
+            "is_target": false
+          },
+          {
+            "score": 0.0423067291130314,
+            "is_target": false
+          },
+          {
+            "score": 0.040415267281079484,
+            "is_target": false
+          },
+          {
+            "score": 0.03544653427130766,
+            "is_target": false
+          },
+          {
+            "score": 0.023430306052683644,
+            "is_target": false
+          },
+          {
+            "score": -6.938893903907227e-18,
+            "is_target": false
+          },
+          {
+            "score": -0.02654958743987387,
+            "is_target": false
+          },
+          {
+            "score": -0.059273414536259415,
+            "is_target": false
+          }
+        ]
+      },
+      {
+        "query": "支付网关怎么做到幂等和日终对账",
+        "candidate_count": 16,
+        "ordered": [
+          {
+            "score": 0.20217792265417858,
+            "is_target": true
+          },
+          {
+            "score": 0.13177297660794246,
+            "is_target": false
+          },
+          {
+            "score": 0.1171369350254158,
+            "is_target": false
+          },
+          {
+            "score": 0.10663823359494566,
+            "is_target": false
+          },
+          {
+            "score": 0.09666800257398865,
+            "is_target": false
+          },
+          {
+            "score": 0.06744532734334634,
+            "is_target": false
+          },
+          {
+            "score": 0.05501485601695765,
+            "is_target": false
+          },
+          {
+            "score": 0.04581621289927273,
+            "is_target": false
+          },
+          {
+            "score": 0.029974532466509038,
+            "is_target": false
+          },
+          {
+            "score": 0.023384216887746695,
+            "is_target": false
+          },
+          {
+            "score": 0.020996001298655167,
+            "is_target": false
+          },
+          {
+            "score": 0.005091845066473419,
+            "is_target": false
+          },
+          {
+            "score": -0.005377587746479035,
+            "is_target": false
+          },
+          {
+            "score": -0.03281825932466517,
+            "is_target": false
+          },
+          {
+            "score": -0.03977196492840077,
+            "is_target": false
+          },
+          {
+            "score": -0.1412519554702941,
+            "is_target": false
+          }
+        ]
+      },
+      {
+        "query": "秒杀系统怎么做限流和降级",
+        "candidate_count": 16,
+        "ordered": [
+          {
+            "score": 0.11839287208668638,
+            "is_target": true
+          },
+          {
+            "score": 0.10168427515684002,
+            "is_target": false
+          },
+          {
+            "score": 0.05938196213132835,
+            "is_target": false
+          },
+          {
+            "score": 0.047231575898903956,
+            "is_target": false
+          },
+          {
+            "score": 0.017887271881442963,
+            "is_target": false
+          },
+          {
+            "score": 0.017110900077978174,
+            "is_target": false
+          },
+          {
+            "score": 0.013573132244947569,
+            "is_target": false
+          },
+          {
+            "score": 0.007563612760200665,
+            "is_target": false
+          },
+          {
+            "score": 0.006969868178387244,
+            "is_target": false
+          },
+          {
+            "score": -0.014790488337295491,
+            "is_target": false
+          },
+          {
+            "score": -0.018398330652094834,
+            "is_target": false
+          },
+          {
+            "score": -0.019425310012210303,
+            "is_target": false
+          },
+          {
+            "score": -0.019901181678800825,
+            "is_target": false
+          },
+          {
+            "score": -0.028259163145533717,
+            "is_target": false
+          },
+          {
+            "score": -0.028846487225567614,
+            "is_target": false
+          },
+          {
+            "score": -0.043968669576911354,
+            "is_target": false
+          }
+        ]
+      }
+    ],
+    "prompt_baseline": {
+      "scenario_id": "s1-mysql-index-mid",
+      "note": "knowledge_context 长度 = 带知识 Prompt 与不带知识 Prompt 的字符差；variables 固定为该场景，只有 knowledge_context 随组合变化。",
+      "base_prompt_chars": 2426
+    }
+  },
+  "part_b_end_to_end": {
+    "scenarios": [
+      {
+        "scenario_id": "s1-mysql-index-mid",
+        "label": "后端开发工程师 · MySQL 索引 · 中级 · 项目阶段",
+        "declared": {
+          "query_topic": "MySQL 索引",
+          "top_k": 5,
+          "min_score": 0.25,
+          "expected_hit_sources": [
+            "handbook://mysql/index"
+          ],
+          "expected_chunk_count": 2,
+          "expected_excluded_sources": [
+            "handbook://spring/auto-configuration",
+            "handbook://redis/persistence-and-ha",
+            "handbook://jvm/memory-and-gc"
+          ]
+        },
+        "chunks_in_store": 32,
+        "expected_chunks_in_corpus": 2,
+        "base_prompt_chars": 2426,
+        "rows": [
+          {
+            "top_k": 3,
+            "min_score": 0.15,
+            "chunk_count": 3,
+            "scores": [
+              0.5476094267474777,
+              0.37796447300922753,
+              0.15653209603896637
+            ],
+            "avg_score": 0.360702,
+            "min_score_observed": 0.156532,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index",
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_hit_sources": [
+              "handbook://mysql/index"
+            ],
+            "expected_chunks_present": 2,
+            "target_hit": true,
+            "knowledge_context_chars": 1288,
+            "prompt_chars": 3714,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": true,
+            "coverage": "2/2",
+            "noise_chunks": 1
+          },
+          {
+            "top_k": 3,
+            "min_score": 0.25,
+            "chunk_count": 2,
+            "scores": [
+              0.5476094267474777,
+              0.37796447300922753
+            ],
+            "avg_score": 0.462787,
+            "min_score_observed": 0.377964,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "expected_hit_sources": [
+              "handbook://mysql/index"
+            ],
+            "expected_chunks_present": 2,
+            "target_hit": true,
+            "knowledge_context_chars": 781,
+            "prompt_chars": 3207,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": true,
+            "coverage": "2/2",
+            "noise_chunks": 0
+          },
+          {
+            "top_k": 3,
+            "min_score": 0.35,
+            "chunk_count": 2,
+            "scores": [
+              0.5476094267474777,
+              0.37796447300922753
+            ],
+            "avg_score": 0.462787,
+            "min_score_observed": 0.377964,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "expected_hit_sources": [
+              "handbook://mysql/index"
+            ],
+            "expected_chunks_present": 2,
+            "target_hit": true,
+            "knowledge_context_chars": 781,
+            "prompt_chars": 3207,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": true,
+            "coverage": "2/2",
+            "noise_chunks": 0
+          },
+          {
+            "top_k": 5,
+            "min_score": 0.15,
+            "chunk_count": 3,
+            "scores": [
+              0.5476094267474777,
+              0.37796447300922753,
+              0.15653209603896637
+            ],
+            "avg_score": 0.360702,
+            "min_score_observed": 0.156532,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index",
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_hit_sources": [
+              "handbook://mysql/index"
+            ],
+            "expected_chunks_present": 2,
+            "target_hit": true,
+            "knowledge_context_chars": 1288,
+            "prompt_chars": 3714,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": true,
+            "coverage": "2/2",
+            "noise_chunks": 1
+          },
+          {
+            "top_k": 5,
+            "min_score": 0.25,
+            "chunk_count": 2,
+            "scores": [
+              0.5476094267474777,
+              0.37796447300922753
+            ],
+            "avg_score": 0.462787,
+            "min_score_observed": 0.377964,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "expected_hit_sources": [
+              "handbook://mysql/index"
+            ],
+            "expected_chunks_present": 2,
+            "target_hit": true,
+            "knowledge_context_chars": 781,
+            "prompt_chars": 3207,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": true,
+            "coverage": "2/2",
+            "noise_chunks": 0
+          },
+          {
+            "top_k": 5,
+            "min_score": 0.35,
+            "chunk_count": 2,
+            "scores": [
+              0.5476094267474777,
+              0.37796447300922753
+            ],
+            "avg_score": 0.462787,
+            "min_score_observed": 0.377964,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "expected_hit_sources": [
+              "handbook://mysql/index"
+            ],
+            "expected_chunks_present": 2,
+            "target_hit": true,
+            "knowledge_context_chars": 781,
+            "prompt_chars": 3207,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": true,
+            "coverage": "2/2",
+            "noise_chunks": 0
+          },
+          {
+            "top_k": 8,
+            "min_score": 0.15,
+            "chunk_count": 3,
+            "scores": [
+              0.5476094267474777,
+              0.37796447300922753,
+              0.15653209603896637
+            ],
+            "avg_score": 0.360702,
+            "min_score_observed": 0.156532,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index",
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_hit_sources": [
+              "handbook://mysql/index"
+            ],
+            "expected_chunks_present": 2,
+            "target_hit": true,
+            "knowledge_context_chars": 1288,
+            "prompt_chars": 3714,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": true,
+            "coverage": "2/2",
+            "noise_chunks": 1
+          },
+          {
+            "top_k": 8,
+            "min_score": 0.25,
+            "chunk_count": 2,
+            "scores": [
+              0.5476094267474777,
+              0.37796447300922753
+            ],
+            "avg_score": 0.462787,
+            "min_score_observed": 0.377964,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "expected_hit_sources": [
+              "handbook://mysql/index"
+            ],
+            "expected_chunks_present": 2,
+            "target_hit": true,
+            "knowledge_context_chars": 781,
+            "prompt_chars": 3207,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": true,
+            "coverage": "2/2",
+            "noise_chunks": 0
+          },
+          {
+            "top_k": 8,
+            "min_score": 0.35,
+            "chunk_count": 2,
+            "scores": [
+              0.5476094267474777,
+              0.37796447300922753
+            ],
+            "avg_score": 0.462787,
+            "min_score_observed": 0.377964,
+            "sources": [
+              "handbook://mysql/index",
+              "handbook://mysql/index"
+            ],
+            "expected_hit_sources": [
+              "handbook://mysql/index"
+            ],
+            "expected_chunks_present": 2,
+            "target_hit": true,
+            "knowledge_context_chars": 781,
+            "prompt_chars": 3207,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": true,
+            "coverage": "2/2",
+            "noise_chunks": 0
+          }
+        ],
+        "full_scan": {
+          "candidate_count": 32,
+          "ordered": [
+            {
+              "score": 0.5476094267474777,
+              "is_target": true
+            },
+            {
+              "score": 0.37796447300922753,
+              "is_target": true
+            },
+            {
+              "score": 0.15653209603896637,
+              "is_target": false
+            },
+            {
+              "score": 0.13452328700008886,
+              "is_target": false
+            },
+            {
+              "score": 0.12547140330712397,
+              "is_target": false
+            },
+            {
+              "score": 0.11500717042366093,
+              "is_target": false
+            },
+            {
+              "score": 0.0842483934452596,
+              "is_target": false
+            },
+            {
+              "score": 0.08401680504168059,
+              "is_target": false
+            },
+            {
+              "score": 0.07977820578407535,
+              "is_target": false
+            },
+            {
+              "score": 0.07233642332556177,
+              "is_target": false
+            },
+            {
+              "score": 0.06537204504606137,
+              "is_target": false
+            },
+            {
+              "score": 0.06523280730534421,
+              "is_target": false
+            },
+            {
+              "score": 0.06240257203741473,
+              "is_target": false
+            },
+            {
+              "score": 0.058570741265742354,
+              "is_target": false
+            },
+            {
+              "score": 0.049346377121982636,
+              "is_target": false
+            },
+            {
+              "score": 0.048853196874603114,
+              "is_target": false
+            },
+            {
+              "score": 0.04680648595607228,
+              "is_target": false
+            },
+            {
+              "score": 0.043664375559957266,
+              "is_target": false
+            },
+            {
+              "score": 0.039283710065919304,
+              "is_target": false
+            },
+            {
+              "score": 0.03717611978224575,
+              "is_target": false
+            },
+            {
+              "score": 0.029411764705882363,
+              "is_target": false
+            },
+            {
+              "score": 0.028216632399155017,
+              "is_target": false
+            },
+            {
+              "score": 0.023287321641631137,
+              "is_target": false
+            },
+            {
+              "score": 0.016835875742536865,
+              "is_target": false
+            },
+            {
+              "score": 0.014052485682983559,
+              "is_target": false
+            },
+            {
+              "score": 0.013334518676566627,
+              "is_target": false
+            },
+            {
+              "score": 0.0,
+              "is_target": false
+            },
+            {
+              "score": 0.0,
+              "is_target": false
+            },
+            {
+              "score": 0.0,
+              "is_target": false
+            },
+            {
+              "score": 0.0,
+              "is_target": false
+            },
+            {
+              "score": -0.025125945381480327,
+              "is_target": false
+            },
+            {
+              "score": -0.07298103651688266,
+              "is_target": false
+            }
+          ]
+        }
+      },
+      {
+        "scenario_id": "s2-spring-boot-senior",
+        "label": "后端开发工程师（Java）· Spring Boot 自动配置 · 高级 · 技术阶段",
+        "declared": {
+          "query_topic": "Spring Boot 自动配置",
+          "top_k": 5,
+          "min_score": 0.25,
+          "expected_hit_sources": [
+            "handbook://spring/auto-configuration"
+          ],
+          "expected_chunk_count": 2,
+          "expected_excluded_sources": [
+            "handbook://spring/transaction",
+            "handbook://mysql/index",
+            "handbook://java/concurrency"
+          ]
+        },
+        "chunks_in_store": 32,
+        "expected_chunks_in_corpus": 2,
+        "base_prompt_chars": 2457,
+        "rows": [
+          {
+            "top_k": 3,
+            "min_score": 0.15,
+            "chunk_count": 2,
+            "scores": [
+              0.542934091091673,
+              0.33915287475109385
+            ],
+            "avg_score": 0.441043,
+            "min_score_observed": 0.339153,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_hit_sources": [
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_chunks_present": 2,
+            "target_hit": true,
+            "knowledge_context_chars": 1117,
+            "prompt_chars": 3574,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": true,
+            "coverage": "2/2",
+            "noise_chunks": 0
+          },
+          {
+            "top_k": 3,
+            "min_score": 0.25,
+            "chunk_count": 2,
+            "scores": [
+              0.542934091091673,
+              0.33915287475109385
+            ],
+            "avg_score": 0.441043,
+            "min_score_observed": 0.339153,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_hit_sources": [
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_chunks_present": 2,
+            "target_hit": true,
+            "knowledge_context_chars": 1117,
+            "prompt_chars": 3574,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": true,
+            "coverage": "2/2",
+            "noise_chunks": 0
+          },
+          {
+            "top_k": 3,
+            "min_score": 0.35,
+            "chunk_count": 1,
+            "scores": [
+              0.542934091091673
+            ],
+            "avg_score": 0.542934,
+            "min_score_observed": 0.542934,
+            "sources": [
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_hit_sources": [
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_chunks_present": 1,
+            "target_hit": true,
+            "knowledge_context_chars": 610,
+            "prompt_chars": 3067,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": false,
+            "coverage": "1/2",
+            "noise_chunks": 0
+          },
+          {
+            "top_k": 5,
+            "min_score": 0.15,
+            "chunk_count": 2,
+            "scores": [
+              0.542934091091673,
+              0.33915287475109385
+            ],
+            "avg_score": 0.441043,
+            "min_score_observed": 0.339153,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_hit_sources": [
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_chunks_present": 2,
+            "target_hit": true,
+            "knowledge_context_chars": 1117,
+            "prompt_chars": 3574,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": true,
+            "coverage": "2/2",
+            "noise_chunks": 0
+          },
+          {
+            "top_k": 5,
+            "min_score": 0.25,
+            "chunk_count": 2,
+            "scores": [
+              0.542934091091673,
+              0.33915287475109385
+            ],
+            "avg_score": 0.441043,
+            "min_score_observed": 0.339153,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_hit_sources": [
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_chunks_present": 2,
+            "target_hit": true,
+            "knowledge_context_chars": 1117,
+            "prompt_chars": 3574,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": true,
+            "coverage": "2/2",
+            "noise_chunks": 0
+          },
+          {
+            "top_k": 5,
+            "min_score": 0.35,
+            "chunk_count": 1,
+            "scores": [
+              0.542934091091673
+            ],
+            "avg_score": 0.542934,
+            "min_score_observed": 0.542934,
+            "sources": [
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_hit_sources": [
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_chunks_present": 1,
+            "target_hit": true,
+            "knowledge_context_chars": 610,
+            "prompt_chars": 3067,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": false,
+            "coverage": "1/2",
+            "noise_chunks": 0
+          },
+          {
+            "top_k": 8,
+            "min_score": 0.15,
+            "chunk_count": 2,
+            "scores": [
+              0.542934091091673,
+              0.33915287475109385
+            ],
+            "avg_score": 0.441043,
+            "min_score_observed": 0.339153,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_hit_sources": [
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_chunks_present": 2,
+            "target_hit": true,
+            "knowledge_context_chars": 1117,
+            "prompt_chars": 3574,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": true,
+            "coverage": "2/2",
+            "noise_chunks": 0
+          },
+          {
+            "top_k": 8,
+            "min_score": 0.25,
+            "chunk_count": 2,
+            "scores": [
+              0.542934091091673,
+              0.33915287475109385
+            ],
+            "avg_score": 0.441043,
+            "min_score_observed": 0.339153,
+            "sources": [
+              "handbook://spring/auto-configuration",
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_hit_sources": [
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_chunks_present": 2,
+            "target_hit": true,
+            "knowledge_context_chars": 1117,
+            "prompt_chars": 3574,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": true,
+            "coverage": "2/2",
+            "noise_chunks": 0
+          },
+          {
+            "top_k": 8,
+            "min_score": 0.35,
+            "chunk_count": 1,
+            "scores": [
+              0.542934091091673
+            ],
+            "avg_score": 0.542934,
+            "min_score_observed": 0.542934,
+            "sources": [
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_hit_sources": [
+              "handbook://spring/auto-configuration"
+            ],
+            "expected_chunks_present": 1,
+            "target_hit": true,
+            "knowledge_context_chars": 610,
+            "prompt_chars": 3067,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 2,
+            "target_full": false,
+            "coverage": "1/2",
+            "noise_chunks": 0
+          }
+        ],
+        "full_scan": {
+          "candidate_count": 32,
+          "ordered": [
+            {
+              "score": 0.542934091091673,
+              "is_target": true
+            },
+            {
+              "score": 0.33915287475109385,
+              "is_target": true
+            },
+            {
+              "score": 0.1382118686237242,
+              "is_target": false
+            },
+            {
+              "score": 0.12346308877860367,
+              "is_target": false
+            },
+            {
+              "score": 0.1005037815259213,
+              "is_target": false
+            },
+            {
+              "score": 0.09778647029482193,
+              "is_target": false
+            },
+            {
+              "score": 0.08509675283634703,
+              "is_target": false
+            },
+            {
+              "score": 0.08005135519325499,
+              "is_target": false
+            },
+            {
+              "score": 0.06833253147669942,
+              "is_target": false
+            },
+            {
+              "score": 0.06579516949597686,
+              "is_target": false
+            },
+            {
+              "score": 0.05824240056825374,
+              "is_target": false
+            },
+            {
+              "score": 0.04160576529428647,
+              "is_target": false
+            },
+            {
+              "score": 0.030400895015524062,
+              "is_target": false
+            },
+            {
+              "score": 0.029894063777797526,
+              "is_target": false
+            },
+            {
+              "score": 0.021744269101781403,
+              "is_target": false
+            },
+            {
+              "score": 0.01867040112037346,
+              "is_target": false
+            },
+            {
+              "score": 0.012935842095105543,
+              "is_target": false
+            },
+            {
+              "score": 0.006081753043073555,
+              "is_target": false
+            },
+            {
+              "score": 0.0,
+              "is_target": false
+            },
+            {
+              "score": 0.0,
+              "is_target": false
+            },
+            {
+              "score": 0.0,
+              "is_target": false
+            },
+            {
+              "score": -3.469446951953612e-18,
+              "is_target": false
+            },
+            {
+              "score": -3.469446951953614e-18,
+              "is_target": false
+            },
+            {
+              "score": -0.016594225052953868,
+              "is_target": false
+            },
+            {
+              "score": -0.018736647577311416,
+              "is_target": false
+            },
+            {
+              "score": -0.018811088266103344,
+              "is_target": false
+            },
+            {
+              "score": -0.01960784313725491,
+              "is_target": false
+            },
+            {
+              "score": -0.03268602252303068,
+              "is_target": false
+            },
+            {
+              "score": -0.03599661647706929,
+              "is_target": false
+            },
+            {
+              "score": -0.05018856132284958,
+              "is_target": false
+            },
+            {
+              "score": -0.0698619649248934,
+              "is_target": false
+            },
+            {
+              "score": -0.08142199479100519,
+              "is_target": false
+            }
+          ]
+        }
+      },
+      {
+        "scenario_id": "s3-cache-consistency-senior",
+        "label": "后端架构师 · 分布式缓存一致性 · 高级 · 场景阶段",
+        "declared": {
+          "query_topic": "分布式缓存一致性",
+          "top_k": 5,
+          "min_score": 0.4,
+          "expected_hit_sources": [
+            "handbook://architecture/cache-consistency"
+          ],
+          "expected_chunk_count": 1,
+          "expected_excluded_sources": [
+            "handbook://redis/persistence-and-ha",
+            "handbook://mysql/index",
+            "handbook://redis/data-structures"
+          ]
+        },
+        "chunks_in_store": 32,
+        "expected_chunks_in_corpus": 1,
+        "base_prompt_chars": 2449,
+        "rows": [
+          {
+            "top_k": 3,
+            "min_score": 0.15,
+            "chunk_count": 3,
+            "scores": [
+              0.4239815085282628,
+              0.3607709853146894,
+              0.30612961627280444
+            ],
+            "avg_score": 0.363627,
+            "min_score_observed": 0.30613,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache",
+              "handbook://redis/data-structures"
+            ],
+            "expected_hit_sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "expected_chunks_present": 1,
+            "target_hit": true,
+            "knowledge_context_chars": 1598,
+            "prompt_chars": 4047,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 1,
+            "target_full": true,
+            "coverage": "1/1",
+            "noise_chunks": 2
+          },
+          {
+            "top_k": 3,
+            "min_score": 0.25,
+            "chunk_count": 3,
+            "scores": [
+              0.4239815085282628,
+              0.3607709853146894,
+              0.30612961627280444
+            ],
+            "avg_score": 0.363627,
+            "min_score_observed": 0.30613,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache",
+              "handbook://redis/data-structures"
+            ],
+            "expected_hit_sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "expected_chunks_present": 1,
+            "target_hit": true,
+            "knowledge_context_chars": 1598,
+            "prompt_chars": 4047,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 1,
+            "target_full": true,
+            "coverage": "1/1",
+            "noise_chunks": 2
+          },
+          {
+            "top_k": 3,
+            "min_score": 0.35,
+            "chunk_count": 2,
+            "scores": [
+              0.4239815085282628,
+              0.3607709853146894
+            ],
+            "avg_score": 0.392376,
+            "min_score_observed": 0.360771,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache"
+            ],
+            "expected_hit_sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "expected_chunks_present": 1,
+            "target_hit": true,
+            "knowledge_context_chars": 1104,
+            "prompt_chars": 3553,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 1,
+            "target_full": true,
+            "coverage": "1/1",
+            "noise_chunks": 1
+          },
+          {
+            "top_k": 5,
+            "min_score": 0.15,
+            "chunk_count": 5,
+            "scores": [
+              0.4239815085282628,
+              0.3607709853146894,
+              0.30612961627280444,
+              0.25135148715187255,
+              0.24902912254587597
+            ],
+            "avg_score": 0.318253,
+            "min_score_observed": 0.249029,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache",
+              "handbook://redis/data-structures",
+              "resume://project/payment-gateway",
+              "resume://project/order-middle-cache"
+            ],
+            "expected_hit_sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "expected_chunks_present": 1,
+            "target_hit": true,
+            "knowledge_context_chars": 2303,
+            "prompt_chars": 4752,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 1,
+            "target_full": true,
+            "coverage": "1/1",
+            "noise_chunks": 4
+          },
+          {
+            "top_k": 5,
+            "min_score": 0.25,
+            "chunk_count": 4,
+            "scores": [
+              0.4239815085282628,
+              0.3607709853146894,
+              0.30612961627280444,
+              0.25135148715187255
+            ],
+            "avg_score": 0.335558,
+            "min_score_observed": 0.251351,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache",
+              "handbook://redis/data-structures",
+              "resume://project/payment-gateway"
+            ],
+            "expected_hit_sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "expected_chunks_present": 1,
+            "target_hit": true,
+            "knowledge_context_chars": 2098,
+            "prompt_chars": 4547,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 1,
+            "target_full": true,
+            "coverage": "1/1",
+            "noise_chunks": 3
+          },
+          {
+            "top_k": 5,
+            "min_score": 0.35,
+            "chunk_count": 2,
+            "scores": [
+              0.4239815085282628,
+              0.3607709853146894
+            ],
+            "avg_score": 0.392376,
+            "min_score_observed": 0.360771,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache"
+            ],
+            "expected_hit_sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "expected_chunks_present": 1,
+            "target_hit": true,
+            "knowledge_context_chars": 1104,
+            "prompt_chars": 3553,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 1,
+            "target_full": true,
+            "coverage": "1/1",
+            "noise_chunks": 1
+          },
+          {
+            "top_k": 8,
+            "min_score": 0.15,
+            "chunk_count": 8,
+            "scores": [
+              0.4239815085282628,
+              0.3607709853146894,
+              0.30612961627280444,
+              0.25135148715187255,
+              0.24902912254587597,
+              0.24343224778007383,
+              0.2315584223237444,
+              0.15149014837450064
+            ],
+            "avg_score": 0.277218,
+            "min_score_observed": 0.15149,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache",
+              "handbook://redis/data-structures",
+              "resume://project/payment-gateway",
+              "resume://project/order-middle-cache",
+              "handbook://network/http-and-https",
+              "resume://project/log-platform",
+              "resume://project/seckill"
+            ],
+            "expected_hit_sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "expected_chunks_present": 1,
+            "target_hit": true,
+            "knowledge_context_chars": 3662,
+            "prompt_chars": 6111,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 1,
+            "target_full": true,
+            "coverage": "1/1",
+            "noise_chunks": 7
+          },
+          {
+            "top_k": 8,
+            "min_score": 0.25,
+            "chunk_count": 4,
+            "scores": [
+              0.4239815085282628,
+              0.3607709853146894,
+              0.30612961627280444,
+              0.25135148715187255
+            ],
+            "avg_score": 0.335558,
+            "min_score_observed": 0.251351,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache",
+              "handbook://redis/data-structures",
+              "resume://project/payment-gateway"
+            ],
+            "expected_hit_sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "expected_chunks_present": 1,
+            "target_hit": true,
+            "knowledge_context_chars": 2098,
+            "prompt_chars": 4547,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 1,
+            "target_full": true,
+            "coverage": "1/1",
+            "noise_chunks": 3
+          },
+          {
+            "top_k": 8,
+            "min_score": 0.35,
+            "chunk_count": 2,
+            "scores": [
+              0.4239815085282628,
+              0.3607709853146894
+            ],
+            "avg_score": 0.392376,
+            "min_score_observed": 0.360771,
+            "sources": [
+              "handbook://architecture/cache-consistency",
+              "resume://project/order-middle-cache"
+            ],
+            "expected_hit_sources": [
+              "handbook://architecture/cache-consistency"
+            ],
+            "expected_chunks_present": 1,
+            "target_hit": true,
+            "knowledge_context_chars": 1104,
+            "prompt_chars": 3553,
+            "prompt_template": "question_knowledge",
+            "agent_calls": 1,
+            "ok": true,
+            "warnings": [],
+            "expected_chunks_in_corpus": 1,
+            "target_full": true,
+            "coverage": "1/1",
+            "noise_chunks": 1
+          }
+        ],
+        "full_scan": {
+          "candidate_count": 32,
+          "ordered": [
+            {
+              "score": 0.4239815085282628,
+              "is_target": true
+            },
+            {
+              "score": 0.3607709853146894,
+              "is_target": false
+            },
+            {
+              "score": 0.30612961627280444,
+              "is_target": false
+            },
+            {
+              "score": 0.25135148715187255,
+              "is_target": false
+            },
+            {
+              "score": 0.24902912254587597,
+              "is_target": false
+            },
+            {
+              "score": 0.24343224778007383,
+              "is_target": false
+            },
+            {
+              "score": 0.2315584223237444,
+              "is_target": false
+            },
+            {
+              "score": 0.15149014837450064,
+              "is_target": false
+            },
+            {
+              "score": 0.1253777223579298,
+              "is_target": false
+            },
+            {
+              "score": 0.1235289843295134,
+              "is_target": false
+            },
+            {
+              "score": 0.09018054180632275,
+              "is_target": false
+            },
+            {
+              "score": 0.08997682018263153,
+              "is_target": false
+            },
+            {
+              "score": 0.08829688835535404,
+              "is_target": false
+            },
+            {
+              "score": 0.08677218312746247,
+              "is_target": false
+            },
+            {
+              "score": 0.07624023963745304,
+              "is_target": false
+            },
+            {
+              "score": 0.07595545253127502,
+              "is_target": false
+            },
+            {
+              "score": 0.07285503157865601,
+              "is_target": false
+            },
+            {
+              "score": 0.06399221901922218,
+              "is_target": false
+            },
+            {
+              "score": 0.050529115263991134,
+              "is_target": false
+            },
+            {
+              "score": 0.04536870109944872,
+              "is_target": false
+            },
+            {
+              "score": 0.04354003441841079,
+              "is_target": false
+            },
+            {
+              "score": 0.03892494720807618,
+              "is_target": false
+            },
+            {
+              "score": 0.03607656355832518,
+              "is_target": false
+            },
+            {
+              "score": 0.027882859227100976,
+              "is_target": false
+            },
+            {
+              "score": 0.025917261623134142,
+              "is_target": false
+            },
+            {
+              "score": 0.02020820670352857,
+              "is_target": false
+            },
+            {
+              "score": 0.015188169985127132,
+              "is_target": false
+            },
+            {
+              "score": 0.0,
+              "is_target": false
+            },
+            {
+              "score": -0.0080569218045493,
+              "is_target": false
+            },
+            {
+              "score": -0.017388017698576723,
+              "is_target": false
+            },
+            {
+              "score": -0.041197288318937604,
+              "is_target": false
+            },
+            {
+              "score": -0.07250947216849345,
+              "is_target": false
+            }
+          ]
+        }
+      }
+    ],
+    "combos": [
+      {
+        "top_k": 3,
+        "min_score": 0.15,
+        "total_chunks": 8,
+        "total_noise_chunks": 3,
+        "scenarios_target_hit": 3,
+        "scenarios_target_full": 3,
+        "coverage": [
+          "2/2",
+          "2/2",
+          "1/1"
+        ],
+        "mean_avg_score": 0.388457,
+        "mean_min_score": 0.267272,
+        "total_knowledge_context_chars": 4003,
+        "total_prompt_chars": 11335,
+        "all_ok": true,
+        "scenarios": 3
+      },
+      {
+        "top_k": 3,
+        "min_score": 0.25,
+        "total_chunks": 7,
+        "total_noise_chunks": 2,
+        "scenarios_target_hit": 3,
+        "scenarios_target_full": 3,
+        "coverage": [
+          "2/2",
+          "2/2",
+          "1/1"
+        ],
+        "mean_avg_score": 0.422486,
+        "mean_min_score": 0.341082,
+        "total_knowledge_context_chars": 3496,
+        "total_prompt_chars": 10828,
+        "all_ok": true,
+        "scenarios": 3
+      },
+      {
+        "top_k": 3,
+        "min_score": 0.35,
+        "total_chunks": 5,
+        "total_noise_chunks": 1,
+        "scenarios_target_hit": 3,
+        "scenarios_target_full": 2,
+        "coverage": [
+          "2/2",
+          "1/2",
+          "1/1"
+        ],
+        "mean_avg_score": 0.466032,
+        "mean_min_score": 0.427223,
+        "total_knowledge_context_chars": 2495,
+        "total_prompt_chars": 9827,
+        "all_ok": true,
+        "scenarios": 3
+      },
+      {
+        "top_k": 5,
+        "min_score": 0.15,
+        "total_chunks": 10,
+        "total_noise_chunks": 5,
+        "scenarios_target_hit": 3,
+        "scenarios_target_full": 3,
+        "coverage": [
+          "2/2",
+          "2/2",
+          "1/1"
+        ],
+        "mean_avg_score": 0.373333,
+        "mean_min_score": 0.248238,
+        "total_knowledge_context_chars": 4708,
+        "total_prompt_chars": 12040,
+        "all_ok": true,
+        "scenarios": 3
+      },
+      {
+        "top_k": 5,
+        "min_score": 0.25,
+        "total_chunks": 8,
+        "total_noise_chunks": 3,
+        "scenarios_target_hit": 3,
+        "scenarios_target_full": 3,
+        "coverage": [
+          "2/2",
+          "2/2",
+          "1/1"
+        ],
+        "mean_avg_score": 0.413129,
+        "mean_min_score": 0.322823,
+        "total_knowledge_context_chars": 3996,
+        "total_prompt_chars": 11328,
+        "all_ok": true,
+        "scenarios": 3
+      },
+      {
+        "top_k": 5,
+        "min_score": 0.35,
+        "total_chunks": 5,
+        "total_noise_chunks": 1,
+        "scenarios_target_hit": 3,
+        "scenarios_target_full": 2,
+        "coverage": [
+          "2/2",
+          "1/2",
+          "1/1"
+        ],
+        "mean_avg_score": 0.466032,
+        "mean_min_score": 0.427223,
+        "total_knowledge_context_chars": 2495,
+        "total_prompt_chars": 9827,
+        "all_ok": true,
+        "scenarios": 3
+      },
+      {
+        "top_k": 8,
+        "min_score": 0.15,
+        "total_chunks": 13,
+        "total_noise_chunks": 8,
+        "scenarios_target_hit": 3,
+        "scenarios_target_full": 3,
+        "coverage": [
+          "2/2",
+          "2/2",
+          "1/1"
+        ],
+        "mean_avg_score": 0.359654,
+        "mean_min_score": 0.215725,
+        "total_knowledge_context_chars": 6067,
+        "total_prompt_chars": 13399,
+        "all_ok": true,
+        "scenarios": 3
+      },
+      {
+        "top_k": 8,
+        "min_score": 0.25,
+        "total_chunks": 8,
+        "total_noise_chunks": 3,
+        "scenarios_target_hit": 3,
+        "scenarios_target_full": 3,
+        "coverage": [
+          "2/2",
+          "2/2",
+          "1/1"
+        ],
+        "mean_avg_score": 0.413129,
+        "mean_min_score": 0.322823,
+        "total_knowledge_context_chars": 3996,
+        "total_prompt_chars": 11328,
+        "all_ok": true,
+        "scenarios": 3
+      },
+      {
+        "top_k": 8,
+        "min_score": 0.35,
+        "total_chunks": 5,
+        "total_noise_chunks": 1,
+        "scenarios_target_hit": 3,
+        "scenarios_target_full": 2,
+        "coverage": [
+          "2/2",
+          "1/2",
+          "1/1"
+        ],
+        "mean_avg_score": 0.466032,
+        "mean_min_score": 0.427223,
+        "total_knowledge_context_chars": 2495,
+        "total_prompt_chars": 9827,
+        "all_ok": true,
+        "scenarios": 3
+      }
+    ]
+  },
+  "feasibility_bands": {
+    "part_a": {
+      "label": "Part A（16 条固定 query）",
+      "units": 16,
+      "recall_ceiling": 0.118393,
+      "recall_ceiling_exact": 0.11839287208668638,
+      "recall_ceiling_binding": "秒杀系统怎么做限流和降级",
+      "zero_noise_floor": 0.308999,
+      "zero_noise_floor_exact": 0.30899874755199314,
+      "zero_noise_floor_binding": "HTTP 的强缓存和协商缓存有什么区别",
+      "has_clean_band": false,
+      "clean_band": null,
+      "clean_band_note": "无：噪声最高分 0.308999 >= 目标最低分 0.118393 ⇒ 单一全局阈值无法「既保住全部目标、又清零噪声」",
+      "optimum_at_recall_ceiling": {
+        "min_score": 0.118393,
+        "total_chunks": 47,
+        "target_chunks": 16,
+        "noise_chunks": 31,
+        "required_top_k": 1,
+        "required_top_k_binding": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+        "recall_failed_units": []
+      }
+    },
+    "part_b": {
+      "label": "Part B（3 个基准场景）",
+      "units": 3,
+      "recall_ceiling": 0.339153,
+      "recall_ceiling_exact": 0.33915287475109385,
+      "recall_ceiling_binding": "s2-spring-boot-senior",
+      "zero_noise_floor": 0.360771,
+      "zero_noise_floor_exact": 0.3607709853146894,
+      "zero_noise_floor_binding": "s3-cache-consistency-senior",
+      "has_clean_band": false,
+      "clean_band": null,
+      "clean_band_note": "无：噪声最高分 0.360771 >= 目标最低分 0.339153 ⇒ 单一全局阈值无法「既保住全部目标、又清零噪声」",
+      "optimum_at_recall_ceiling": {
+        "min_score": 0.339153,
+        "total_chunks": 6,
+        "target_chunks": 5,
+        "noise_chunks": 1,
+        "required_top_k": 2,
+        "required_top_k_binding": "s1-mysql-index-mid",
+        "recall_failed_units": []
+      }
+    },
+    "combined": {
+      "recall_ceiling": 0.118393,
+      "recall_ceiling_exact": 0.11839287208668638,
+      "zero_noise_floor": 0.360771,
+      "zero_noise_floor_exact": 0.3607709853146894,
+      "has_clean_band": false,
+      "clean_band": null
+    },
+    "recommended_min_score": 0.118393,
+    "recommended_min_score_exact": 0.11839287208668638,
+    "recommended_strategy": "无干净带 ⇒ **优先保召回**，取召回上界（接受残余噪声）",
+    "boundary_probes": [
+      {
+        "label": "recommended",
+        "min_score": 0.118393,
+        "min_score_exact": 0.11839287208668638,
+        "part_a": {
+          "min_score": 0.118393,
+          "required_top_k": 1,
+          "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "recall_failed_units": []
+        },
+        "part_b": {
+          "min_score": 0.118393,
+          "required_top_k": 2,
+          "binding_unit": "s1-mysql-index-mid",
+          "recall_failed_units": []
+        }
+      },
+      {
+        "label": "recall_ceiling",
+        "min_score": 0.118393,
+        "min_score_exact": 0.11839287208668638,
+        "part_a": {
+          "min_score": 0.118393,
+          "required_top_k": 1,
+          "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "recall_failed_units": []
+        },
+        "part_b": {
+          "min_score": 0.118393,
+          "required_top_k": 2,
+          "binding_unit": "s1-mysql-index-mid",
+          "recall_failed_units": []
+        }
+      },
+      {
+        "label": "zero_noise_floor",
+        "min_score": 0.360771,
+        "min_score_exact": 0.3607709853146894,
+        "part_a": {
+          "min_score": 0.360771,
+          "required_top_k": null,
+          "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "recall_failed_units": [
+            "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+            "Redis 的 RDB 和 AOF 持久化有什么区别",
+            "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+            "JVM 垃圾回收算法和常见收集器",
+            "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+            "Kafka 怎么保证消息不重复消费、幂等生产",
+            "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+            "Java 后端工程师的岗位职责和任职要求",
+            "大数据开发工程师需要熟悉哪些计算引擎",
+            "订单中台的缓存击穿是怎么治理的",
+            "支付网关怎么做到幂等和日终对账",
+            "秒杀系统怎么做限流和降级"
+          ]
+        },
+        "part_b": {
+          "min_score": 0.360771,
+          "required_top_k": 2,
+          "binding_unit": "s1-mysql-index-mid",
+          "recall_failed_units": []
+        }
+      }
+    ],
+    "top_k_requirement_grid": [
+      {
+        "top_k": 3,
+        "min_score": 0.15,
+        "part_a": {
+          "min_score": 0.15,
+          "required_top_k": null,
+          "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "recall_failed_units": [
+            "秒杀系统怎么做限流和降级"
+          ]
+        },
+        "part_b": {
+          "min_score": 0.15,
+          "required_top_k": 2,
+          "binding_unit": "s1-mysql-index-mid",
+          "recall_failed_units": []
+        }
+      },
+      {
+        "top_k": 3,
+        "min_score": 0.25,
+        "part_a": {
+          "min_score": 0.25,
+          "required_top_k": null,
+          "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "recall_failed_units": [
+            "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+            "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+            "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+            "支付网关怎么做到幂等和日终对账",
+            "秒杀系统怎么做限流和降级"
+          ]
+        },
+        "part_b": {
+          "min_score": 0.25,
+          "required_top_k": 2,
+          "binding_unit": "s1-mysql-index-mid",
+          "recall_failed_units": []
+        }
+      },
+      {
+        "top_k": 3,
+        "min_score": 0.35,
+        "part_a": {
+          "min_score": 0.35,
+          "required_top_k": null,
+          "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "recall_failed_units": [
+            "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+            "Redis 的 RDB 和 AOF 持久化有什么区别",
+            "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+            "JVM 垃圾回收算法和常见收集器",
+            "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+            "Kafka 怎么保证消息不重复消费、幂等生产",
+            "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+            "Java 后端工程师的岗位职责和任职要求",
+            "大数据开发工程师需要熟悉哪些计算引擎",
+            "订单中台的缓存击穿是怎么治理的",
+            "支付网关怎么做到幂等和日终对账",
+            "秒杀系统怎么做限流和降级"
+          ]
+        },
+        "part_b": {
+          "min_score": 0.35,
+          "required_top_k": 2,
+          "binding_unit": "s1-mysql-index-mid",
+          "recall_failed_units": []
+        }
+      },
+      {
+        "top_k": 5,
+        "min_score": 0.15,
+        "part_a": {
+          "min_score": 0.15,
+          "required_top_k": null,
+          "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "recall_failed_units": [
+            "秒杀系统怎么做限流和降级"
+          ]
+        },
+        "part_b": {
+          "min_score": 0.15,
+          "required_top_k": 2,
+          "binding_unit": "s1-mysql-index-mid",
+          "recall_failed_units": []
+        }
+      },
+      {
+        "top_k": 5,
+        "min_score": 0.25,
+        "part_a": {
+          "min_score": 0.25,
+          "required_top_k": null,
+          "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "recall_failed_units": [
+            "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+            "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+            "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+            "支付网关怎么做到幂等和日终对账",
+            "秒杀系统怎么做限流和降级"
+          ]
+        },
+        "part_b": {
+          "min_score": 0.25,
+          "required_top_k": 2,
+          "binding_unit": "s1-mysql-index-mid",
+          "recall_failed_units": []
+        }
+      },
+      {
+        "top_k": 5,
+        "min_score": 0.35,
+        "part_a": {
+          "min_score": 0.35,
+          "required_top_k": null,
+          "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "recall_failed_units": [
+            "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+            "Redis 的 RDB 和 AOF 持久化有什么区别",
+            "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+            "JVM 垃圾回收算法和常见收集器",
+            "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+            "Kafka 怎么保证消息不重复消费、幂等生产",
+            "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+            "Java 后端工程师的岗位职责和任职要求",
+            "大数据开发工程师需要熟悉哪些计算引擎",
+            "订单中台的缓存击穿是怎么治理的",
+            "支付网关怎么做到幂等和日终对账",
+            "秒杀系统怎么做限流和降级"
+          ]
+        },
+        "part_b": {
+          "min_score": 0.35,
+          "required_top_k": 2,
+          "binding_unit": "s1-mysql-index-mid",
+          "recall_failed_units": []
+        }
+      },
+      {
+        "top_k": 8,
+        "min_score": 0.15,
+        "part_a": {
+          "min_score": 0.15,
+          "required_top_k": null,
+          "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "recall_failed_units": [
+            "秒杀系统怎么做限流和降级"
+          ]
+        },
+        "part_b": {
+          "min_score": 0.15,
+          "required_top_k": 2,
+          "binding_unit": "s1-mysql-index-mid",
+          "recall_failed_units": []
+        }
+      },
+      {
+        "top_k": 8,
+        "min_score": 0.25,
+        "part_a": {
+          "min_score": 0.25,
+          "required_top_k": null,
+          "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "recall_failed_units": [
+            "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+            "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+            "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+            "支付网关怎么做到幂等和日终对账",
+            "秒杀系统怎么做限流和降级"
+          ]
+        },
+        "part_b": {
+          "min_score": 0.25,
+          "required_top_k": 2,
+          "binding_unit": "s1-mysql-index-mid",
+          "recall_failed_units": []
+        }
+      },
+      {
+        "top_k": 8,
+        "min_score": 0.35,
+        "part_a": {
+          "min_score": 0.35,
+          "required_top_k": null,
+          "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "recall_failed_units": [
+            "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+            "Redis 的 RDB 和 AOF 持久化有什么区别",
+            "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+            "JVM 垃圾回收算法和常见收集器",
+            "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+            "Kafka 怎么保证消息不重复消费、幂等生产",
+            "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+            "Java 后端工程师的岗位职责和任职要求",
+            "大数据开发工程师需要熟悉哪些计算引擎",
+            "订单中台的缓存击穿是怎么治理的",
+            "支付网关怎么做到幂等和日终对账",
+            "秒杀系统怎么做限流和降级"
+          ]
+        },
+        "part_b": {
+          "min_score": 0.35,
+          "required_top_k": 2,
+          "binding_unit": "s1-mysql-index-mid",
+          "recall_failed_units": []
+        }
+      }
+    ],
+    "profile_by_min_score": [
+      {
+        "min_score": 0.15,
+        "part_a": {
+          "min_score": 0.15,
+          "total_chunks": 31,
+          "target_chunks": 15,
+          "noise_chunks": 16,
+          "required_top_k": null,
+          "required_top_k_binding": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "recall_failed_units": [
+            "秒杀系统怎么做限流和降级"
+          ]
+        },
+        "part_b": {
+          "min_score": 0.15,
+          "total_chunks": 13,
+          "target_chunks": 5,
+          "noise_chunks": 8,
+          "required_top_k": 2,
+          "required_top_k_binding": "s1-mysql-index-mid",
+          "recall_failed_units": []
+        }
+      },
+      {
+        "min_score": 0.25,
+        "part_a": {
+          "min_score": 0.25,
+          "total_chunks": 14,
+          "target_chunks": 11,
+          "noise_chunks": 3,
+          "required_top_k": null,
+          "required_top_k_binding": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "recall_failed_units": [
+            "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+            "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+            "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+            "支付网关怎么做到幂等和日终对账",
+            "秒杀系统怎么做限流和降级"
+          ]
+        },
+        "part_b": {
+          "min_score": 0.25,
+          "total_chunks": 8,
+          "target_chunks": 5,
+          "noise_chunks": 3,
+          "required_top_k": 2,
+          "required_top_k_binding": "s1-mysql-index-mid",
+          "recall_failed_units": []
+        }
+      },
+      {
+        "min_score": 0.35,
+        "part_a": {
+          "min_score": 0.35,
+          "total_chunks": 4,
+          "target_chunks": 4,
+          "noise_chunks": 0,
+          "required_top_k": null,
+          "required_top_k_binding": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "recall_failed_units": [
+            "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+            "Redis 的 RDB 和 AOF 持久化有什么区别",
+            "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+            "JVM 垃圾回收算法和常见收集器",
+            "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+            "Kafka 怎么保证消息不重复消费、幂等生产",
+            "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+            "Java 后端工程师的岗位职责和任职要求",
+            "大数据开发工程师需要熟悉哪些计算引擎",
+            "订单中台的缓存击穿是怎么治理的",
+            "支付网关怎么做到幂等和日终对账",
+            "秒杀系统怎么做限流和降级"
+          ]
+        },
+        "part_b": {
+          "min_score": 0.35,
+          "total_chunks": 5,
+          "target_chunks": 4,
+          "noise_chunks": 1,
+          "required_top_k": 2,
+          "required_top_k_binding": "s1-mysql-index-mid",
+          "recall_failed_units": []
+        }
+      }
+    ]
+  },
+  "recommendation": {
+    "criteria": {
+      "A": "Part A 16 条 query 全部检回目标 chunk（target_hit_queries == 16）",
+      "B": "Part B 3 个场景全部覆盖全部期望来源片（scenarios_target_full == 3）",
+      "tie_break": "满足 A/B 后，按 (Part A 总条数 + Part B 总条数) 升序；越少越好"
+    },
+    "grid_conclusion": {
+      "feasible_combos": [],
+      "feasible_count": 0,
+      "total": 9,
+      "verdict": "9/9 不可行（全部败在硬约束 A）"
+    },
+    "evaluated": [
+      {
+        "top_k": 3,
+        "min_score": 0.15,
+        "constraint_a_target_recall": false,
+        "constraint_b_scenario_coverage": true,
+        "feasible": false,
+        "a_hit_n": 15,
+        "a_total_n": 16,
+        "b_full_n": 3,
+        "b_total_n": 3,
+        "a_target_hit": "15/16",
+        "b_target_full": "3/3",
+        "total_chunks_a": 26,
+        "total_chunks_b": 8,
+        "total_noise_chunks_b": 3,
+        "total_knowledge_context_chars": 15606
+      },
+      {
+        "top_k": 3,
+        "min_score": 0.25,
+        "constraint_a_target_recall": false,
+        "constraint_b_scenario_coverage": true,
+        "feasible": false,
+        "a_hit_n": 11,
+        "a_total_n": 16,
+        "b_full_n": 3,
+        "b_total_n": 3,
+        "a_target_hit": "11/16",
+        "b_target_full": "3/3",
+        "total_chunks_a": 14,
+        "total_chunks_b": 7,
+        "total_noise_chunks_b": 2,
+        "total_knowledge_context_chars": 10135
+      },
+      {
+        "top_k": 3,
+        "min_score": 0.35,
+        "constraint_a_target_recall": false,
+        "constraint_b_scenario_coverage": false,
+        "feasible": false,
+        "a_hit_n": 4,
+        "a_total_n": 16,
+        "b_full_n": 2,
+        "b_total_n": 3,
+        "a_target_hit": "4/16",
+        "b_target_full": "2/3",
+        "total_chunks_a": 4,
+        "total_chunks_b": 5,
+        "total_noise_chunks_b": 1,
+        "total_knowledge_context_chars": 4507
+      },
+      {
+        "top_k": 5,
+        "min_score": 0.15,
+        "constraint_a_target_recall": false,
+        "constraint_b_scenario_coverage": true,
+        "feasible": false,
+        "a_hit_n": 15,
+        "a_total_n": 16,
+        "b_full_n": 3,
+        "b_total_n": 3,
+        "a_target_hit": "15/16",
+        "b_target_full": "3/3",
+        "total_chunks_a": 29,
+        "total_chunks_b": 10,
+        "total_noise_chunks_b": 5,
+        "total_knowledge_context_chars": 17362
+      },
+      {
+        "top_k": 5,
+        "min_score": 0.25,
+        "constraint_a_target_recall": false,
+        "constraint_b_scenario_coverage": true,
+        "feasible": false,
+        "a_hit_n": 11,
+        "a_total_n": 16,
+        "b_full_n": 3,
+        "b_total_n": 3,
+        "a_target_hit": "11/16",
+        "b_target_full": "3/3",
+        "total_chunks_a": 14,
+        "total_chunks_b": 8,
+        "total_noise_chunks_b": 3,
+        "total_knowledge_context_chars": 10635
+      },
+      {
+        "top_k": 5,
+        "min_score": 0.35,
+        "constraint_a_target_recall": false,
+        "constraint_b_scenario_coverage": false,
+        "feasible": false,
+        "a_hit_n": 4,
+        "a_total_n": 16,
+        "b_full_n": 2,
+        "b_total_n": 3,
+        "a_target_hit": "4/16",
+        "b_target_full": "2/3",
+        "total_chunks_a": 4,
+        "total_chunks_b": 5,
+        "total_noise_chunks_b": 1,
+        "total_knowledge_context_chars": 4507
+      },
+      {
+        "top_k": 8,
+        "min_score": 0.15,
+        "constraint_a_target_recall": false,
+        "constraint_b_scenario_coverage": true,
+        "feasible": false,
+        "a_hit_n": 15,
+        "a_total_n": 16,
+        "b_full_n": 3,
+        "b_total_n": 3,
+        "a_target_hit": "15/16",
+        "b_target_full": "3/3",
+        "total_chunks_a": 31,
+        "total_chunks_b": 13,
+        "total_noise_chunks_b": 8,
+        "total_knowledge_context_chars": 19453
+      },
+      {
+        "top_k": 8,
+        "min_score": 0.25,
+        "constraint_a_target_recall": false,
+        "constraint_b_scenario_coverage": true,
+        "feasible": false,
+        "a_hit_n": 11,
+        "a_total_n": 16,
+        "b_full_n": 3,
+        "b_total_n": 3,
+        "a_target_hit": "11/16",
+        "b_target_full": "3/3",
+        "total_chunks_a": 14,
+        "total_chunks_b": 8,
+        "total_noise_chunks_b": 3,
+        "total_knowledge_context_chars": 10635
+      },
+      {
+        "top_k": 8,
+        "min_score": 0.35,
+        "constraint_a_target_recall": false,
+        "constraint_b_scenario_coverage": false,
+        "feasible": false,
+        "a_hit_n": 4,
+        "a_total_n": 16,
+        "b_full_n": 2,
+        "b_total_n": 3,
+        "a_target_hit": "4/16",
+        "b_target_full": "2/3",
+        "total_chunks_a": 4,
+        "total_chunks_b": 5,
+        "total_noise_chunks_b": 1,
+        "total_knowledge_context_chars": 4507
+      }
+    ],
+    "threshold_loss_profile": [
+      {
+        "min_score": 0.15,
+        "part_a_target_hit": "15/16",
+        "part_b_target_full": "3/3",
+        "part_a_lost_queries": 1,
+        "part_b_lost_scenarios": 0,
+        "recall_independent_of_top_k": true,
+        "chunks_by_top_k": {
+          "3": [
+            26,
+            8
+          ],
+          "5": [
+            29,
+            10
+          ],
+          "8": [
+            31,
+            13
+          ]
+        },
+        "context_chars_by_top_k": {
+          "3": 15606,
+          "5": 17362,
+          "8": 19453
+        }
+      },
+      {
+        "min_score": 0.25,
+        "part_a_target_hit": "11/16",
+        "part_b_target_full": "3/3",
+        "part_a_lost_queries": 5,
+        "part_b_lost_scenarios": 0,
+        "recall_independent_of_top_k": true,
+        "chunks_by_top_k": {
+          "3": [
+            14,
+            7
+          ],
+          "5": [
+            14,
+            8
+          ],
+          "8": [
+            14,
+            8
+          ]
+        },
+        "context_chars_by_top_k": {
+          "3": 10135,
+          "5": 10635,
+          "8": 10635
+        }
+      },
+      {
+        "min_score": 0.35,
+        "part_a_target_hit": "4/16",
+        "part_b_target_full": "2/3",
+        "part_a_lost_queries": 12,
+        "part_b_lost_scenarios": 1,
+        "recall_independent_of_top_k": true,
+        "chunks_by_top_k": {
+          "3": [
+            4,
+            5
+          ],
+          "5": [
+            4,
+            5
+          ],
+          "8": [
+            4,
+            5
+          ]
+        },
+        "context_chars_by_top_k": {
+          "3": 4507,
+          "5": 4507,
+          "8": 4507
+        }
+      }
+    ],
+    "top_k_effect": [
+      {
+        "min_score": 0.15,
+        "recall_by_top_k": {
+          "3": [
+            15,
+            3
+          ],
+          "5": [
+            15,
+            3
+          ],
+          "8": [
+            15,
+            3
+          ]
+        },
+        "chunks_by_top_k": {
+          "3": [
+            26,
+            8
+          ],
+          "5": [
+            29,
+            10
+          ],
+          "8": [
+            31,
+            13
+          ]
+        },
+        "recall_changes_with_top_k": false,
+        "min_top_k_at_best_recall": 3,
+        "chunk_growth_3_to_8": [
+          5,
+          5
+        ]
+      },
+      {
+        "min_score": 0.25,
+        "recall_by_top_k": {
+          "3": [
+            11,
+            3
+          ],
+          "5": [
+            11,
+            3
+          ],
+          "8": [
+            11,
+            3
+          ]
+        },
+        "chunks_by_top_k": {
+          "3": [
+            14,
+            7
+          ],
+          "5": [
+            14,
+            8
+          ],
+          "8": [
+            14,
+            8
+          ]
+        },
+        "recall_changes_with_top_k": false,
+        "min_top_k_at_best_recall": 3,
+        "chunk_growth_3_to_8": [
+          0,
+          1
+        ]
+      },
+      {
+        "min_score": 0.35,
+        "recall_by_top_k": {
+          "3": [
+            4,
+            2
+          ],
+          "5": [
+            4,
+            2
+          ],
+          "8": [
+            4,
+            2
+          ]
+        },
+        "chunks_by_top_k": {
+          "3": [
+            4,
+            5
+          ],
+          "5": [
+            4,
+            5
+          ],
+          "8": [
+            4,
+            5
+          ]
+        },
+        "recall_changes_with_top_k": false,
+        "min_top_k_at_best_recall": 3,
+        "chunk_growth_3_to_8": [
+          0,
+          0
+        ]
+      }
+    ],
+    "problem_statement": {
+      "summary": "网格 9 组在硬约束下**全部不可行**：任一网格阈值都已高于「保住全部目标片」的上限。",
+      "why": "保「Part A 16/16 召回」要求 min_score <= 0.118393；保「Part B 3/3 场景全覆盖」要求 min_score <= 0.339153；⇒ 单一全局阈值的**召回安全上限** = 0.118393（由「秒杀系统怎么做限流和降级」决定），而网格最小取值 0.15 已高于它。另一面：把噪声清零需要 min_score > 0.360771（由「s3-cache-consistency-senior」决定），与召回上限 0.118393 不相交 ⇒ **不存在既保住全部目标、又清零噪声的单一全局阈值**。",
+      "single_global_threshold": {
+        "recall_safe_upper_bound": 0.118393,
+        "recall_safe_upper_bound_part_a": 0.118393,
+        "recall_safe_upper_bound_part_b": 0.339153,
+        "recall_safe_upper_bound_binding": "秒杀系统怎么做限流和降级",
+        "noise_free_lower_bound": 0.360771,
+        "noise_free_lower_bound_binding": "s3-cache-consistency-senior",
+        "clean_band": null,
+        "exists": false,
+        "note": "「召回安全」= min_score <= 召回上限（过滤含等号）；「噪声清零」= min_score > 噪声下界。两者须**同时**成立才叫可行。"
+      }
+    },
+    "options": [
+      {
+        "id": "A",
+        "name": "按语料 / 按场景分别标定 min_score（推荐）",
+        "feasible": true,
+        "why": "两个数据集的分数尺度不同（HashEmbedding 是**词面哈希**，绝对分数只在同模型同语料内可比）⇒ 用一个常数跨语料必然顾此失彼。",
+        "procedure": [
+          "对该语料跑一次全量检索（top_k=100、不设 min_score），取每个 query 的 top-1 分数；",
+          "min_score = floor(0.5 × top-1 分数, 2 位小数)（规则见 scripts/rag_query_set.json 的 min_score_calibration）；",
+          "语料 / Embedding 模型一变就重标；标定必须在**全量候选**上做，否则只是局部窗口。"
+        ],
+        "on_these_datasets": {
+          "part_a": {
+            "recall_safe_upper_bound": 0.118393,
+            "binding": "秒杀系统怎么做限流和降级",
+            "note": "16 条 query 的 top-1 分数跨度大 ⇒ 常数阈值几乎必然误杀"
+          },
+          "part_b": {
+            "recall_safe_upper_bound": 0.339153,
+            "noise_free_lower_bound": 0.360771,
+            "clean_band": null,
+            "note": "窗口宽度仅 -0.021618（无干净带 ⇒ 必须在「保召回」与「压噪声」之间取舍）"
+          }
+        }
+      },
+      {
+        "id": "B",
+        "name": "单一全局 min_score",
+        "feasible": false,
+        "why": "召回安全上限 0.118393 与噪声清零下界 0.360771 不相交 ⇒ 不存在可行值；网格 9 组也全部落在「丢召回」一侧。"
+      }
+    ],
+    "excluded": [
+      {
+        "min_score": 0.15,
+        "part_a_target_hit": "15/16",
+        "part_b_target_full": "3/3",
+        "why": "Part A 只召回 15/16（丢 1 条 query）"
+      },
+      {
+        "min_score": 0.25,
+        "part_a_target_hit": "11/16",
+        "part_b_target_full": "3/3",
+        "why": "Part A 只召回 11/16（丢 5 条 query）"
+      },
+      {
+        "min_score": 0.35,
+        "part_a_target_hit": "4/16",
+        "part_b_target_full": "2/3",
+        "why": "Part A 只召回 4/16（丢 12 条 query）; Part B 只有 2/3 场景全覆盖"
+      }
+    ],
+    "best_in_grid": {
+      "top_k": 3,
+      "min_score": 0.15,
+      "part_a_target_hit": "15/16",
+      "part_b_target_full": "3/3",
+      "total_chunks": 34,
+      "note": "网格内召回最优的一档（**仍不满足硬约束 A**）；同一 min_score 下 top_k=3/5/8 召回完全相同，只有条数差别。"
+    },
+    "recommended_range": {
+      "top_k": {
+        "value": 5,
+        "grid": [
+          3,
+          5,
+          8
+        ],
+        "note": "min_score 生效后 top_k 只负责「别把目标片截掉」；本实验 9 组里没有任何一组因 top_k 截断丢目标 ⇒ 3/5/8 都够。保持当前声明值 5（**不必改**）；要更保守可取 8。",
+        "required_top_k_grid": [
+          {
+            "top_k": 3,
+            "min_score": 0.15,
+            "part_a": {
+              "min_score": 0.15,
+              "required_top_k": null,
+              "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+              "recall_failed_units": [
+                "秒杀系统怎么做限流和降级"
+              ]
+            },
+            "part_b": {
+              "min_score": 0.15,
+              "required_top_k": 2,
+              "binding_unit": "s1-mysql-index-mid",
+              "recall_failed_units": []
+            }
+          },
+          {
+            "top_k": 3,
+            "min_score": 0.25,
+            "part_a": {
+              "min_score": 0.25,
+              "required_top_k": null,
+              "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+              "recall_failed_units": [
+                "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+                "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+                "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+                "支付网关怎么做到幂等和日终对账",
+                "秒杀系统怎么做限流和降级"
+              ]
+            },
+            "part_b": {
+              "min_score": 0.25,
+              "required_top_k": 2,
+              "binding_unit": "s1-mysql-index-mid",
+              "recall_failed_units": []
+            }
+          },
+          {
+            "top_k": 3,
+            "min_score": 0.35,
+            "part_a": {
+              "min_score": 0.35,
+              "required_top_k": null,
+              "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+              "recall_failed_units": [
+                "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+                "Redis 的 RDB 和 AOF 持久化有什么区别",
+                "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+                "JVM 垃圾回收算法和常见收集器",
+                "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+                "Kafka 怎么保证消息不重复消费、幂等生产",
+                "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+                "Java 后端工程师的岗位职责和任职要求",
+                "大数据开发工程师需要熟悉哪些计算引擎",
+                "订单中台的缓存击穿是怎么治理的",
+                "支付网关怎么做到幂等和日终对账",
+                "秒杀系统怎么做限流和降级"
+              ]
+            },
+            "part_b": {
+              "min_score": 0.35,
+              "required_top_k": 2,
+              "binding_unit": "s1-mysql-index-mid",
+              "recall_failed_units": []
+            }
+          },
+          {
+            "top_k": 5,
+            "min_score": 0.15,
+            "part_a": {
+              "min_score": 0.15,
+              "required_top_k": null,
+              "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+              "recall_failed_units": [
+                "秒杀系统怎么做限流和降级"
+              ]
+            },
+            "part_b": {
+              "min_score": 0.15,
+              "required_top_k": 2,
+              "binding_unit": "s1-mysql-index-mid",
+              "recall_failed_units": []
+            }
+          },
+          {
+            "top_k": 5,
+            "min_score": 0.25,
+            "part_a": {
+              "min_score": 0.25,
+              "required_top_k": null,
+              "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+              "recall_failed_units": [
+                "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+                "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+                "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+                "支付网关怎么做到幂等和日终对账",
+                "秒杀系统怎么做限流和降级"
+              ]
+            },
+            "part_b": {
+              "min_score": 0.25,
+              "required_top_k": 2,
+              "binding_unit": "s1-mysql-index-mid",
+              "recall_failed_units": []
+            }
+          },
+          {
+            "top_k": 5,
+            "min_score": 0.35,
+            "part_a": {
+              "min_score": 0.35,
+              "required_top_k": null,
+              "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+              "recall_failed_units": [
+                "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+                "Redis 的 RDB 和 AOF 持久化有什么区别",
+                "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+                "JVM 垃圾回收算法和常见收集器",
+                "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+                "Kafka 怎么保证消息不重复消费、幂等生产",
+                "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+                "Java 后端工程师的岗位职责和任职要求",
+                "大数据开发工程师需要熟悉哪些计算引擎",
+                "订单中台的缓存击穿是怎么治理的",
+                "支付网关怎么做到幂等和日终对账",
+                "秒杀系统怎么做限流和降级"
+              ]
+            },
+            "part_b": {
+              "min_score": 0.35,
+              "required_top_k": 2,
+              "binding_unit": "s1-mysql-index-mid",
+              "recall_failed_units": []
+            }
+          },
+          {
+            "top_k": 8,
+            "min_score": 0.15,
+            "part_a": {
+              "min_score": 0.15,
+              "required_top_k": null,
+              "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+              "recall_failed_units": [
+                "秒杀系统怎么做限流和降级"
+              ]
+            },
+            "part_b": {
+              "min_score": 0.15,
+              "required_top_k": 2,
+              "binding_unit": "s1-mysql-index-mid",
+              "recall_failed_units": []
+            }
+          },
+          {
+            "top_k": 8,
+            "min_score": 0.25,
+            "part_a": {
+              "min_score": 0.25,
+              "required_top_k": null,
+              "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+              "recall_failed_units": [
+                "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+                "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+                "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+                "支付网关怎么做到幂等和日终对账",
+                "秒杀系统怎么做限流和降级"
+              ]
+            },
+            "part_b": {
+              "min_score": 0.25,
+              "required_top_k": 2,
+              "binding_unit": "s1-mysql-index-mid",
+              "recall_failed_units": []
+            }
+          },
+          {
+            "top_k": 8,
+            "min_score": 0.35,
+            "part_a": {
+              "min_score": 0.35,
+              "required_top_k": null,
+              "binding_unit": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+              "recall_failed_units": [
+                "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+                "Redis 的 RDB 和 AOF 持久化有什么区别",
+                "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+                "JVM 垃圾回收算法和常见收集器",
+                "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+                "Kafka 怎么保证消息不重复消费、幂等生产",
+                "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+                "Java 后端工程师的岗位职责和任职要求",
+                "大数据开发工程师需要熟悉哪些计算引擎",
+                "订单中台的缓存击穿是怎么治理的",
+                "支付网关怎么做到幂等和日终对账",
+                "秒杀系统怎么做限流和降级"
+              ]
+            },
+            "part_b": {
+              "min_score": 0.35,
+              "required_top_k": 2,
+              "binding_unit": "s1-mysql-index-mid",
+              "recall_failed_units": []
+            }
+          }
+        ],
+        "evidence": [
+          {
+            "min_score": 0.15,
+            "recall_by_top_k": {
+              "3": [
+                15,
+                3
+              ],
+              "5": [
+                15,
+                3
+              ],
+              "8": [
+                15,
+                3
+              ]
+            },
+            "chunks_by_top_k": {
+              "3": [
+                26,
+                8
+              ],
+              "5": [
+                29,
+                10
+              ],
+              "8": [
+                31,
+                13
+              ]
+            },
+            "recall_changes_with_top_k": false,
+            "min_top_k_at_best_recall": 3,
+            "chunk_growth_3_to_8": [
+              5,
+              5
+            ]
+          },
+          {
+            "min_score": 0.25,
+            "recall_by_top_k": {
+              "3": [
+                11,
+                3
+              ],
+              "5": [
+                11,
+                3
+              ],
+              "8": [
+                11,
+                3
+              ]
+            },
+            "chunks_by_top_k": {
+              "3": [
+                14,
+                7
+              ],
+              "5": [
+                14,
+                8
+              ],
+              "8": [
+                14,
+                8
+              ]
+            },
+            "recall_changes_with_top_k": false,
+            "min_top_k_at_best_recall": 3,
+            "chunk_growth_3_to_8": [
+              0,
+              1
+            ]
+          },
+          {
+            "min_score": 0.35,
+            "recall_by_top_k": {
+              "3": [
+                4,
+                2
+              ],
+              "5": [
+                4,
+                2
+              ],
+              "8": [
+                4,
+                2
+              ]
+            },
+            "chunks_by_top_k": {
+              "3": [
+                4,
+                5
+              ],
+              "5": [
+                4,
+                5
+              ],
+              "8": [
+                4,
+                5
+              ]
+            },
+            "recall_changes_with_top_k": false,
+            "min_top_k_at_best_recall": 3,
+            "chunk_growth_3_to_8": [
+              0,
+              0
+            ]
+          }
+        ]
+      },
+      "min_score": {
+        "global_constant": null,
+        "reason": "两个数据集的可行区间不相交（见 problem_statement）",
+        "if_recall_first": {
+          "range": [
+            0.0,
+            0.118393
+          ],
+          "note": "≈不设阈值；能保 16/16 + 3/3，但噪声全部保留。上界含等号可用，但**贴边零余量**，实践建议再留 ~0.01 余量。"
+        },
+        "if_noise_first": {
+          "range": [
+            0.360771,
+            1.0
+          ],
+          "note": "噪声清零，但 Part A 目标片几乎全被误杀、Part B 丢 s2 的 1/2 片"
+        },
+        "calibrate_per_corpus": true
+      }
+    }
+  }
+}
