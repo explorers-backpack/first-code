@@ -385,6 +385,42 @@ async def run() -> bool:
     _check("  └ 纯空白也算缺失（不把空白当有效凭据）",
            _sync_raises(sp.load_spark_config, EmbeddingProviderConfigError, env)[0])
 
+    # --- 两组凭据：专用组优先 / 逐项回落（Embedding 与文本模型解耦） ---
+    # 讯飞的「文本大模型 X1」与「Embedding」是**两项独立授权**，同一个 AppId 未必
+    # 都开通；因此 Embedding 需要自己的一组变量，同时**不能**让「只配 SPARK_*」的
+    # 既有部署改变行为（本项目「不配 = 默认 = 行为不变」）。
+    dedicated = {
+        sp.ENV_SPARK_EMBEDDING_APP_ID: "emb-app",
+        sp.ENV_SPARK_EMBEDDING_API_KEY: "emb-key",
+        sp.ENV_SPARK_EMBEDDING_API_SECRET: "emb-secret",
+    }
+    base = _spark_env()
+
+    cfg = sp.load_spark_config(base)
+    _check("★ 只配回落组 SPARK_* → 取到的就是 SPARK_* 的值（既有部署行为不变）",
+           (cfg.app_id, cfg.api_key, cfg.api_secret) == (APP_ID, API_KEY, API_SECRET),
+           f"{cfg.app_id}/{cfg.api_key}/{cfg.api_secret}")
+
+    cfg = sp.load_spark_config({**base, **dedicated})
+    _check("★ 两组都配 → 专用组优先（Embedding 用自己那组，不与文本模型串味）",
+           (cfg.app_id, cfg.api_key, cfg.api_secret) == ("emb-app", "emb-key", "emb-secret"),
+           f"{cfg.app_id}/{cfg.api_key}/{cfg.api_secret}")
+
+    cfg = sp.load_spark_config({**base, sp.ENV_SPARK_EMBEDDING_APP_ID: "emb-app"})
+    _check("  └ 只补一个专用变量 → **逐项**回落（AppId 用专用、Key/Secret 用 SPARK_*）",
+           (cfg.app_id, cfg.api_key, cfg.api_secret) == ("emb-app", API_KEY, API_SECRET),
+           f"{cfg.app_id}/{cfg.api_key}/{cfg.api_secret}")
+
+    # 变量名刻意不互为子串：否则「报错消息里是否提到某个变量名」这类断言会**恒真**
+    _check("★ 专用名与回落名不互为子串（防「因错误的原因通过」）",
+           sp.ENV_APP_ID not in sp.ENV_SPARK_EMBEDDING_APP_ID
+           and sp.ENV_SPARK_EMBEDDING_APP_ID not in sp.ENV_APP_ID)
+
+    ok, info = _sync_raises(sp.load_spark_config, EmbeddingProviderConfigError, {})
+    _check("★ 两组都缺 → 报错同时点明专用名与回落名（排障不用翻源码）",
+           ok and sp.ENV_SPARK_EMBEDDING_APP_ID in str(info) and sp.ENV_APP_ID in str(info),
+           str(info))
+
     # --- load_spark_config：非法取值 ---
     for env, why in (
         ({sp.ENV_DOMAIN: "doc"}, "domain 取值非法"),
@@ -835,18 +871,22 @@ async def run() -> bool:
     # 更强的取证：若 backend/.env 提供了真实凭据，则它**一个都不能**出现在源码 / 模板里
     # （只报键名，绝不打印值）
     real = _env_file_values()
-    present = [k for k in (sp.ENV_APP_ID, sp.ENV_API_KEY, sp.ENV_API_SECRET)
-               if real.get(k)]
+    cred_keys = (sp.ENV_APP_ID, sp.ENV_API_KEY, sp.ENV_API_SECRET,
+                 sp.ENV_SPARK_EMBEDDING_APP_ID, sp.ENV_SPARK_EMBEDDING_API_KEY,
+                 sp.ENV_SPARK_EMBEDDING_API_SECRET)
+    present = [k for k in cred_keys if real.get(k)]
     example_text = (BACKEND_DIR / ".env.example").read_text(encoding="utf-8")
     if present:
         leaked = [k for k in present
                   if real[k] in src or real[k] in example_text]
-        _check("★ backend/.env 里的真实凭据未出现在源码 / .env.example 中",
+        _check("★ backend/.env 里的真实凭据（两组都查）未出现在源码 / .env.example 中",
                not leaked, str(leaked))
     else:
         _check("（跳过）backend/.env 未提供 SPARK_* 真实凭据 —— 跳过该取证", True)
 
-    for name in (sp.ENV_APP_ID, sp.ENV_API_KEY, sp.ENV_API_SECRET, ep.ENV_API_KEY):
+    for name in (sp.ENV_APP_ID, sp.ENV_API_KEY, sp.ENV_API_SECRET,
+                 sp.ENV_SPARK_EMBEDDING_APP_ID, sp.ENV_SPARK_EMBEDDING_API_KEY,
+                 sp.ENV_SPARK_EMBEDDING_API_SECRET, ep.ENV_API_KEY):
         occurrences = [
             line.strip() for line in example_text.splitlines()
             if re.match(rf"^#?\s*{name}\s*=", line.strip())

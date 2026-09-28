@@ -44,9 +44,12 @@
 ``EMBEDDING_PROVIDER``          *(空 → 自动)*                        **必须显式写 ``spark`` 才会用本模块**；
                                                                      留空时只按 ``EMBEDDING_API_KEY`` 判断
                                                                      （``SPARK_*`` 的存在**不会**自动切换）
-``SPARK_APP_ID``                *(空)*                               **必填**；与 ``SPARK_*`` 文本模型共用同一组凭据
-``SPARK_API_KEY``               *(空)*                               **必填**；参与签名，**禁止提交**
-``SPARK_API_SECRET``            *(空)*                               **必填**；参与签名，**禁止提交**
+``SPARK_EMBEDDING_APP_ID``      *(空 → 回落 ``SPARK_APP_ID``)*        **必填**；Embedding 专用 AppId
+``SPARK_EMBEDDING_API_KEY``     *(空 → 回落 ``SPARK_API_KEY``)*       **必填**；参与签名，**禁止提交**
+``SPARK_EMBEDDING_API_SECRET``  *(空 → 回落 ``SPARK_API_SECRET``)*    **必填**；参与签名，**禁止提交**
+``SPARK_APP_ID`` / ``_API_KEY`` / ``_API_SECRET``                     **回落组**：**文本大模型 X1** 的凭据
+                                *(空)*                                （见 ``main.SparkAPI``）。专用组未配置时
+                                                                      逐项回落 ⇒ 既有部署行为不变
 ``EMBEDDING_BASE_URL``          ``https://emb-cn-huabei-1.xf-yun.com``   不含 query；签名后拼上 ``?authorization=…``
                                                                      （末尾 ``/`` 会被去掉）
 ``EMBEDDING_MODEL``             ``xinghuo-embedding``                写进 ``KnowledgeChunk.embedding_model``
@@ -56,6 +59,12 @@
                                                                      不超过 1 分钟」）
 ``EMBEDDING_SPARK_DOMAIN``      *(空 → 由 role 决定)*                 ``query`` / ``para``；只在排障时手工覆盖
 ==============================  ===================================  ==========================================
+
+**为什么要两组凭据**：讯飞的「文本大模型 X1」与「Embedding」是**两项独立授权**，
+同一个 AppId 未必都开通——实测（2026-09-28）一个 AppId 只通 X1 文本
+（Embedding 报 ``HTTP 500 / code=11200 licc failed``），另一个只通 Embedding
+（X1 报 ``AppIdNoAuthError``）。于是两组凭据**必须能同时存在、各用各的**。
+只配一组也能跑：Embedding 优先读专用组，取不到就回落 ``SPARK_*``。
 
 **刻意不读 ``EMBEDDING_BATCH_SIZE``**：上游接口只接受**单条**文本（``payload.messages.text``
 里是一个 ``messages`` 数组），没有可用的原生批量 ⇒ 批量只能逐条发。
@@ -137,7 +146,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime
 from time import mktime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlencode, urlsplit
 from wsgiref.handlers import format_date_time
 
@@ -167,10 +176,27 @@ from services.embedding_service import (
 # ============================================================
 # 常量：环境变量名 / provider 取值 / 默认值
 # ============================================================
-#: 讯飞凭据（与 ``SPARK_*`` 文本模型**共用同一组**，见 ``.env.example``）
+#: **Embedding 专用**凭据（优先读取）。
+#:
+#: 讯飞的「文本大模型 X1」与「Embedding」是**两项独立授权**，同一个 AppId 未必
+#: 都开通——本机实测（2026-09-28）：一个 AppId 只通 X1 文本、另一个只通 Embedding。
+#: 因此本模块优先读下面这组专用变量，把 Embedding 的凭据与文本模型**解耦**。
+ENV_SPARK_EMBEDDING_APP_ID = "SPARK_EMBEDDING_APP_ID"
+ENV_SPARK_EMBEDDING_API_KEY = "SPARK_EMBEDDING_API_KEY"
+ENV_SPARK_EMBEDDING_API_SECRET = "SPARK_EMBEDDING_API_SECRET"
+
+#: **回落组**：``SPARK_*`` 是**文本大模型 X1** 的凭据（见 ``main.SparkAPI``）。
+#:
+#: 专用变量未配置时按本组回落 ⇒ 对「只配了 ``SPARK_*``」的既有部署，
+#: 行为与引入专用变量**之前完全一致**（符合本项目「不配 = 默认 = 行为不变」）。
+#: 注意变量名**刻意不互为前缀**（``SPARK_EMBEDDING_APP_ID`` 不含子串
+#: ``SPARK_APP_ID``），否则「消息里是否提到某个变量名」这类断言会恒真。
 ENV_APP_ID = "SPARK_APP_ID"
 ENV_API_KEY = "SPARK_API_KEY"
 ENV_API_SECRET = "SPARK_API_SECRET"
+
+#: 回落组的三个名字（报错时一并提示，便于排障时知道还有哪组可用）
+ENV_FALLBACK_GROUP: Tuple[str, str, str] = (ENV_APP_ID, ENV_API_KEY, ENV_API_SECRET)
 
 #: 手工覆盖 ``domain`` 的逃生口（正常情况由通用 role 决定）
 ENV_DOMAIN = "EMBEDDING_SPARK_DOMAIN"
@@ -228,8 +254,10 @@ DEFAULT_UID = "career-ai"
 CODE_HINTS: Dict[int, str] = {
     10009: "输入非法（检查文本是否为空 / 超长）",
     10139: "参数错误（检查 domain 是否为 query / para）",
-    10313: f"{ENV_APP_ID} 与 {ENV_API_KEY} 不匹配（须同属一个应用）",
-    11200: f"未授权（检查 {ENV_APP_ID}，以及该应用是否已开通 Embedding 服务）",
+    10313: f"{ENV_SPARK_EMBEDDING_APP_ID} 与 {ENV_SPARK_EMBEDDING_API_KEY} 不匹配"
+           f"（须同属一个应用；回落组 {' / '.join(ENV_FALLBACK_GROUP[:2])} 同理）",
+    11200: f"未授权（检查 {ENV_SPARK_EMBEDDING_APP_ID}（回落 {ENV_APP_ID}），"
+           f"以及该应用是否已开通 Embedding 服务）",
     11202: "上游 license 校验失败（**实测多为限流 / 并发过高**，稍后重试即可）",
 }
 
@@ -309,23 +337,36 @@ def load_spark_config(
     于是「配了个非法数字」在两条协议下的报错完全一致。
 
     :param role: 与厂商无关的角色（``document`` / ``query``），决定 ``domain``。
-    :raises EmbeddingProviderConfigError: 缺 ``SPARK_*`` / ``role`` 或 ``ENV_DOMAIN``
-        取值非法 / 维度为负 / 超时非正。
+    :raises EmbeddingProviderConfigError: 缺凭据（专用组与回落组**都**取不到）/
+        ``role`` 或 ``ENV_DOMAIN`` 取值非法 / 维度为负 / 超时非正。
     """
     source: Mapping = os.environ if env is None else env
 
-    app_id = _read_str(source, ENV_APP_ID, "")
-    api_key = _read_str(source, ENV_API_KEY, "")
-    api_secret = _read_str(source, ENV_API_SECRET, "")
+    # 优先专用组，整项回落 ``SPARK_*``（文本模型 X1 的凭据）——逐项回落而不是整组：
+    # 允许「只补一个 AppId」这种过渡配置，且不改变任何既有部署的行为。
+    app_id = _read_str(source, ENV_SPARK_EMBEDDING_APP_ID, "") or _read_str(
+        source, ENV_APP_ID, ""
+    )
+    api_key = _read_str(source, ENV_SPARK_EMBEDDING_API_KEY, "") or _read_str(
+        source, ENV_API_KEY, ""
+    )
+    api_secret = _read_str(source, ENV_SPARK_EMBEDDING_API_SECRET, "") or _read_str(
+        source, ENV_API_SECRET, ""
+    )
     missing = [
         name
-        for name, value in ((ENV_APP_ID, app_id), (ENV_API_KEY, api_key), (ENV_API_SECRET, api_secret))
+        for name, value in (
+            (ENV_SPARK_EMBEDDING_APP_ID, app_id),
+            (ENV_SPARK_EMBEDDING_API_KEY, api_key),
+            (ENV_SPARK_EMBEDDING_API_SECRET, api_secret),
+        )
         if not value
     ]
     if missing:
         raise EmbeddingProviderConfigError(
             f"{PROVIDER_SPARK} 需要 {' / '.join(missing)}"
             "（三项都必填，且只写在 backend/.env，禁止提交）；"
+            f"也可整组回落用 {' / '.join(ENV_FALLBACK_GROUP)}（文本模型 X1 的凭据）；"
             f"离线环境请用 EMBEDDING_PROVIDER=hash"
         )
 

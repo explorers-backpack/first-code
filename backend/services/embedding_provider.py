@@ -300,7 +300,8 @@ def load_embedding_config(env: Optional[Mapping] = None) -> EmbeddingProviderCon
     """从环境变量读配置（``env=None`` 时读 ``os.environ``）。
 
     **只负责 OpenAI 兼容协议**的配置。``EMBEDDING_PROVIDER=spark`` 时**直接报错**：
-    讯飞的凭据（``SPARK_APP_ID`` / ``SPARK_API_KEY`` / ``SPARK_API_SECRET``）、端点与
+    讯飞的凭据（专用组 ``SPARK_EMBEDDING_*``，未配置时回落文本模型的
+    ``SPARK_APP_ID`` / ``SPARK_API_KEY`` / ``SPARK_API_SECRET``）、端点与
     请求体都不一样，由 ``services/embedding_provider_spark.py`` 自行加载。
     返回一个「字段是 OpenAI 的、provider 却写着 spark」的对象只会误导使用者。
 

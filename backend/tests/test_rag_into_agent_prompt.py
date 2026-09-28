@@ -108,7 +108,7 @@ FROZEN_SOURCES: Tuple[Tuple[str, str], ...] = (
     ("services/embedding_service.py",
      "a7bd287ea5b25d33bb3b95567e6a344c90238d49babab8d98313cbc376bb123e"),
     ("services/embedding_provider.py",
-     "d4e84cb89995adf267913aff296296bc3d8d2c798b251937c3f0d1ec4bada19e"),
+     "33dcd6ddfa5d147a5786a169bf1a2d65dde4f71d6fdd8d72ca30f712ba972f4e"),
 )
 
 #: 固定知识 chunk 的来源文档。**逐字节固定**——整份套件的期望值都由它推导。

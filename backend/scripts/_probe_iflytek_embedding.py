@@ -15,9 +15,11 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".env"))
 
-APPID = os.getenv("SPARK_APP_ID", "")
-APIKEY = os.getenv("SPARK_API_KEY", "")
-APISECRET = os.getenv("SPARK_API_SECRET", "")
+#: Embedding **专用**凭据优先；三项都取不到时逐项回落文本模型的 ``SPARK_*``
+#: （与 services/embedding_provider_spark.py 的解析口径保持一致）。
+APPID = os.getenv("SPARK_EMBEDDING_APP_ID", "") or os.getenv("SPARK_APP_ID", "")
+APIKEY = os.getenv("SPARK_EMBEDDING_API_KEY", "") or os.getenv("SPARK_API_KEY", "")
+APISECRET = os.getenv("SPARK_EMBEDDING_API_SECRET", "") or os.getenv("SPARK_API_SECRET", "")
 HOST = "emb-cn-huabei-1.xf-yun.com"
 PATH = "/"
 
