@@ -18,6 +18,11 @@
 [9] 服务层删除语义：后端无删除接口时 `index_error` **如实说明**（不假装成功）
 [10] 源码守卫（AST）：写接口挂 `get_current_admin`、读接口挂 `get_current_user`；
      本层**不 import** interview 三件套（分层）
+
+环境钉扎：本套件会真实走 ``knowledge_import_pipeline``（内含 Embedding），
+因此必须 ``import regression_env`` 把 ``EMBEDDING_*`` 钉成空串 ⇒ 用离线哈希占位。
+**未钉扎时它会真的去打讯飞 Embedding 接口**（`backend/.env` 里配了
+``EMBEDDING_PROVIDER=spark``），既消耗配额又让回归结果依赖网络。
 """
 
 import ast
@@ -30,6 +35,9 @@ from typing import Any, Dict, List, Optional
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+import regression_env  # noqa: E402,F401  （必须在项目模块之前）
 
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 from sqlalchemy import func, select  # noqa: E402

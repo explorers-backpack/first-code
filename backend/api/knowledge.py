@@ -6,16 +6,25 @@
 与 ``api/interview.py`` 同款：**参数校验 → 调用 service → 声明响应模型**。
 一切业务判断都在 service 层：
 
+- ``services/document_parser``              —— 「二进制 → 文本」（**唯一解析入口**，只给上传路由用）
 - ``services/knowledge_document_service``   —— 文档读写与校验（唯一校验口径）
 - ``services/knowledge_import_pipeline``    —— 切片 + 向量化 + 落库（**唯一写侧接线点**）
 - ``services/knowledge_maintenance``        —— 显式删除 / 索引重建（维护动作）
 
 本层**不 import** Agent / Core / Retriever，也不自己组装向量库或 Embedding。
 
+两个写入入口，一条管线
+----------------------
+``POST /documents``（JSON，``content`` 已是纯文本）与 ``POST /documents/upload``
+（multipart，服务端先解析）**共用同一个** ``knowledge_import_pipeline.import_document``。
+上传路由**只多一步**「解析」，解析失败（不支持格式 / 损坏 / 加密 / 无文本层）在
+进入管线**之前**就以 400 拦下——不会产生「有标题、没正文」的半成品文档。
+现有 JSON 契约**未做任何改动**。
+
 权限（本文件给出「谁能导入知识」的答案）
 ----------------------------------------
 - **读**（``GET`` 列表 / 详情）：任意已登录用户
-- **写**（``POST`` 导入 / 重建、``DELETE`` 删除）：**仅 admin**
+- **写**（``POST`` 导入 / 上传 / 重建、``DELETE`` 删除）：**仅 admin**
 
 理由：知识库是**维护面**。普通用户需要的是「面试时用上知识」，不是「改知识」；
 写入与删除会**改变所有用户的检索结果**，属于运维动作。
@@ -33,7 +42,8 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Path, Query, UploadFile
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
@@ -45,7 +55,9 @@ from schemas.knowledge import (
     KnowledgeImportReport,
     KnowledgeImportRequest,
     KnowledgeRebuildResponse,
+    KnowledgeUploadReport,
 )
+from services import document_parser
 from services import knowledge_document_service, knowledge_import_pipeline
 from services import knowledge_maintenance
 
@@ -91,6 +103,78 @@ async def import_knowledge_document(
         knowledge_import_pipeline.import_document(db, payload.model_dump()),
     )
     return KnowledgeImportReport(**report)
+
+
+@router.post(
+    "/documents/upload",
+    response_model=KnowledgeUploadReport,
+    summary="上传文件导入知识（服务端解析 → 切片 → 向量化 → 落库）",
+    description=(
+        "**文件入口**：把上传的文件在服务端解析成纯文本，再走与 `POST /documents` "
+        "**完全相同**的导入管线（落库 → 切片 → 逐片向量化 → 写向量库）。\n\n"
+        "**仅 admin 可调用**（写入会改变所有用户的检索结果）。\n\n"
+        "支持的格式（按扩展名判定）：\n"
+        "- **PDF** `.pdf`（取文本层，**不做 OCR**；扫描件会明确报错而不是导入空文档）\n"
+        "- **Word** `.docx`（OOXML，标准库解析）\n"
+        "- **PowerPoint** `.pptx`（逐页取文本，每页加「第 N 页」分隔）\n"
+        "- **网页** `.html` / `.htm` / `.xhtml`（去标签）\n"
+        "- **纯文本** `.txt` `.md` `.markdown` `.csv` `.tsv` `.json` `.log` "
+        "`.yml` `.yaml` `.ini` `.conf` `.rst` `.text`（自动探测编码）\n\n"
+        "**不支持**：`.doc` / `.xls` / `.xlsx` / `.ppt`（旧二进制格式）、图片（不做 OCR）、"
+        "压缩包（不解包）——会返回 **400** 并在 `detail` 里说明该怎么办。\n\n"
+        "错误口径：\n"
+        "- **400** —— 格式不支持 / 文件损坏 / 已加密 / 解析后正文为空（含扫描件 PDF）\n"
+        "- **413** —— 超过单文件上限（20 MB）\n"
+        "- **200 + `ok=false`** —— 解析成功但**导入**中途失败（切片 / 向量化 / 落库 / 写向量），"
+        "与 `POST /documents` 同口径；报告里的 `parse_warnings` 会同时给出解析阶段的告警\n\n"
+        "`title` 缺省时取**文件名去扩展名**；`source` 缺省为空串。"
+        "解析是 CPU 密集动作，已丢到线程池执行，不阻塞事件循环。"
+    ),
+)
+async def upload_knowledge_document(
+    file: UploadFile = File(..., description="待导入的文件（multipart/form-data）"),
+    category: str = Form(..., description="知识分类：job / technical / company / project"),
+    title: Optional[str] = Form(default=None, description="标题；缺省取文件名（去扩展名）"),
+    source: Optional[str] = Form(default=None, description="来源标识；缺省为空串"),
+    current_admin: dict = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+) -> KnowledgeUploadReport:
+    filename = (file.filename or "").strip()
+    try:
+        data = await file.read()
+    finally:
+        await file.close()
+
+    # 「二进制 → 文本」是解析器的职责（见 services/document_parser 模块文档）。
+    # 解析是同步 CPU 动作，丢线程池以免阻塞事件循环。
+    try:
+        parsed = await run_in_threadpool(document_parser.parse_document, filename, data)
+    except document_parser.FileTooLargeError as exc:
+        raise HTTPException(status_code=413, detail=str(exc)) from exc
+    except document_parser.DocumentParseError as exc:
+        # 不支持格式 / 损坏 / 加密 / 无文本层：都是「这份文件用不了」，属入参契约问题
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    # 标题缺省回落文件名；`category` 不做本地校验，由 create_document 判定（唯一校验口径）
+    payload = {
+        "title": (title or "").strip() or parsed.suggested_title,
+        "content": parsed.text,
+        "category": category,
+        "source": (source or "").strip(),
+    }
+
+    report = await _run(
+        "导入知识文档",
+        knowledge_import_pipeline.import_document(db, payload),
+    )
+    return KnowledgeUploadReport(
+        **report,
+        filename=filename,
+        parsed_format=parsed.source_format,
+        parsed_chars=parsed.chars,
+        parsed_encoding=parsed.encoding,
+        parse_warnings=list(parsed.warnings),
+    )
 
 
 # ============================================================

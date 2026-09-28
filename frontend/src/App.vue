@@ -5,6 +5,7 @@ import MarkdownIt from 'markdown-it'
 import * as echarts from 'echarts'
 import AuthModal from './components/AuthModal.vue'
 import KnowledgeBase from './components/KnowledgeBase.vue'
+import InterviewRoom from './components/InterviewRoom.vue'
 import { apiClient, clearToken, setStoredUser } from './api/apiClient'
 
 const md = new MarkdownIt()
@@ -632,6 +633,13 @@ const handleResize = () => {
             知识库
           </button>
           <button
+            v-if="isLoggedIn"
+            :class="{ active: currentPage === 'interview' }"
+            @click="currentPage = 'interview'"
+          >
+            AI 面试
+          </button>
+          <button
             v-if="currentUser.role === 'admin'"
             :class="{ active: currentPage === 'data-manage' }"
             @click="currentPage = 'data-manage'"
@@ -665,6 +673,9 @@ const handleResize = () => {
       v-if="currentPage === 'knowledge'"
       :is-admin="currentUser.role === 'admin'"
     />
+
+    <!-- AI 面试间（大模型出题通道 + RAG 开关；这是 RAG 在生产 UI 上的唯一入口） -->
+    <InterviewRoom v-if="currentPage === 'interview'" />
 
     <!-- Resume Analysis Page -->
     <div v-if="currentPage === 'resume-analysis'" class="resume-page">

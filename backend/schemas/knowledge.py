@@ -104,6 +104,28 @@ class KnowledgeImportReport(BaseModel):
     error: str = ""
 
 
+class KnowledgeUploadReport(KnowledgeImportReport):
+    """**文件上传**导入报告 = 导入报告 + 「这份文本是怎么来的」。
+
+    继承 ``KnowledgeImportReport``，因此 12 键形状**完全不变**（前端可复用同一块
+    报告渲染），额外携带解析阶段的如实信息：
+
+    - ``parsed_format``  —— 实际走的解析器（``pdf`` / ``docx`` / ``pptx`` / ``html`` / ``text``）
+    - ``parsed_chars``   —— 解析出的正文字符数（**不是**文件字节数）
+    - ``parsed_encoding``—— 文本类文件实际使用的编码；非 UTF-8 时会同时进 ``parse_warnings``
+    - ``parse_warnings`` —— 解析告警（稳定码：``decoded_as_gb18030`` /
+      ``pdf_encrypted_with_empty_password`` / ``page_N_no_text_layer`` / ``slide_N_no_text`` …）
+
+    ``parse_warnings`` **不是失败**：解析成功才会走到导入，它只表示「有件事你该知道」。
+    """
+
+    filename: str = ""
+    parsed_format: str = ""
+    parsed_chars: int = 0
+    parsed_encoding: str = ""
+    parse_warnings: List[str] = Field(default_factory=list)
+
+
 class KnowledgeDeleteResponse(BaseModel):
     """删除文档的结果（**显式维护动作**，不做静默清理）。"""
 
