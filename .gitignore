@@ -40,3 +40,4 @@ tools/
 
 # AI 工作区数据（本地记忆与技能，不纳入版本管理）
 .workbuddy-ai/
+.workbuddy/

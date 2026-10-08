@@ -1,6 +1,22 @@
 {
   "name": "rag-min-score-calibration",
   "version": 1,
+  "superseded_by": {
+    "status": "superseded",
+    "reason": "本文件的标定跑在**离线哈希占位**上（见下方 calibration_basis.embedder：hash-local，词面哈希、无语义）。哈希向量的分数尺度与真实语义模型**不可比**，因此本文件里的 min_score 数值（含 0.25）**不得**用于真实模型部署。",
+    "replaced_by": [
+      "backend/scripts/rag_min_score_calibration_spark.json",
+      "backend/scripts/rag_min_score_sweep_spark.json",
+      "backend/scripts/rag_production_query_calibration_spark.json"
+    ],
+    "current_production_values": {
+      "RAG_TOP_K": 8,
+      "RAG_MIN_SCORE": 0.7685,
+      "RAG_MIN_SCORE_RATIO": 0.9947,
+      "note": "以上为真实模型（xinghuo-embedding / 2560 维）标定值，权威来源是 backend/.env 与 backend/.env.example。哈希时代标的是 0.25/0.83 这类数字，均已废弃。"
+    },
+    "kept_for": "历史溯源：它记录了「离线占位下的分数地形」，仍是 hash 模式下自检套件的期望值来源，故保留不删。"
+  },
   "purpose": "把任务 69 实测的 min_score 安全窗口落地为可用的标定值，并用任务 70（R1）的 retriever_kwargs 透传路径实跑验证：注入条数 15 → 5、Prompt 13810 → 9852 字。只做标定与验证，不修改生产代码、不改基准文件、不评价生成质量。",
   "scope": {
     "modifies_code": false,

@@ -342,7 +342,11 @@ async def run() -> bool:
         _check("  └ 结果字段集恒定",
                set(res) == {"ok", "question_no", "question", "question_type", "topic",
                             "difficulty", "expected_points", "reason", "stage",
-                            "warnings", "errors", "error"})
+                            "warnings", "errors", "error", "knowledge_chunks"})
+        # ★ 正向信号：本用例注入的是**空**检索器 ⇒ 必须如实报 0，
+        #   不能因为「检索器被调用过」就报成 1（那会让调用方误以为拿到了知识）。
+        _check("  └ ★ knowledge_chunks == 0（空检索器 ⇒ 正向信号为 0，不虚报）",
+               res["knowledge_chunks"] == 0, repr(res["knowledge_chunks"]))
         _check("  └ 空检索器不产生 warning（空是正常语义，不是失败）",
                res["warnings"] == [], str(res["warnings"]))
 

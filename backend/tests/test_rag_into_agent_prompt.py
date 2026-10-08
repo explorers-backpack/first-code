@@ -690,7 +690,9 @@ async def check_end_to_end() -> None:
         _check("★ 检索成功 ⇒ 无 knowledge_retrieval_failed 警告",
                interview_core.WARNING_KNOWLEDGE_FAILED not in result["warnings"],
                str(result["warnings"]))
-        _check("返回字段集恒定为 QUESTION_RESULT_FIELDS（12 键）",
+        _check("★ knowledge_chunks > 0（命中知识 ⇒ 正向信号如实上报，不只报失败）",
+               result["knowledge_chunks"] > 0, repr(result["knowledge_chunks"]))
+        _check("返回字段集恒定为 QUESTION_RESULT_FIELDS（13 键）",
                tuple(result) == interview_core.QUESTION_RESULT_FIELDS, str(tuple(result)))
 
         _check("检索器确实被调用（queries 非空）", retriever.queries == [FIXED_TOPIC],
@@ -735,6 +737,8 @@ async def check_boundaries() -> None:
         _check("★ 降级后 Prompt 回落原模板（不含参考知识小节）",
                KNOWLEDGE_HEADING not in spy.calls[0])
         _check("降级后 Prompt 里没有未渲染占位符", "{{" not in spy.calls[0])
+        _check("★ 检索失败 ⇒ knowledge_chunks == 0（正向信号不虚报）",
+               result["knowledge_chunks"] == 0, repr(result["knowledge_chunks"]))
 
     # -- 检索不到（[]）⇒ 同样回落原模板 --
     async with _rag_env(top_k=3, min_score=None, with_session=True) as env:

@@ -1,6 +1,21 @@
 {
   "name": "rag-top-k-calibration",
   "version": 1,
+  "superseded_by": {
+    "status": "superseded-partially",
+    "reason": "本文件的 recommended_top_k=8 是在**离线哈希占位**的分数地形上推出的（见 sources.min_score_calibration 指向的 rag_min_score_calibration.json，其 embedder=hash-local、无语义）。哈希分数与真实语义模型的分数不可比，因此该推荐值**只是历史记录**，不是当前取值的依据。",
+    "replaced_by": [
+      "backend/scripts/rag_min_score_sweep_spark.json",
+      "backend/scripts/rag_production_query_calibration_spark.json"
+    ],
+    "current_production_values": {
+      "RAG_TOP_K": 8,
+      "RAG_MIN_SCORE": 0.7685,
+      "RAG_MIN_SCORE_RATIO": 0.9947,
+      "note": "RAG_TOP_K 数值恰好同为 8，但**依据不同**：真实模型下 top_k 会重新变成有效杠杆（见 backend/.env.example）。权威来源是 backend/.env。"
+    },
+    "kept_for": "历史溯源：它记录了「min_score 生效后 top_k 还约束什么」的推理过程，结论中的定性部分仍成立，定量数值不成立。"
+  },
   "purpose": "校准 top_k 取值口径：实测 min_score 生效后 top_k 还约束什么、「只调小 top_k」能否替代 min_score、top_k 是否影响 Prompt 长度，并给出推荐值与下限警告。不修改生产代码、不改基准文件、不评价生成质量。",
   "scope": {
     "modifies_code": false,

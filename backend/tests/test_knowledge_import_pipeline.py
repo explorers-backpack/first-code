@@ -629,8 +629,11 @@ async def run() -> bool:
         # 需要 build_vector_store 拿「当前配置用哪个后端」——仍是**闭集 + 精确相等**。
         # 任务 76 加入**向量迁移模块**：换 Embedding 模型后把既有切片向量就地重算，
         # 同样经组装器拿 embedder / store（不认识任何具体实现）。
-        _check("★ 组装器的消费者 = 读侧(Core) + 写侧(入库 Pipeline) + 维护模块 + 迁移模块",
+        # 任务 85 加入**main**：启动日志与 GET /api/health 用 describe_default_embedding()
+        # 上报「当前在用哪个 Embedding、是不是语义模型」——**只读状态、不组装检索器**。
+        _check("★ 组装器的消费者 = 读侧(Core) + 写侧(入库 Pipeline) + 维护 + 迁移 + 状态上报",
                consumers_rag == [
+                   "main.py",
                    "services/interview_core.py",
                    "services/knowledge_embedding_migration.py",
                    "services/knowledge_import_pipeline.py",

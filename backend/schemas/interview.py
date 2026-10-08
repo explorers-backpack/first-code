@@ -279,6 +279,10 @@ class NextQuestionResponse(BaseModel):
       ``all_answered`` / ``agent_failed`` / ``validation_failed``）
     - 知识检索失败**不是失败**：``ok`` 不受影响，只在 ``warnings`` 里记
       ``knowledge_retrieval_failed``
+    - ``knowledge_chunks`` 是**正向信号**：本次真正注入 Prompt 的切片条数。
+      与 ``warnings`` 配合才能完整区分三种状态——「没开 RAG」（0 条 + 无警告）、
+      「开了但没命中」（0 条 + 无警告，与前者同形，需结合请求里的 ``use_rag``）、
+      「命中 N 条」（N > 0）。检索失败仍是 0 条 + ``knowledge_retrieval_failed``。
     """
 
     ok: bool
@@ -293,6 +297,7 @@ class NextQuestionResponse(BaseModel):
     warnings: List[str] = Field(default_factory=list)
     errors: List[str] = Field(default_factory=list)
     error: Optional[str] = None
+    knowledge_chunks: int = 0
 
 
 class ErrorResponse(BaseModel):

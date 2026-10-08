@@ -246,12 +246,12 @@ async def run() -> bool:
             "prompt 缺失或含知识小节",
         )
         _check(
-            "结果字段集恒定（12 键）",
+            "结果字段集恒定（13 键）",
             set(body.keys())
             == {
                 "ok", "question_no", "question", "question_type", "topic",
                 "difficulty", "expected_points", "reason", "stage", "warnings",
-                "errors", "error",
+                "errors", "error", "knowledge_chunks",
             },
             str(sorted(body.keys())),
         )

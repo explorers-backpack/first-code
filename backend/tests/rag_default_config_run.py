@@ -419,7 +419,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if structure:
         print("\n  结构核验（推荐配置，s1）："
               f"Agent 8 键={structure['agent_keys_expected']} / "
-              f"Core 12 键={structure['core_keys_expected']} / "
+              f"Core 13 键={structure['core_keys_expected']} / "
               f"Agent 实发 Prompt == 手工渲染={structure['agent_prompt_equals_rendered']} / "
               f"Core 同={structure['core_prompt_equals_rendered']}")
 

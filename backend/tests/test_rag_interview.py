@@ -702,6 +702,10 @@ async def run() -> bool:
         #   * knowledge_import_pipeline —— 写侧：入库时 build_vector_store / default_embedder
         #   * knowledge_maintenance     —— 维护：重建派生索引时 build_vector_store
         #   * knowledge_embedding_migration —— 迁移：换模型后重算既有切片向量
+        #   * main                      —— 上报：启动日志 / GET /api/health 用
+        #                                 describe_default_embedding() 报「当前到底在用什么
+        #                                 Embedding、是不是语义模型」。**只读状态、不组装
+        #                                 检索器**，不参与任何业务路径。
         # 仍然是**闭集 + 精确相等**，不是「谁都能 import」。
         consumers = []
         for path in _production_files():
@@ -710,8 +714,9 @@ async def run() -> bool:
             if any("knowledge_rag" in m
                    for m in _imported_modules(path.read_text(encoding="utf-8"))):
                 consumers.append(path.relative_to(BACKEND_DIR).as_posix())
-        _check("★ 组装器 knowledge_rag 的消费者 = 读侧 Core + 写侧 Pipeline + 维护 + 迁移模块",
+        _check("★ 组装器 knowledge_rag 的消费者 = 读侧 Core + 写侧 Pipeline + 维护 + 迁移 + 状态上报",
                consumers == [
+                   "main.py",
                    "services/interview_core.py",
                    "services/knowledge_embedding_migration.py",
                    "services/knowledge_import_pipeline.py",

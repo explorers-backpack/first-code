@@ -96,6 +96,7 @@ SEAM_FUNCTIONS = (
 RESULT_KEYS = {
     "ok", "question_no", "question", "question_type", "topic", "difficulty",
     "expected_points", "reason", "stage", "warnings", "errors", "error",
+    "knowledge_chunks",
 }
 
 

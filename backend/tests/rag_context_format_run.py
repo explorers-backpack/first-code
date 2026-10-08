@@ -18,7 +18,7 @@
   ``metadata``，条数与来源序列与优化前一致）；
 - ``InterviewAgent`` 输出结构不变（``render_question_prompt`` 仍是
   ``(模板名, Prompt 正文)``；``generate_question`` 仍是 8 键；
-  ``interview_core.generate_next_question`` 仍是 12 键）；
+  ``interview_core.generate_next_question`` 仍是 13 键）；
   且 Prompt 中**知识小节之外**的部分逐字节不变。
 
 本文件**不是回归套件**（无 ``test_`` 前缀）：它会真正跑检索与出题，耗时长；
@@ -449,7 +449,7 @@ def _print_scenario(run: Dict[str, Any]) -> None:
           f"之后逐字节相同={inv['prompt_suffix_identical']} / "
           f"小节确有变化={inv['knowledge_section_changed']}")
     print(f"             Agent 8 键={inv['agent_keys_expected']} / "
-          f"Core 12 键={inv['core_keys_expected']} / "
+          f"Core 13 键={inv['core_keys_expected']} / "
           f"Agent 实发 Prompt == 手工渲染={inv['agent_prompt_equals_rendered']}")
 
 

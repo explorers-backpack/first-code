@@ -97,7 +97,7 @@ from services.vector_store_sql import SqlAlchemyVectorStore  # noqa: E402
 #: 用**源码文本**而非 AST——``ast.dump`` 随 Python 版本变化，换解释器会假失败。
 FROZEN_SOURCES: Tuple[Tuple[str, str], ...] = (
     ("services/interview_core.py",
-     "b8da0caa24577cc21b134666a8da602bd6f8d701bf287c62163840fc7e949d51"),
+     "2bd6f6aab04bdd3c8eaf9e03c64f37d99a8e52dd1047d711779616845ff8e5e8"),
     ("services/question_validator.py",
      "b23e6957edf39696fcc4803b4b627fbdc90c1548de86535bc804f4acc1c7e53b"),
 )
@@ -339,8 +339,8 @@ def check_preconditions() -> None:
                interview_core.ERROR_AGENT_FAILED,
                interview_core.ERROR_VALIDATION_FAILED,
            })
-    _check("结果字段集恒定为 QUESTION_RESULT_FIELDS（12 键，成功失败同形状）",
-           len(interview_core.QUESTION_RESULT_FIELDS) == 12,
+    _check("结果字段集恒定为 QUESTION_RESULT_FIELDS（13 键，成功失败同形状）",
+           len(interview_core.QUESTION_RESULT_FIELDS) == 13,
            str(len(interview_core.QUESTION_RESULT_FIELDS)))
 
 
@@ -529,8 +529,10 @@ async def check_agent_continues() -> None:
             _check(f"  └ errors == []", result["errors"] == [], str(result["errors"]))
             _check(f"  └ warnings == []（无知识不是故障）", result["warnings"] == [],
                    str(result["warnings"]))
+            _check(f"  └ ★ knowledge_chunks == 0（无知识 ⇒ 正向信号必须为 0）",
+                   result["knowledge_chunks"] == 0, repr(result["knowledge_chunks"]))
             _check(f"  └ 仍调用模型恰好一次", len(spy.calls) == 1, str(len(spy.calls)))
-            _check(f"  └ 返回字段集恒定（12 键）",
+            _check(f"  └ 返回字段集恒定（13 键）",
                    tuple(result) == interview_core.QUESTION_RESULT_FIELDS)
             _check(f"  └ 题目字段正常（question / topic / difficulty）",
                    bool(result["question"]) and result["topic"] == "Redis 持久化"
@@ -581,7 +583,7 @@ async def check_agent_continues() -> None:
                f"ok={result['ok']} errors={result['errors']}")
         _check("  └ 失败时 question 恒为空串（绝不放行伪造问题）",
                result["question"] == "", repr(result["question"]))
-        _check("  └ 失败结果字段集仍恒定（12 键）",
+        _check("  └ 失败结果字段集仍恒定（13 键）",
                tuple(result) == interview_core.QUESTION_RESULT_FIELDS)
 
     # -- 5f. Validator 在无知识时照常工作（未修改 Validator，只是被调用）--

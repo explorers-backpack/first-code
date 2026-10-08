@@ -25,9 +25,10 @@
  * 2. 401 / 403 **不静默、不跳转、不清 token**，只把后端给的说明展示出来；
  * 3. `/next-question` 的**成功与否看响应体的 `ok`，不看 HTTP 状态码**——
  *    它在失败时同样返回 200（字段集恒定，成功失败同形状）；
- * 4. **不宣称「已用到知识」**：接口只在**检索失败**时给 `knowledge_retrieval_failed`，
- *    **没有**「已注入知识」的正向信号，因此本页对检索状态只做「未启用 / 已请求未报失败 /
- *    检索失败」三种如实表述（见 `knowledgeStatus`）；
+ * 4. **知识检索状态如实表述**：后端除失败信号 `knowledge_retrieval_failed` 外，
+ *    还会回传正向信号 `knowledge_chunks`（本次真正注入 Prompt 的切片条数）。
+ *    本页据此区分**四态**——未启用 / 已注入 N 条 / 命中 0 条 / 检索失败
+ *    （见 `knowledgeStatus`）。**不把「命中 0 条」说成「已用到知识」**；
  * 5. **评分是纯规则评分，不是大模型评分**：`interview_core.score_answer` 按文本特征词表
  *    计分，确定性、可复现（见其 docstring）。本页如实标注为「规则评分」；
  * 6. **大模型出题通道与面试闭环是两条独立的线**：`/next-question` **不落库、不推进题号**
@@ -158,11 +159,15 @@ const reportRows = computed(() => {
 const countedDimensions = computed(() => reportRows.value.filter((r) => !r.missing).length)
 
 /**
- * 知识检索状态 —— **如实**表述。
+ * 知识检索状态 —— **如实**表述（四态）。
  *
- * 后端只在**检索失败**时给 `knowledge_retrieval_failed`；**没有**「检索到几条 / 是否注入」
- * 的正向信号。所以这里刻意区分三态，且第三种不写「已用到知识」：
- * 无 warning 只能说明「没报失败」，不能推出「一定命中了语料」。
+ * 两个信号配合才能说清楚：
+ * - `warnings` 含 `knowledge_retrieval_failed` ⇒ 检索链路报错，降级为无知识；
+ * - `knowledge_chunks`（**正向信号**）⇒ 本次真正注入 Prompt 的切片条数。
+ *
+ * 「命中 0 条」与「已注入 N 条」在只失败信号的时代**无法区分**，现在可以了。
+ * 注意 0 有两种来源：`use_rag=false`（没检索）与「检索了但没命中」——
+ * 前者由 `form.use_rag` 判掉，因此走到最后那条分支时 0 一定是「真的没命中」。
  */
 const knowledgeStatus = computed(() => {
   if (!agentResult.value) return null
@@ -172,9 +177,16 @@ const knowledgeStatus = computed(() => {
   if (warnings.value.includes('knowledge_retrieval_failed')) {
     return { level: 'failed', text: '知识检索失败 → 本次出题**未使用知识库**（已降级为无知识）' }
   }
+  const injected = Number(agentResult.value.knowledge_chunks) || 0
+  if (injected > 0) {
+    return {
+      level: 'injected',
+      text: `已注入 ${injected} 条知识切片到出题 Prompt（后端 knowledge_chunks 计数）`,
+    }
+  }
   return {
     level: 'requested',
-    text: '已请求知识检索，未报失败。接口不区分「命中 0 条」与「已注入知识」，故此处不宣称已用到知识。',
+    text: '已请求知识检索，但**命中 0 条** —— 本次出题未拿到任何知识（语料可能未覆盖该 topic）。',
   }
 })
 
@@ -477,6 +489,8 @@ onMounted(loadJobs)
             <code>.env</code> 的 <code>RAG_*</code> 决定。<br />
             <strong>检索失败不会让出题失败</strong>——会静默降级为「无知识」，并在下方
             <code>warnings</code> 里给出 <code>knowledge_retrieval_failed</code>。<br />
+            命中的条数由响应体的 <code>knowledge_chunks</code> 如实回传，
+            下方状态条据此区分「已注入 N 条」与「命中 0 条」。<br />
             注：本场面试的题目由 <code>/start</code> 一次性生成，<strong>RAG 试跑通道产出的候选
             题不落库、不进本场记录</strong>。
           </p>
@@ -1409,6 +1423,14 @@ onMounted(loadJobs)
   border-radius: var(--radius-sm);
 }
 
+/* 正向信号：本次确实把 N 条知识注入了 Prompt */
+.ir-knowledge.injected {
+  color: var(--accent-gold);
+  background: rgba(201, 162, 39, 0.10);
+  border: 1px solid rgba(201, 162, 39, 0.30);
+}
+
+/* 已检索但命中 0 条 —— 不是失败，但也没拿到知识 */
 .ir-knowledge.requested {
   color: var(--accent-cyan);
   background: rgba(0, 168, 150, 0.08);

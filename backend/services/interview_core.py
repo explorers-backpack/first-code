@@ -1027,6 +1027,12 @@ QUESTION_RESULT_FIELDS: Tuple[str, ...] = (
     "warnings",
     "errors",
     "error",
+    # 本次**真正注入 Prompt** 的知识切片条数（正向信号）。
+    # 为什么需要它：检索失败有 ``knowledge_retrieval_failed`` 警告，但
+    # 「检索成功却一条没命中」与「命中 N 条」在响应里**无法区分** ⇒ 调用方
+    # （前端 / 运维）回答不了「RAG 到底有没有贡献」。0 既可能是「没开 RAG」，
+    # 也可能是「开了但没命中」——这两者仍由 ``warnings`` 区分。
+    "knowledge_chunks",
 )
 
 
@@ -1045,6 +1051,7 @@ def _question_result(**overrides: Any) -> Dict[str, Any]:
         "warnings": [],
         "errors": [],
         "error": None,
+        "knowledge_chunks": 0,
     }
     result.update(overrides)
     return result
@@ -1275,6 +1282,7 @@ async def generate_next_question(
             question_no=question_no,
             stage=stage,
             warnings=list(knowledge_warnings),
+            knowledge_chunks=len(knowledge_context),
         )
 
     # ---- 5. Validator（只校验 + 标准化）----
@@ -1287,6 +1295,7 @@ async def generate_next_question(
             stage=stage,
             errors=[ERROR_VALIDATION_FAILED, *validation.errors],
             warnings=list(knowledge_warnings),
+            knowledge_chunks=len(knowledge_context),
         )
 
     # ---- 6. InterviewQuestion ----
@@ -1302,4 +1311,5 @@ async def generate_next_question(
         reason=normalized.get("reason", ""),
         stage=stage,
         warnings=[*knowledge_warnings, *validation.warnings],
+        knowledge_chunks=len(knowledge_context),
     )

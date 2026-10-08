@@ -1,7 +1,7 @@
 <script setup>
-import { ref, reactive, defineEmits } from 'vue'
+import { ref, reactive } from 'vue'
 import { ElMessage } from 'element-plus'
-import { publicApi, setToken, setStoredUser } from '../api/apiClient'
+import { ApiError, publicApi, setToken, setStoredUser } from '../api/apiClient'
 
 const emit = defineEmits(['close', 'loginSuccess'])
 
@@ -15,31 +15,23 @@ const form = reactive({
   password: ''
 })
 
-const validateEmailLimit = (email) => {
-  const stored = localStorage.getItem('registered_emails') || '{}'
-  const emails = JSON.parse(stored)
-  const count = emails[email] || 0
-  return count < 5
-}
-
-// 向后端换取并持久化 token —— 统一请求层（apiClient）的 token 唯一来源。
-// 后端未启动 / 数据库不可用 / 后端校验失败时静默降级，不改变既有本地登录流程与提示文案。
-// 返回后端权威 user（含 role）；失败返回 null。**前端不硬编码任何角色判定**，
-// 管理员身份完全以后端返回为准。
-const syncBackendToken = async (path) => {
-  try {
-    const body = { email: form.email, password: form.password }
-    if (isRegister.value) body.username = form.username
-    const data = await publicApi.post(path, { body })
-    if (data && data.token) {
-      setToken(data.token)
-      setStoredUser(data.user || null)
-      return data.user || { email: form.email, role: 'user' }
-    }
-  } catch (e) {
-    // 有意静默：保持原有纯本地登录体验，token 缺失时后续请求按未登录处理
+// 把后端 / 网络的失败原因翻成用户能看懂的一句话。
+//
+// ★ 为什么不再做本地校验：本组件原先在 localStorage 里存一份
+//   ``{email: {username, password(明文), role}}`` 并自行比对密码，
+//   比对通过就放行——**明文密码落盘**，且**后端返回被忽略**，
+//   等于本地比对即可登录（后端不可用时也能进）。现已彻底移除：
+//   注册/登录一律由 ``/api/auth/*`` 判定，前端只负责展示结论。
+//
+// 后端用 ``HTTPException(detail="…")`` 返回中文原因（「密码错误」「邮箱已被使用」等），
+// apiClient 会把它原样放进 ``ApiError.detail`` ⇒ 优先展示服务端的真实判定，
+// 前端**不自己编造**「该邮箱尚未注册」这类结论。
+const describeAuthError = (e, fallback) => {
+  if (e instanceof ApiError) {
+    if (e.isNetworkError) return '无法连接服务器，请确认后端已启动后重试'
+    if (typeof e.detail === 'string' && e.detail.trim()) return e.detail
   }
-  return null
+  return fallback
 }
 
 const handleSubmit = async () => {
@@ -68,71 +60,34 @@ const handleSubmit = async () => {
   isSubmitting.value = true
 
   try {
-    if (isRegister.value) {
-      // 注册逻辑
-      const users = JSON.parse(localStorage.getItem('users') || '{}')
+    const path = isRegister.value ? '/auth/register' : '/auth/login'
+    const body = { email: form.email, password: form.password }
+    if (isRegister.value) body.username = form.username
 
-      if (users[form.email]) {
-        error.value = '该邮箱已注册，请直接登录'
-        isSubmitting.value = false
-        return
-      }
+    const data = await publicApi.post(path, { body })
 
-      if (!validateEmailLimit(form.email)) {
-        error.value = '该邮箱注册的账号已达上限（最大5个）'
-        ElMessage.error('该邮箱注册的账号已达上限（最大5个）')
-        isSubmitting.value = false
-        return
-      }
-
-      users[form.email] = {
-        username: form.username,
-        password: form.password,
-        role: 'user',
-        createdAt: new Date().toISOString()
-      }
-      localStorage.setItem('users', JSON.stringify(users))
-
-      // 更新邮箱计数
-      const emails = JSON.parse(localStorage.getItem('registered_emails') || '{}')
-      emails[form.email] = (emails[form.email] || 0) + 1
-      localStorage.setItem('registered_emails', JSON.stringify(emails))
-
-      ElMessage.success('注册成功！')
-      const backendUser = await syncBackendToken('/auth/register')
-      // 注册角色同样以后端返回为准（后端固定为 user），前端不自行决定。
-      emit('loginSuccess', { email: form.email, role: (backendUser && backendUser.role) || 'user' })
-    } else {
-      // 登录逻辑
-      // 角色一律由后端权威返回，前端**不硬编码任何管理员账号或权限判断**。
-      const users = JSON.parse(localStorage.getItem('users') || '{}')
-      const user = users[form.email]
-
-      if (user) {
-        if (user.password !== form.password) {
-          error.value = '密码错误，请重试'
-          isSubmitting.value = false
-          return
-        }
-        ElMessage.success(`欢迎回来，${user.username}！`)
-        await syncBackendToken('/auth/login')
-        emit('loginSuccess', { email: form.email, role: user.role })
-        return
-      }
-
-      // 本地无此账号（例如由数据库脚本创建的管理员）：交由后端判定角色。
-      const backendUser = await syncBackendToken('/auth/login')
-      if (backendUser) {
-        ElMessage.success(`欢迎回来，${backendUser.username || form.email}！`)
-        emit('loginSuccess', { email: form.email, role: backendUser.role || 'user' })
-        return
-      }
-
-      error.value = '该邮箱尚未注册'
-      isSubmitting.value = false
+    // 没有 token 就不算登录成功——**绝不放行一个「看起来成功」的会话**。
+    if (!data || !data.token) {
+      error.value = '服务器未返回登录凭证，请稍后重试'
+      return
     }
+
+    setToken(data.token)
+    setStoredUser(data.user || null)
+
+    const name = (data.user && data.user.username) || form.email
+    ElMessage.success(isRegister.value ? '注册成功！' : `欢迎回来，${name}！`)
+
+    // 角色**一律以后端权威返回为准**：前端不硬编码任何角色判定，也不读本地副本。
+    emit('loginSuccess', {
+      email: form.email,
+      role: (data.user && data.user.role) || 'user'
+    })
   } catch (e) {
-    error.value = '操作失败，请稍后重试'
+    error.value = describeAuthError(
+      e,
+      isRegister.value ? '注册失败，请稍后重试' : '登录失败，请稍后重试'
+    )
   } finally {
     isSubmitting.value = false
   }

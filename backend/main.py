@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
 from contextlib import asynccontextmanager
-from typing import Optional, List
+from typing import Any, Dict, Optional, List
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Request
 from fastapi.responses import JSONResponse
@@ -295,10 +295,65 @@ class ResumeParseRequest(BaseModel):
 
 
 # ============================================================
+# Embedding 运行状态上报（只读：不读库、不发网络请求、不编码文本）
+# ============================================================
+def embedding_status() -> Dict[str, Any]:
+    """当前进程**默认 Embedding** 的运行状态标识（固定 4 键，成功时 ``error=None``）。
+
+    为什么要有它：``default_embedder()`` 在「一个 ``EMBEDDING_*`` 都不配」时会返回
+    ``HashEmbeddingService``（``provider="hash-local"``，**词面哈希、无语义**）。
+    那种状态下 RAG **不会报错**——它只是一条都检索不到（检索器按 ``embedding_model``
+    过滤，模型名对不上）。于是「部署漏配凭据」的表现是「知识库好像没内容」，
+    **静默且无从排查**。本函数把「到底在用哪个 Embedding、它是不是语义模型」
+    摆到启动日志与健康检查里，让这件事不可能再被忽略。
+
+    纯读配置：构造 Provider 只解析环境变量，**不读库、不发网络请求、不编码任何文本**，
+    因此可安全地在启动期与每次健康检查时调用。
+    配置非法（如 ``openai`` 却没给密钥）时**刻意不抛异常**——健康检查永远不该 500，
+    改为把错误放进 ``error`` 字段暴露出来。
+    """
+    try:
+        # 延迟导入：与 services.knowledge_rag 同一取舍（模块顶层只留标准库）。
+        from services.knowledge_rag import describe_default_embedding
+
+        status: Dict[str, Any] = dict(describe_default_embedding().to_dict())
+        status["error"] = None
+        return status
+    except Exception as exc:  # noqa: BLE001 - 配置错误要变成可见字段，不是 500
+        return {
+            "provider": None,
+            "dimension": None,
+            "semantic_enabled": None,
+            "error": f"{type(exc).__name__}: {exc}",
+        }
+
+
+def _report_embedding_status() -> None:
+    """把 Embedding 状态打进启动日志；**非语义**时给出醒目告警。"""
+    status = embedding_status()
+    if status["error"] is not None:
+        print(f"[embedding][ERROR] 默认 Embedding 配置非法：{status['error']}")
+        return
+    if status["semantic_enabled"]:
+        print(
+            f"[embedding] provider={status['provider']} "
+            f"dim={status['dimension']} semantic=True"
+        )
+        return
+    print(
+        f"[embedding][WARN] provider={status['provider']} "
+        f"dim={status['dimension']} semantic=False —— 这是**离线占位**（词面哈希），"
+        "检索出的「相似度」没有语义含义，RAG 知识注入会静默失效。"
+        "生产部署请配置 EMBEDDING_* 后重启。"
+    )
+
+
+# ============================================================
 # Lifespan（MySQL 下由 SQLAlchemy create_all 自动建表 + 幂等补列）
 # ============================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    _report_embedding_status()
     async with engine.begin() as conn:
         # ① 建表：只创建**不存在的新表**
         await conn.run_sync(Base.metadata.create_all)
@@ -888,7 +943,17 @@ async def add_job(
 
 @app.get("/api/health", tags=["系统"])
 async def health():
-    return {"status": "ok", "service": "Career.ai FastAPI"}
+    """健康检查。
+
+    ``status`` / ``service`` 两个键**保持不变**（既有消费者不受影响）；
+    新增 ``embedding`` 键上报默认 Embedding 的运行状态——见 :func:`embedding_status`。
+    它是判断「RAG 到底跑在真实语义模型上、还是退化成了离线哈希占位」的**唯一在线入口**。
+    """
+    return {
+        "status": "ok",
+        "service": "Career.ai FastAPI",
+        "embedding": embedding_status(),
+    }
 
 
 # ============================================================
