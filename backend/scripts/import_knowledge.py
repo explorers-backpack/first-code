@@ -105,7 +105,10 @@ from services.embedding_provider import (  # noqa: E402
     describe_embedding,
 )
 from services.embedding_service import EmbeddingService  # noqa: E402
-from services.knowledge_import_pipeline import KnowledgeImportPipeline  # noqa: E402
+from services.knowledge_import_pipeline import (  # noqa: E402
+    DEFAULT_EMBED_BATCH,
+    KnowledgeImportPipeline,
+)
 from services.knowledge_rag import build_vector_store, default_embedder  # noqa: E402
 
 #: 默认语料（需求指定的数据源）。
@@ -205,9 +208,16 @@ class PacedEmbedder(EmbeddingService):
     """包住真实 embedder：**逐条间隔 + 失败重试 + 调用计数**，其余行为原样透传。
 
     为什么需要它：上游有 license 限流（实测 ``code=11202``），而
-    ``KnowledgeImportPipeline`` 是**逐片**编码的（为了失败可定位）。
+    ``KnowledgeImportPipeline`` 会**分批**编码（``embed_batch_size``，默认 16），
+    某批失败则**回退逐片**以定位失败位置。
     把节流放在这里，就**不用改 Pipeline**（它的「先编码后落库 + 失败可定位」
     语义原样保留），也不用改任何 Embedding 实现。
+
+    ★ 节流对**批量与回退两条路径都生效**：本类只覆写 ``_embed_one``，而基类
+    ``embed_batch`` 是「逐条 ``embed``」的模板方法 ⇒ 无论走批量还是回退逐片，
+    每条文本最终都经过 ``_embed_one``，``pace_seconds`` 一次不落。
+    这也是**讯飞场景下 ``--embed-batch-size`` 收效甚微**的原因——讯飞上游
+    ``payload.messages.text`` 只收单条，批量只是少几层 Python 调用。
 
     ``name`` / ``dimension`` / ``semantic_enabled`` 必须透传——
     Pipeline 用 ``embedder.name`` 写 ``embedding_model`` 并据此判断
@@ -333,6 +343,10 @@ def build_parser() -> argparse.ArgumentParser:
                         help="只导入上次统计文件里失败的文档（按 source 匹配）")
     parser.add_argument("--pace", type=float, default=3.0,
                         help="每条编码之间的间隔秒数，默认 3.0（讯飞实测稳定值）")
+    parser.add_argument("--embed-batch-size", type=int, default=DEFAULT_EMBED_BATCH,
+                        help=f"管线一次交给 embed_batch 的切片数，默认 {DEFAULT_EMBED_BATCH}；"
+                             "设 1 即退回纯逐片（语义与改造前逐字一致）。"
+                             "★ 讯飞上游只收单条，改大此值对它几乎无收益（节流靠 --pace）")
     parser.add_argument("--retries", type=int, default=3,
                         help="单条编码的重试次数（不含首次），默认 3")
     parser.add_argument("--retry-delay", type=float, default=3.0,
@@ -409,6 +423,8 @@ async def run(args: argparse.Namespace) -> int:
           f"semantic={info.semantic_enabled}")
     print(f"角色(模式)  : {ROLE_DOCUMENT}（文档向量化 ⇒ 讯飞 domain=para）")
     print(f"节流        : 每条 {args.pace}s    重试 {args.retries} × {args.retry_delay}s")
+    print(f"批量编码    : embed_batch_size={args.embed_batch_size}"
+          f"（1 = 纯逐片；某批失败自动回退逐片以定位）")
     print(f"模式        : {'DRY-RUN（不写库）' if args.dry_run else '真跑（写库）'}")
     print("-" * 74)
 
@@ -439,7 +455,10 @@ async def run(args: argparse.Namespace) -> int:
                   f"{[m['model'] for m in before['embedding_models']]}")
             after = before
         else:
-            pipeline = KnowledgeImportPipeline(db, embedder=paced, store=store)
+            pipeline = KnowledgeImportPipeline(
+                db, embedder=paced, store=store,
+                embed_batch_size=args.embed_batch_size,
+            )
             for index, doc in enumerate(documents, start=1):
                 print(f"[{index}/{len(documents)}] {doc['category']:9s} {doc['title']}")
                 report = await pipeline.import_document(doc)
@@ -484,6 +503,7 @@ async def run(args: argparse.Namespace) -> int:
             "pace_seconds": args.pace,
             "retries": args.retries,
             "retry_delay": args.retry_delay,
+            "embed_batch_size": args.embed_batch_size,
         },
         # ---- 需求点名要记录的四项 ----
         "summary": {

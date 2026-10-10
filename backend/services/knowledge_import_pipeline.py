@@ -24,7 +24,7 @@
       │
       ├─ [document]  find-or-create KnowledgeDocument（自然键 title + source + category）
       ├─ [chunk]     DocumentChunker.split(content, document_id=…, category=…, source=…)
-      ├─ [embedding] EmbeddingService.embed(切片正文)     ← **逐片**编码，失败能定位到第几片
+      ├─ [embedding] EmbeddingService.embed_batch(切片正文…)  ← **分批**编码；某批失败则回退逐片以定位「第几片」
       ├─ [persist]   KnowledgeChunk upsert（按 document_id + chunk_index）
       └─ [vector]    VectorStore.add([VectorRecord(chunk_id=…, vector=…)])
 
@@ -39,16 +39,25 @@
 1 创建 Document      ``_resolve_document``：按自然键找既有文档，没有才
                      ``knowledge_document_service.create_document``（校验口径复用，不重写）
 2 生成 Chunk         ``DocumentChunker.split``（切片参数由调用方注入，本模块不设默认值以外的偏好）
-3 生成向量           ``EmbeddingService.embed``（**逐片**，不是 ``embed_batch``：见下）
+3 生成向量           ``EmbeddingService.embed_batch``（**分批**，批大小 ``embed_batch_size``；
+                     某批失败则回退逐片，保住 ``failed_index``：见下）
 4 保存 Chunk         ``KnowledgeChunk`` upsert（``document_id`` + ``chunk_index`` 唯一确定一行）
 5 写入 VectorStore   ``VectorStore.add``（``chunk_id`` 指向刚落库的切片行）
 ==================  ==========================================================
 
-**为什么逐片编码而不是 ``embed_batch``**：需求要求「中途失败有明确状态」。
-批量接口在默认实现里是逐条 ``embed``，一旦第 k 条抛错，调用方拿不到「是第几条」；
-而本 Pipeline 的失败报告需要 ``failed_index``。真实厂商实现覆盖 ``embed_batch`` 后
-（原生批量是性能来源）可以用 ``embed_batch`` 换性能，代价是丢失失败位置——
-本阶段选**可定位**，规模上去后再权衡。
+**为什么是「分批 + 失败回退」而不是纯逐片**：需求要求「中途失败有明确状态」，
+失败报告需要 ``failed_index``。而批量接口一旦第 k 条抛错，调用方**拿不到**「是第几条」。
+两者兼顾的做法是：
+
+1. 按 ``embed_batch_size``（默认 16）调 ``embed_batch`` —— 厂商的原生批量接口
+   是真实性能来源（``EMBEDDING_BATCH_SIZE`` 对**讯飞**无效果：上游只收单条，
+   见 ``embedding_provider_spark`` 的说明；对 OpenAI 兼容 / 本地模型才真正提速）；
+2. **某批抛错 ⇒ 只对「这一批」回退逐片 ``embed``**，逐条定位到具体是哪一片，
+   然后按原语义在那一处 ``return _fail(..., index=…)``。
+
+代价（如实写明）：回退时会把该批中**失败片之前**的文本再编码一次（≤ ``embed_batch_size-1`` 次）。
+只发生在**失败路径**上，且换来的是「失败位置可定位」+「已完成的片照常落库、重跑可续做」。
+设 ``embed_batch_size=1`` 即退回纯逐片（逐条 ``embed``，完全不碰 ``embed_batch``）。
 
 幂等语义（支持重复执行）
 ------------------------
@@ -155,6 +164,12 @@ ERROR_EMBEDDING_FAILED = "embedding_failed"
 ERROR_PERSIST_FAILED = "persist_failed"
 ERROR_VECTOR_FAILED = "vector_failed"
 
+#: 默认批量编码大小（一次 ``embed_batch`` 调用喂几片）。
+#: 与 ``embedding_provider.DEFAULT_BATCH_SIZE`` 同值（16），但**刻意各自声明**——
+#: 那个是「单次 HTTP 请求最多几条」（OpenAI 兼容实现用），本值是「本 Pipeline
+#: 一次交给 ``embed_batch`` 几片」。两者语义不同，将来可能分叉，不互相 import。
+DEFAULT_EMBED_BATCH = 16
+
 
 # ============================================================
 # 异常（项目规范：领域基类 + 最贴近的内建异常）
@@ -201,6 +216,18 @@ def _as_content(value: Any) -> str:
     if value is None:
         return ""
     return value if isinstance(value, str) else str(value)
+
+
+def _require_positive_int(value: Any, name: str) -> int:
+    """校验「正整数」参数（项目老坑：``bool`` 是 ``int`` 子类，必须显式拒）。
+
+    ``embed_batch_size=True`` 会静默变成 1，把「批量」悄悄降级成「逐片」而无人察觉。
+    """
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise ImportConfigError(f"{name} 必须是正整数，收到 {type(value).__name__}: {value!r}")
+    if value < 1:
+        raise ImportConfigError(f"{name} 必须 >= 1，收到 {value!r}")
+    return value
 
 
 # ============================================================
@@ -264,6 +291,11 @@ class KnowledgeImportPipeline:
     :param store: 向量存储后端。``None`` → ``knowledge_rag.build_vector_store(db)``
         ——同理，本模块**不认识** ``SqlAlchemyVectorStore``，换向量库只改组装器。
     :param model: 传给向量存储后端的默认模型标识（记录自带 ``model`` 时以记录为准）。
+    :param embed_batch_size: 一次 ``embed_batch`` 喂几片（默认
+        :data:`DEFAULT_EMBED_BATCH`）。**设 1 即退回纯逐片**（完全不碰 ``embed_batch``）。
+        刻意**不读环境变量**：这是「本 Pipeline 怎么调用 embedder」的策略，
+        不是部署配置——若做成 ``.env`` 旋钮，会变成第 6 个需要评估「是否污染回归」的变量。
+        非法值（非正整数 / ``bool``）在构造期抛 :class:`ImportConfigError`，不静默收敛。
     """
 
     def __init__(
@@ -274,6 +306,7 @@ class KnowledgeImportPipeline:
         embedder: Any = None,
         store: Any = None,
         model: Optional[str] = None,
+        embed_batch_size: int = DEFAULT_EMBED_BATCH,
     ) -> None:
         if db is None:
             raise ImportConfigError("KnowledgeImportPipeline 需要 db（文档与切片都要落库）")
@@ -282,6 +315,7 @@ class KnowledgeImportPipeline:
         self.embedder = embedder if embedder is not None else default_embedder()
         self.store = store if store is not None else build_vector_store(db, model=model)
         self.model = model
+        self.embed_batch_size = _require_positive_int(embed_batch_size, "embed_batch_size")
 
     # --------------------------------------------------------
     # 主入口
@@ -328,7 +362,8 @@ class KnowledgeImportPipeline:
         # ---- 既有切片一次性读出来（含后续判断所需的列值，避免 commit 后再惰性加载）----
         existing = await self._load_chunks(document_id)
 
-        # ---- [3~5/5] 逐片：编码 → 落库 → 写向量 ----
+        # ---- 规划：哪些片要干活（保持 chunk_index 升序；跳过的片当场计数）----
+        planned: List[Dict[str, Any]] = []
         for chunk in chunks:
             index = chunk["metadata"]["chunk_index"]
             text = chunk["content"]
@@ -340,13 +375,33 @@ class KnowledgeImportPipeline:
                 report["skipped_chunks"] += 1
                 continue
 
-            # [3/5] embedding
-            try:
-                vector = await self.embedder.embed(text)
-            except Exception as exc:  # noqa: BLE001 - 变成 status=failed + failed_index
-                return _fail(
-                    report, STAGE_EMBEDDING, ERROR_EMBEDDING_FAILED, exc, index=index
-                )
+            planned.append({
+                "index": index,
+                "text": text,
+                "metadata": metadata,
+                "row": row,
+                "row_id": row_id,
+            })
+
+        # ---- [3/5] embedding：**分批**编码（某批失败则只对该批回退逐片，定位到具体哪一片）----
+        vectors, failure = await self._embed_planned(planned)
+
+        # 失败片**之前**的片照常落库（「已完成的部分」有计数，重跑可续做）；
+        # 失败片及其之后的片本次一律不做。
+        stop_at = len(planned)
+        if failure is not None:
+            stop_at = next(
+                offset for offset, item in enumerate(planned) if item["index"] == failure[0]
+            )
+
+        # ---- [4~5/5] 逐片：落库 → 写向量 ----
+        for item in planned[:stop_at]:
+            index = item["index"]
+            text = item["text"]
+            metadata = item["metadata"]
+            row = item["row"]
+            row_id = item["row_id"]
+            vector = vectors[index]
 
             # [4/5] persist（新建 / 更新切片行）
             try:
@@ -385,10 +440,79 @@ class KnowledgeImportPipeline:
 
             report["embedded_chunks"] += 1
 
+        if failure is not None:
+            return _fail(
+                report, STAGE_EMBEDDING, ERROR_EMBEDDING_FAILED, failure[1],
+                index=failure[0],
+            )
+
         # ---- 收尾：全部跳过 = 已完整入库（成功的空操作）----
         if report["embedded_chunks"] == 0 and report["saved_chunks"] == 0:
             report["status"] = STATUS_SKIPPED
         return report
+
+    # --------------------------------------------------------
+    # 内部：分批编码
+    # --------------------------------------------------------
+    async def _embed_planned(
+        self, planned: List[Dict[str, Any]]
+    ) -> Tuple[Dict[int, List[float]], Optional[Tuple[int, BaseException]]]:
+        """按 :attr:`embed_batch_size` 分批编码，返回 ``({chunk_index: 向量}, 失败信息)``。
+
+        失败信息是 ``(chunk_index, 原始异常)``；``None`` 表示全部编码成功。
+
+        **语义保证**（与改造前的纯逐片路径逐条一致）：
+        - 编码**按 chunk_index 升序**进行，遇错即停 —— 失败片之后的片**不会**被编码；
+        - 已成功编码的片全部出现在返回值里，调用方据此照常落库（重跑可续做）；
+        - 某批抛错 ⇒ **只对这一批**回退逐片 ``embed``，从而定位到具体是哪一片。
+          回退会把该批中失败片**之前**的文本再编码一次（≤ ``embed_batch_size-1`` 次），
+          这是「批量提速」与「失败可定位」之间刻意付出的代价，只发生在失败路径上。
+        """
+        vectors: Dict[int, List[float]] = {}
+        if not planned:
+            return vectors, None
+
+        size = self.embed_batch_size
+        for offset in range(0, len(planned), size):
+            batch = planned[offset:offset + size]
+            texts = [item["text"] for item in batch]
+
+            try:
+                encoded = await self._encode_batch(texts)
+            except Exception:  # noqa: BLE001 - 批量失败 → 回退逐片定位（原异常不留，逐片会重新抛）
+                encoded = None
+
+            if encoded is None:
+                for item in batch:
+                    try:
+                        vectors[item["index"]] = await self.embedder.embed(item["text"])
+                    except Exception as exc:  # noqa: BLE001
+                        return vectors, (item["index"], exc)
+                continue
+
+            for item, vector in zip(batch, encoded):
+                vectors[item["index"]] = vector
+
+        return vectors, None
+
+    async def _encode_batch(self, texts: List[str]) -> List[List[float]]:
+        """调 ``embed_batch`` 并校验返回条数。
+
+        ``len(texts) == 1`` 时**走 ``embed``**——单元素批量没有任何性能收益，
+        却会绕开基类 ``embed`` 的模板方法校验，得不偿失（``embed_batch_size=1``
+        因此与改造前的行为**逐字一致**）。
+
+        ★ 条数不符**必须显式抛**：``zip(batch, encoded)`` 在条数少时会**静默截断**，
+        结果是「后几片没有向量」却毫无提示——典型的「因错误的原因通过」。
+        """
+        if len(texts) == 1:
+            return [await self.embedder.embed(texts[0])]
+        encoded = list(await self.embedder.embed_batch(texts))
+        if len(encoded) != len(texts):
+            raise ValueError(
+                f"embed_batch 返回条数不符：入参 {len(texts)} 条，实得 {len(encoded)} 条"
+            )
+        return encoded
 
     # --------------------------------------------------------
     # 内部：文档解析（自然键幂等）
@@ -534,6 +658,7 @@ async def import_document(
     embedder: Any = None,
     store: Any = None,
     model: Optional[str] = None,
+    embed_batch_size: int = DEFAULT_EMBED_BATCH,
 ) -> Dict[str, Any]:
     """默认组装的便捷入口：``KnowledgeImportPipeline(db, …).import_document(document)``。
 
@@ -541,12 +666,14 @@ async def import_document(
     请自行构造 :class:`KnowledgeImportPipeline`。
     """
     pipeline = KnowledgeImportPipeline(
-        db, chunker=chunker, embedder=embedder, store=store, model=model
+        db, chunker=chunker, embedder=embedder, store=store, model=model,
+        embed_batch_size=embed_batch_size,
     )
     return await pipeline.import_document(document)
 
 
 __all__ = [
+    "DEFAULT_EMBED_BATCH",
     "ERROR_CHUNK_EMPTY",
     "ERROR_EMBEDDING_FAILED",
     "ERROR_PERSIST_FAILED",

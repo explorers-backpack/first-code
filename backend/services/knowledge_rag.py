@@ -69,6 +69,14 @@ RAG 链路由三段拼成，每段都刻意「不认识别人」：
    的结果**全部过滤掉**。**必须先在自己的库上标定**，
    方法见 ``backend/scripts/rag_query_set.json`` 的 ``min_score_calibration``。
 
+向量后端的运行状态与规模告警
+------------------------------
+后端选择是**部署决策**，最容易出的问题是「以为开了 ANN、其实还在全表扫描」。
+:func:`describe_vector_backend` 把它变成一个**可读、可断言的值**（``backend`` / ``ann``），
+供启动日志与 ``GET /api/health`` 上报；:data:`FULL_SCAN_WARN_CHUNKS` 给出
+「切片数到这个量级就该换后端」的阈值，由启动日志按**实测切片数**告警。
+两者都**只读、只报告**：本模块**不自动切换后端**（见下）。
+
 本阶段刻意不做
 --------------
 - **自动被调用**：本模块的两个入口都**不会被自动触发**——读侧由
@@ -77,6 +85,9 @@ RAG 链路由三段拼成，每段都刻意「不认识别人」：
   **不做全局单例**，避免「悄悄接上 RAG」。
 - **把 ANN 接进面试流程**：``VECTOR_STORE=chroma`` 只换向量后端，
   **不改变**「谁在什么时候检索」——那由 ``use_rag`` 决定，与后端无关。
+- **按规模自动切换后端**：超过 :data:`FULL_SCAN_WARN_CHUNKS` 只在启动日志告警，
+  **不会**自动改用 ``chroma``——那会同时改变依赖（要装 chromadb）、首次检索延迟
+  （要建索引）与检索结果（ANN 近似召回），必须是显式运维动作。
 - **索引的删/重建**：``vector_store_chroma`` 只写不删，见该模块「刻意不做」。
 - **给阈值设「代码默认值」**：``RAG_MIN_SCORE`` 不设时仍是 ``None``（不过滤）。
   本项目不内置任何「推荐的魔法数字」——阈值必须由部署方按自己的库标定后显式配置。
@@ -159,6 +170,41 @@ def _normalize_backend(backend: str) -> str:
             f"未知的向量后端 {backend!r}；可选：{BACKEND_SQL} / {BACKEND_CHROMA}"
         )
     return resolved
+
+
+#: **全表扫描后端的规模告警阈值**（按切片数计）。
+#:
+#: 为什么要有它：:data:`BACKEND_SQL` 的 ``search()`` 会把**全部**切片（含 2560 维
+#: 向量的 JSON）一次性捞进内存、在 Python 侧算余弦——没有 ANN 索引、没有分页、
+#: 没有列投影。本库实测约 20KB/条（2560 维 float 的 JSON），于是：
+#:
+#: - 32 片  ≈ 0.6MB/次查询（当前生产规模，完全无感）
+#: - 2000 片 ≈ 40MB/次查询（每次出题都产生可感知的延迟与内存压力）
+#:
+#: 本值**只用于启动日志告警**（超阈值且后端仍是 ``sql`` ⇒ 提示切 ``chroma``）。
+#: **刻意不自动切换后端**——后端是部署决策（``chroma`` 要装额外依赖、且首次检索
+#: 才建索引），静默切换会让「检索结果为什么变了」无从解释。
+FULL_SCAN_WARN_CHUNKS = 2000
+
+
+def describe_vector_backend(env: Optional[Mapping[str, str]] = None) -> Dict[str, Any]:
+    """读出**当前进程会用的向量后端**（固定 3 键，供启动日志 / 健康检查）。
+
+    与 :func:`describe_default_embedding` 同款：**纯读配置**——不读库、不发网络
+    请求、不构造任何后端实例（``chroma`` 的实现要 import ``chromadb``，那是可选依赖，
+    绝不能因为「只是看一眼配置」就被拉起来）。
+
+    :return: ``{"backend": "sql" | "chroma" | None, "ann": bool | None, "error": str | None}``。
+        ``ann=True`` 表示走 HNSW ANN 索引（只有 ``chroma``）；``sql`` 是**全表扫描**。
+        配置非法（``VECTOR_STORE`` 取值无法识别）时 ``backend`` / ``ann`` 为 ``None``、
+        ``error`` 非空，**刻意不抛异常**——健康检查永远不该 500。
+    :param env: 环境变量映射（默认 ``os.environ``；测试可注入，避免污染真实环境）。
+    """
+    try:
+        backend = resolve_vector_backend(env)
+    except Exception as exc:  # noqa: BLE001 - 配置错误要变成可见字段，不是 500
+        return {"backend": None, "ann": None, "error": f"{type(exc).__name__}: {exc}"}
+    return {"backend": backend, "ann": backend == BACKEND_CHROMA, "error": None}
 
 
 # ============================================================
@@ -452,10 +498,12 @@ __all__ = [
     "ENV_RAG_MIN_SCORE_RATIO",
     "ENV_RAG_TOP_K",
     "ENV_VECTOR_STORE",
+    "FULL_SCAN_WARN_CHUNKS",
     "build_vector_retriever",
     "build_vector_store",
     "default_embedder",
     "describe_default_embedding",
+    "describe_vector_backend",
     "resolve_retriever_defaults",
     "resolve_vector_backend",
 ]

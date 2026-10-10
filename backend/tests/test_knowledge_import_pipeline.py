@@ -10,6 +10,7 @@
 [5] 幂等：支持重复执行（重复执行不重复写；换模型 / 改正文会重算）
 [6] 其他失败路径（向量阶段失败 / 复用路径空正文 / 入参契约 400）
 [7] 隔离守卫（不碰 InterviewAgent、不改 Retriever 接口、不认识 DB 后端）
+[8] **批量编码**（`embed_batch` 接线 / 批大小 / 条数不符回退 / 跨批失败定位 / 构造期校验）
 
 运行：``python tests/test_knowledge_import_pipeline.py``
 """
@@ -43,6 +44,7 @@ from services.embedding_service import (  # noqa: E402
     HashEmbeddingService,
 )
 from services.knowledge_import_pipeline import (  # noqa: E402
+    DEFAULT_EMBED_BATCH,
     ERROR_CHUNK_EMPTY,
     ERROR_EMBEDDING_FAILED,
     ERROR_VECTOR_FAILED,
@@ -132,10 +134,17 @@ def _retrieval_of(source: str, attr: str) -> int:
 # 测试替身
 # ============================================================
 class FailingEmbedder(HashEmbeddingService):
-    """哈希 Embedding，可在**第 k 次**编码时抛错（``fail_at=None`` 表示永不失败）。
+    """哈希 Embedding，可在**第 k 个「不同文本」**上抛错（``fail_at=None`` 表示永不失败）。
 
     name 固定为 ``hash-failing``：重跑时必须用**同名**的实例，
     这样「已完成的切片」才会被正确跳过（模型标识一致）。
+
+    ★ 为什么按「不同文本的序号」而不是「第 k 次调用」判定（任务 87 改）：
+    管线现在是**分批**编码（``embed_batch``），某批失败会**回退逐片**重试以定位
+    到具体哪一片 —— 于是同一段文本会被编码**多次**。若仍按调用次数判定，
+    失败点会随重试次数漂移（第一次调用失败的那片，回退时序号已经变了 ⇒
+    「失败消失」），断言就会**因错误的原因**通过或失败。
+    按「首次见到该文本时的序号」判定，则在批量、回退、复跑三条路径下都稳定。
     """
 
     name = "hash-failing"
@@ -145,11 +154,13 @@ class FailingEmbedder(HashEmbeddingService):
         self.fail_at = fail_at
         self.exc = exc if exc is not None else EmbeddingUnavailableError("上游抖动")
         self.calls: list = []
+        self._ordinals: dict = {}
 
     async def _embed_one(self, text: str):
-        index = len(self.calls)
         self.calls.append(text)
-        if self.fail_at is not None and index == self.fail_at:
+        if text not in self._ordinals:
+            self._ordinals[text] = len(self._ordinals)
+        if self.fail_at is not None and self._ordinals[text] == self.fail_at:
             raise self.exc
         return await super()._embed_one(text)
 
@@ -160,6 +171,41 @@ class NamedEmbedder(HashEmbeddingService):
     def __init__(self, name: str, *, dimension: int = DEFAULT_EMBEDDING_DIMENSION) -> None:
         super().__init__(dimension=dimension)
         self.name = name
+
+
+class RecordingBatchEmbedder(HashEmbeddingService):
+    """记录 ``embed_batch`` 每次的入参条数，并单独统计逐片 ``embed`` 调用次数。
+
+    ★ 两类调用要分开计数：``embed_batch`` 内部走 ``super().embed``（**不**经过本类的
+    计数器），否则「批量路径」与「回退逐片」就分不出来了——而「有没有真的走批量」
+    正是本组断言要证明的事。
+    """
+
+    name = "hash-recording"
+
+    def __init__(self, *, short_return: bool = False) -> None:
+        super().__init__()
+        self.batch_sizes: list = []
+        self.single_calls = 0
+        self.short_return = short_return
+
+    async def embed(self, text: str):
+        self.single_calls += 1
+        return await super().embed(text)
+
+    async def embed_batch(self, texts):
+        items = list(texts)
+        self.batch_sizes.append(len(items))
+        # ★ 必须用显式 for 循环，不能写 `[await super().embed(x) for x in items]`：
+        #   列表推导式有自己的作用域，零参 `super()` 在其中会抛
+        #   `TypeError: super(type, obj): obj must be an instance or subtype of type`
+        #   —— 而那个异常会被管线的「批量失败 → 回退逐片」吞掉，
+        #   于是断言看到的「逐片被调用 20 次」其实是**测试替身自己坏了**。
+        source = items[:-1] if self.short_return else items
+        encoded = []
+        for item in source:
+            encoded.append(await super().embed(item))
+        return encoded
 
 
 class ExplodingStore(VectorStore):
@@ -210,13 +256,18 @@ async def _chunk_rows(db):
     ).scalars().all()
 
 
-def _make(db, embedder=None, store=None, chunker=None, model=None) -> KnowledgeImportPipeline:
+def _make(db, embedder=None, store=None, chunker=None, model=None,
+          embed_batch_size=None) -> KnowledgeImportPipeline:
+    kwargs = {}
+    if embed_batch_size is not None:
+        kwargs["embed_batch_size"] = embed_batch_size
     return KnowledgeImportPipeline(
         db,
         chunker=chunker if chunker is not None else CHUNKER,
         embedder=embedder if embedder is not None else HashEmbeddingService(),
         store=store if store is not None else SqlAlchemyVectorStore(db, model=model),
         model=model,
+        **kwargs,
     )
 
 
@@ -639,6 +690,101 @@ async def run() -> bool:
                    "services/knowledge_import_pipeline.py",
                    "services/knowledge_maintenance.py",
                ], str(consumers_rag))
+
+        # ------------------------------------------------------------
+        # [8] 批量编码（任务 87：把 embed_batch 接上，默认启用）
+        # ------------------------------------------------------------
+        print("\n[8] 批量编码（embed_batch 接线 / 批大小 / 条数不符回退 / 跨批失败定位）")
+
+        params = inspect.signature(KnowledgeImportPipeline.__init__).parameters
+        _check("★ embed_batch_size 是 keyword-only 且默认 DEFAULT_EMBED_BATCH",
+               params["embed_batch_size"].kind is inspect.Parameter.KEYWORD_ONLY
+               and params["embed_batch_size"].default == DEFAULT_EMBED_BATCH,
+               str(params["embed_batch_size"]))
+
+        for bad in (0, -1, True, "3", 1.5):
+            try:
+                KnowledgeImportPipeline(db, embedder=HashEmbeddingService(),
+                                        store=store4, embed_batch_size=bad)
+                rejected = False
+            except ImportConfigError:
+                rejected = True
+            except Exception:  # noqa: BLE001 - 别的异常也算不合格
+                rejected = False
+            _check(f"  └ 非法 embed_batch_size={bad!r} → ImportConfigError（不静默收敛）",
+                   rejected)
+
+        # ---- 批量路径（embed_batch_size=2 ⇒ 20 片 = 10 批）----
+        rec = RecordingBatchEmbedder()
+        b_rep = await KnowledgeImportPipeline(
+            db, chunker=CHUNKER, embedder=rec, store=SqlAlchemyVectorStore(db),
+            embed_batch_size=2,
+        ).import_document(
+            _payload(title="批量编码文档", content=LONG_TEXT, source="manual://batch")
+        )
+        n_b = b_rep["chunk_count"]
+        _check("★ 走批量：embed_batch 被调用、逐片 embed 为 0",
+               len(rec.batch_sizes) > 0 and rec.single_calls == 0,
+               f"batch={rec.batch_sizes} single={rec.single_calls}")
+        _check("  └ 每批大小 == embed_batch_size（末批可更小）",
+               all(size == 2 for size in rec.batch_sizes[:-1])
+               and 1 <= rec.batch_sizes[-1] <= 2, str(rec.batch_sizes))
+        _check("  └ 批次数 == ceil(片数 / 批大小)",
+               len(rec.batch_sizes) == (n_b + 1) // 2,
+               f"{len(rec.batch_sizes)} vs {(n_b + 1) // 2}（片数 {n_b}）")
+        _check("  └ 每片只喂一次（入参条数总和 == 片数）",
+               sum(rec.batch_sizes) == n_b, f"{sum(rec.batch_sizes)} vs {n_b}")
+        _check("★ 批量路径的结果与逐片一致（ok / 每片都有向量）",
+               b_rep["ok"] is True and b_rep["embedded_chunks"] == n_b
+               and b_rep["saved_chunks"] == n_b, str(b_rep))
+
+        # ---- 逐片路径（embed_batch_size=1）----
+        rec1 = RecordingBatchEmbedder()
+        s_rep = await KnowledgeImportPipeline(
+            db, chunker=CHUNKER, embedder=rec1, store=SqlAlchemyVectorStore(db),
+            embed_batch_size=1,
+        ).import_document(
+            _payload(title="逐片编码文档", content=LONG_TEXT, source="manual://single")
+        )
+        _check("★ embed_batch_size=1 ⇒ 完全不碰 embed_batch（退回纯逐片）",
+               rec1.batch_sizes == [] and rec1.single_calls == s_rep["chunk_count"],
+               f"batch={rec1.batch_sizes} single={rec1.single_calls}")
+        _check("  └ 逐片与批量产出的报告除 document_id 外逐键相同",
+               {k: v for k, v in s_rep.items() if k != "document_id"}
+               == {k: v for k, v in b_rep.items() if k != "document_id"},
+               f"{s_rep} vs {b_rep}")
+
+        # ---- embed_batch 返回条数不符：必须回退，不能被 zip 静默截断 ----
+        short = RecordingBatchEmbedder(short_return=True)
+        sh_rep = await KnowledgeImportPipeline(
+            db, chunker=CHUNKER, embedder=short, store=SqlAlchemyVectorStore(db),
+            embed_batch_size=4,
+        ).import_document(
+            _payload(title="条数不符文档", content=LONG_TEXT, source="manual://short")
+        )
+        _check("★ embed_batch 返回条数不符 ⇒ 回退逐片（不静默截断）",
+               sh_rep["ok"] is True and short.single_calls == sh_rep["chunk_count"],
+               f"single={short.single_calls} vs {sh_rep['chunk_count']}")
+        _check("  └ 回退后每片仍有向量（没有「少了几条」）",
+               sh_rep["embedded_chunks"] == sh_rep["chunk_count"],
+               str(sh_rep["embedded_chunks"]))
+
+        # ---- 失败落在第二批：仍要定位到具体哪一片 ----
+        boom8 = FailingEmbedder(fail_at=3)
+        x_rep = await KnowledgeImportPipeline(
+            db, chunker=CHUNKER, embedder=boom8, store=SqlAlchemyVectorStore(db),
+            embed_batch_size=2,
+        ).import_document(
+            _payload(title="跨批失败文档", content=LONG_TEXT, source="manual://crossbatch")
+        )
+        _check("★ 第二批失败也能定位到具体第几片（failed_index=3 / stage=embedding）",
+               x_rep["failed_index"] == 3 and x_rep["stage"] == STAGE_EMBEDDING,
+               f"{x_rep['failed_index']} / {x_rep['stage']}")
+        _check("  └ 失败片之前的片照常落库（embedded_chunks=3 / saved_chunks=3）",
+               x_rep["embedded_chunks"] == 3 and x_rep["saved_chunks"] == 3,
+               f"{x_rep['embedded_chunks']}/{x_rep['saved_chunks']}")
+        _check("  └ errors 仍是稳定错误码",
+               x_rep["errors"] == [ERROR_EMBEDDING_FAILED], str(x_rep["errors"]))
 
     await engine.dispose()
 
