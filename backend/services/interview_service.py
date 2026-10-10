@@ -35,6 +35,7 @@ Service 只做归属校验，其余全部委托 ``interview_core`` ——
 分流点只有一处：``_deliver``（交付边界）——``text`` 原样返回，
 ``avatar`` 交给 ``services/avatar_interview.enter``（数字人通道入口，当前空实现）。
 **面试逻辑一行都不分流**，这样 text 路径天然零变化、avatar 通道也不会阻塞流程。
+（v2：``_deliver`` 现被全部交互入口复用，见其函数文档。）
 
 **不在**本模块：出题计划、作答评分、报告汇总，以及 Context / Plan / Agent /
 Validator 的编排——这些全部在 ``services/interview_core.py``。
@@ -85,8 +86,12 @@ from models import (
     Job,
     Resume,
 )
-from schemas.interview import AnswerSubmitRequest, SessionCreateRequest
-from services import avatar_interview, interview_core
+from schemas.interview import (
+    AnswerSubmitRequest,
+    FollowUpRequest,
+    SessionCreateRequest,
+)
+from services import avatar_interview, interview_core, interview_followup
 from services.resume_scoring import extract_skills
 
 # ============================================================
@@ -261,12 +266,65 @@ async def _deliver(
       当前为空实现、原样透传，未接讯飞 / ASR / TTS）。
 
     刻意**不**在这里做任何业务判断：出题、评分、报告、状态机对两种模式完全共享，
-    本函数只回答「这份结果交给谁」。因此未来 ``submit_answer`` / ``end_session``
-    需要分流时，直接复用本函数即可，不必再写一遍分支。
+    本函数只回答「这份结果交给谁」。
+
+    覆盖范围（**全部交互入口**，一处实现、多处调用）::
+
+        start_session        → 交付第一题（开场）
+        get_current_question → 交付当前待答题（重播 / 语音播报）
+        submit_answer        → 交付评分反馈 + 下一题
+        end_session          → 交付结束语 + 报告
+
+    只读投影 ``get_session_detail`` / ``get_report`` **不分流**：它们不产出
+    「交给通道去表演」的交互内容，只是把已有数据原样回读。
+
+    ``avatar`` 分支当前是**空实现**（``avatar_interview.enter`` 原样透传），
+    因此两种模式的交付内容**逐字段相同**——接入数字人后，只需改 ``enter`` 的
+    函数体，这里与 ``text`` 分支都不用动。
     """
     if session.interview_mode == INTERVIEW_MODE_AVATAR:
         return await avatar_interview.enter(db, session, payload)
     return payload
+
+
+# ============================================================
+# 二·六、数字人闭环的两项**显式能力**（预检 / ASR）
+# ============================================================
+# 为什么在这里再包一层（而不是让编排层直接调 ``avatar_interview``）：
+#   ① 本模块是**唯一接触 DB 的地方** ⇒ ``session`` 行只能在这里取；
+#   ② 归属校验（``_load_session`` 的 404）必须复用既有口径，不另造一套；
+#   ③ 编排层 ``interview_orchestrator`` 因此**只需依赖 interview_service**，
+#      不必新增「编排 → 通道层」的边（分层保持单向、依赖面最小）。
+#
+# 两者都**不抛 provider 异常**：失败以 ``ok=False`` + ``status`` 如实上报
+# （见 ``avatar_interview`` 的 ``CHANNEL_*``），只有「会话不存在 / 非本人」
+# 才照旧抛 404（与其余入口一致）。
+async def ensure_avatar(
+    db: AsyncSession, user_id: int, session_id: int
+) -> Dict[str, Any]:
+    """**初始化 / 预检数字人会话**（幂等）——「Avatar 启动」这一步。
+
+    返回 ``avatar_interview.ensure_ready`` 的恒定键集信封
+    （``ok`` / ``status`` / ``avatar_session_id`` / ``stream_url`` / …）。
+    数字人不可用时 ``ok=False``，**不影响面试流程**（交付仍会降级为文字）。
+    """
+    session = await _load_session(db, session_id, user_id)
+    return await avatar_interview.ensure_ready(db, session)
+
+
+async def capture_avatar_answer(
+    db: AsyncSession, user_id: int, session_id: int, *, timeout_ms: int = 0
+) -> Dict[str, Any]:
+    """**取用户语音回答的文本**（讯飞虚拟人内置 **ASR**）。
+
+    返回 ``avatar_interview.capture_answer`` 的恒定 8 键信封
+    （``ok`` / ``status`` / ``text`` / ``audio_url`` / ``avatar_session_id`` / …）。
+
+    拿到 ``text`` 后由编排层交给 :func:`submit_answer` 评分——
+    本函数**只取文本、不落库、不评分**（职责单一，便于单测）。
+    """
+    session = await _load_session(db, session_id, user_id)
+    return await avatar_interview.capture_answer(db, session, timeout_ms=timeout_ms)
 
 
 # ============================================================
@@ -438,7 +496,7 @@ async def get_current_question(
     # 终态优先：finished 是不可逆终态，即使 current_question_no 尚未越过 N
     # （例如提前 end），也不得再对外呈现「待作答题目」，否则前端会误判还有题目可答。
     if session.status == SESSION_STATUS_FINISHED:
-        return {
+        return await _deliver(db, session, {
             "session_id": session.id,
             "status": session.status,
             "question_no": None,
@@ -447,10 +505,10 @@ async def get_current_question(
             "answered": False,
             "all_answered": True,
             "message": "面试已结束，请调用 report 接口查看面试报告",
-        }
+        })
 
     if session.status == SESSION_STATUS_CREATED or session.current_question_no <= 0:
-        return {
+        return await _deliver(db, session, {
             "session_id": session.id,
             "status": session.status,
             "question_no": None,
@@ -459,10 +517,10 @@ async def get_current_question(
             "answered": False,
             "all_answered": False,
             "message": "面试尚未开始，请先调用 start 接口",
-        }
+        })
 
     if session.current_question_no > session.total_questions:
-        return {
+        return await _deliver(db, session, {
             "session_id": session.id,
             "status": session.status,
             "question_no": None,
@@ -471,7 +529,7 @@ async def get_current_question(
             "answered": False,
             "all_answered": True,
             "message": "全部题目已作答，请调用 end 接口生成报告",
-        }
+        })
 
     current = next(
         (q for q in questions if q.question_no == session.current_question_no), None
@@ -482,7 +540,7 @@ async def get_current_question(
             detail=f"会话数据异常：第 {session.current_question_no} 题不存在，请重新创建面试",
         )
 
-    return {
+    return await _deliver(db, session, {
         "session_id": session.id,
         "status": session.status,
         "question_no": current.question_no,
@@ -491,7 +549,7 @@ async def get_current_question(
         "answered": current.id in answered_ids,
         "all_answered": False,
         "message": "ok",
-    }
+    })
 
 
 async def submit_answer(
@@ -563,13 +621,15 @@ async def submit_answer(
             (q for q in questions if q.question_no == session.current_question_no), None
         )
 
-    return {
+    result = {
         "answer": _answer_to_dict(answer),
         "session": _session_to_dict(session),
         "next_question": _question_to_dict(next_question) if next_question else None,
         "all_answered": all_answered,
         "message": "全部题目已作答，请调用 end 接口生成报告" if all_answered else "回答已提交",
     }
+    # 交付边界分流：text 原样返回（默认路径）；avatar 走数字人通道入口
+    return await _deliver(db, session, result)
 
 
 async def end_session(
@@ -592,11 +652,11 @@ async def end_session(
         )
         report = existing.scalar_one_or_none()
         if report is not None:
-            return {
+            return await _deliver(db, session, {
                 "session": _session_to_dict(session),
                 "report": _report_to_dict(report),
                 "message": "面试已结束（返回既有报告）",
-            }
+            })
 
     job = await _load_job(db, session.job_id)
     resume_skills = await _load_resume_skills(db, session.resume_id)
@@ -628,11 +688,13 @@ async def end_session(
     await db.refresh(report)
     await db.refresh(session)
 
-    return {
+    result = {
         "session": _session_to_dict(session),
         "report": _report_to_dict(report),
         "message": "面试已结束",
     }
+    # 交付边界分流：text 原样返回（默认路径）；avatar 走数字人通道入口
+    return await _deliver(db, session, result)
 
 
 async def get_report(
@@ -700,3 +762,69 @@ async def generate_next_question(
         retriever=retriever, use_rag=use_rag,
         retriever_kwargs=retriever_kwargs,
     )
+
+
+# ============================================================
+# 五、追问入口（数字人面试的「继续提问」）
+# ============================================================
+async def generate_followup(
+    db: AsyncSession,
+    user_id: int,
+    session_id: int,
+    payload: FollowUpRequest,
+    *,
+    spark: Any = None,
+    retriever: Any = None,
+) -> Dict[str, Any]:
+    """根据候选人的回答生成**一道追问** —— 经 ``interview_followup`` 编排。
+
+    调用链::
+
+        Service（归属校验 + 交付分流）
+            └── interview_followup.generate_followup
+                    ├── ② 分析回答        interview_core.score_answer（纯规则）
+                    ├── ③ Retriever 检索  interview_core.resolve_retriever / retrieve_knowledge
+                    └── ④ Agent 生成追问  interview_followup_agent.generate_followup
+
+    分工与 ``generate_next_question`` **完全一致**：
+
+    - **Service**：归属校验（不存在 / 非本人 → 404）+ **交付分流**（``_deliver``）
+    - **Core**：评分 / 检索接缝 / 只读加载——Service 不直接 import Agent / Validator
+    - **RAG**：``use_rag=True`` 才组装真实链路；``retriever=`` 可直接注入
+      （优先级更高）。默认都不开——不显式要求就不会打开 RAG。
+
+    **交付分流**是本函数与 ``generate_next_question`` 的关键差别：追问是「要立刻
+    播报出去的一句话」，因此结果会经 ``_deliver`` 交给对应通道——
+    ``avatar`` 模式走 ``avatar_interview.enter``（数字人继续提问），
+    ``text`` 模式原样返回（默认路径，行为不变）。
+
+    返回值即 ``interview_followup`` 的结果字典（字段集恒定，见
+    ``FOLLOWUP_RESULT_FIELDS``）。状态类错误以 ``ok=False`` 返回，**不抛
+    HTTPException**，便于数字人前端按字段分支处理。
+
+    **不落库**：本函数不写题目 / 作答 / 报告，也不推进题号——追问的持久化
+    （含 ``interview_context.increment_follow_up``）由调用方按业务需要决定，
+    因此同一入参重复调用是安全的。
+    """
+    session = await _load_session(db, session_id, user_id)  # 归属校验：404
+
+    # 只把**显式给出**的检索参数传下去：都缺省 → None ⇒ 组装器用自身默认值
+    retriever_kwargs: Dict[str, Any] = {}
+    if payload.top_k is not None:
+        retriever_kwargs["top_k"] = payload.top_k
+    if payload.min_score is not None:
+        retriever_kwargs["min_score"] = payload.min_score
+
+    result = await interview_followup.generate_followup(
+        db,
+        session_id,
+        answer_text=payload.answer_text,
+        question_no=payload.question_no,
+        user_id=user_id,
+        spark=spark,
+        retriever=retriever,
+        use_rag=payload.use_rag,
+        retriever_kwargs=retriever_kwargs or None,
+    )
+    # 交付边界分流：text 原样返回（默认路径）；avatar 走数字人通道入口
+    return await _deliver(db, session, result)

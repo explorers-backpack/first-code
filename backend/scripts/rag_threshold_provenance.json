@@ -1,0 +1,38 @@
+{
+  "generated_at": "2026-10-08T23:34:13+0800",
+  "source": {
+    "runner": "tests/rag_production_query_calibration_spark_run.py",
+    "artifact": "scripts/rag_production_query_calibration_spark.json",
+    "artifact_generated_at": "2026-09-28T01:39:25+0800",
+    "applied_by": "scripts/apply_threshold_calibration.py",
+    "embedder_verified": false
+  },
+  "embedder": {
+    "provider": "xinghuo-embedding",
+    "dimension": 2560,
+    "semantic_enabled": true
+  },
+  "corpus": {
+    "file": "scripts/interview_knowledge.json",
+    "documents": 22,
+    "chunks": 32,
+    "sha256": "fe72792e8982648b8c7e43024f83d42bc8863924ffdd276d08a047df351e4311"
+  },
+  "params": {
+    "min_score": 0.7685,
+    "min_score_ratio": 0.9947,
+    "top_k": 8
+  },
+  "windows": {
+    "min_score": {
+      "lo_exclusive": 0.7663152759786335,
+      "hi_inclusive": 0.7700276507504282,
+      "recommended": 0.7681714633645309
+    },
+    "min_score_ratio": {
+      "lo_exclusive": 0.9932455171101932,
+      "hi_inclusive": 0.996251335470167,
+      "recommended": 0.99474842629018
+    }
+  }
+}

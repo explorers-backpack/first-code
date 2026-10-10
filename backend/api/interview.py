@@ -37,6 +37,8 @@ from schemas.interview import (
     AnswerSubmitResponse,
     CurrentQuestionResponse,
     EndSessionResponse,
+    FollowUpRequest,
+    FollowUpResponse,
     InterviewReportOut,
     NextQuestionRequest,
     NextQuestionResponse,
@@ -243,3 +245,35 @@ async def next_question(
         ),
     )
     return NextQuestionResponse(**data)
+
+
+@router.post(
+    "/{session_id}/follow-up",
+    response_model=FollowUpResponse,
+    summary="根据回答生成追问（数字人「继续提问」）",
+    description=(
+        "走**追问链**：`用户回答 → 分析回答 → Retriever 检索 → Agent 生成追问 → "
+        "Avatar 继续提问`。上下文同时带上**简历 + 岗位 + 知识库 + 历史回答**。\n\n"
+        "与 `/next-question` 的区别：追问**必须**针对候选人刚说的那一句，"
+        "因此要求 `answer_text`；`question_no` 缺省时取「最近一道已作答的题」。\n\n"
+        "**RAG 开关**与 `/next-question` 完全一致：`use_rag=true` 才组装真实检索链路，"
+        "缺省 `false` ⇒ 不检索（Prompt 与引入知识能力之前逐字节相同）。"
+        "组装 / 检索失败**静默降级为「无知识」**，只在 `warnings` 里体现。\n\n"
+        "**本接口不落库**、不推进题号，因此重复调用是安全的。"
+        "`avatar` 模式下的结果会经数字人通道交付（失败一律降级为原样返回，"
+        "**不会阻断面试**）。"
+    ),
+)
+async def follow_up(
+    payload: FollowUpRequest,
+    session_id: int = SessionId,
+    current_user: dict = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> FollowUpResponse:
+    data = await _run(
+        "生成追问",
+        interview_service.generate_followup(
+            db, current_user["user_id"], session_id, payload
+        ),
+    )
+    return FollowUpResponse(**data)

@@ -37,11 +37,54 @@
  * 7. **报告权重与后端同源**：`REPORT_DIMENSIONS` 的 7 个维度名与权重逐项对齐
  *    `interview_core.REPORT_DIMENSION_WEIGHTS`（仅用于**展示**，总分一律取后端返回的
  *    `total_score`，不在前端重算——后端在维度缺失时会重新归一化权重）。
+ *
+ * 面试模式（本次新增）
+ * -------------------
+ * 配置区新增「面试模式」，`startInterview` 把它作为 `mode` 传给
+ * `POST /api/interview/create`（后端字段名 `interview_mode`，两种键名都接受）。
+ *
+ * | 模式 | 值 | 走哪条通道 | 作答方式 |
+ * |---|---|---|---|
+ * | 文字面试 | `text` | HTTP（与改造前**完全一致**） | 打字 |
+ * | 视频面试 | `avatar` | WebSocket `/api/interview/{id}/ws` | 数字人播报 + 语音(ASR) / 打字兜底 |
+ *
+ * 关键约束：**两种模式共用同一套面试核心**（出题 / 评分 / 报告 / 状态机全不分流），
+ * 差别只在「怎么交付」。因此：
+ * - `mode === 'text'` 时本组件的行为与改造前**逐字节相同**（多出来的分支都带
+ *   `isAvatarMode` 条件，文字路径一个判断都不会命中）；
+ * - `mode === 'avatar'` 时**不再调** HTTP `/start`（题目由实时通道的 `start` 消息
+ *   触发，服务端会先做数字人预检再出题），作答、结束也都走通道。
+ *
+ * 视频模式额外渲染（用户要求的五项）：
+ * - **数字人展示区域**：`avatar` 事件（`provider` / `configured` / `session_probed` /
+ *   `status` / `stream_url`）。注意「未探测」（`session_probed === false`，`ok === null`）
+ *   与「探测失败」（`ok === false`）是**两件事**，界面必须分开说；
+ * - **视频流播放器**：`<video>` 绑定 `stream_url`（Mock 下是 `mock://stream`，
+ *   浏览器放不出来属正常，因此播放器不可用时**降级为占位提示**而不是空白）；
+ * - **当前问题**：`question` 事件的 `question`（与 HTTP 契约**同一形状**）；
+ * - **回答状态**：`answer` 事件的 `submitted` / `rejected`（含 ASR 明细与拒收原因）；
+ * - **面试状态**：`state` 事件的编排状态（5 态，`ORCH_STATE_LABELS` 给中文）。
+ *
+ * 通道的关闭码按语义分开提示（4401 未登录 / 4403 无权限 / 4404 会话不存在），
+ * **不在本组件跳转、不清 token**——与全项目的登录态约定一致。
  */
 
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { apiClient } from '../api/apiClient'
+import {
+  ANSWER_REJECTED,
+  ANSWER_SUBMITTED,
+  AVATAR_STATUS_LABELS,
+  InterviewSocket,
+  ORCH_STATE_LABELS,
+  SocketAuthError,
+  WS_CLOSE_BUSY,
+  WS_CLOSE_FORBIDDEN,
+  WS_CLOSE_IDLE,
+  WS_CLOSE_NOT_FOUND,
+  WS_CLOSE_UNAUTHORIZED,
+} from '../api/interviewSocket'
 
 const API = '/interview'
 
@@ -57,6 +100,16 @@ const DIFFICULTY_OPTIONS = [
   { value: 'senior', label: '高级' },
 ]
 const STATUS_LABELS = { created: '未开始', ongoing: '进行中', finished: '已结束' }
+
+// ---------------- 面试模式（与后端 schemas.interview.InterviewMode 取值一一对应） ----------------
+// text   = 文字面试：打字作答，走 HTTP —— **现有 UI 与流程一行未改**
+// avatar = 视频面试：数字人播报 + 实时通道（WebSocket），语音(ASR)作答 / 打字兜底
+const MODE_TEXT = 'text'
+const MODE_AVATAR = 'avatar'
+const MODE_OPTIONS = [
+  { value: MODE_TEXT, label: '文字面试' },
+  { value: MODE_AVATAR, label: '视频面试' },
+]
 
 const TYPE_LABELS = TYPE_OPTIONS.reduce((acc, i) => ((acc[i.value] = i.label), acc), {})
 const DIFFICULTY_LABELS = DIFFICULTY_OPTIONS.reduce((acc, i) => ((acc[i.value] = i.label), acc), {})
@@ -100,6 +153,8 @@ const jobsLoading = ref(false)
 // ---------------- 配置 ----------------
 const form = reactive({
   job_id: null,
+  // ★ 交互模式：默认 text ⇒ 不选就是改造前的行为，文字面试零变化。
+  mode: MODE_TEXT,
   interview_type: 'comprehensive',
   difficulty: 'mid',
   total_questions: 5,
@@ -123,9 +178,26 @@ const starting = ref(false)
 const loading = ref(false)
 const submitting = ref(false)
 const ending = ref(false)
+// 视频模式：作答请求已发出、还没等到 `answer` 事件（用于禁用按钮，避免重复提交）
+const answerPending = ref(false)
 
 // 作答草稿
 const answerDraft = ref('')
+
+// ---------------- 视频面试：实时通道状态（仅 avatar 模式会用到） ----------------
+// ★ `activeSocket` 刻意是**普通变量**而不是 ref：Vue 的 ref 会用 Proxy 深包裹对象，
+//   把 WebSocket 实例塞进去会在 readyState / send 等路径上多一层代理，得不偿失。
+//   界面需要的是**派生出来的**几个响应式状态（下面这些 ref），而不是实例本身。
+let activeSocket = null
+
+const socketConnected = ref(false) // 通道是否已连上（用于按钮可用性）
+const socketNotice = ref('') // 通道提示（连接中 / 断开原因 / 重连耗尽）
+const helloInfo = ref(null) // hello 事件（服务端自报的协议能力）
+const orchState = ref(null) // state 事件 → 面试状态
+const avatarState = ref(null) // avatar 事件 → 数字人状态
+const answerStatus = ref(null) // answer 事件 → 回答状态（submitted / rejected）
+const lastScore = ref(null) // score 事件 → 最近一题的评分
+const wsError = ref(null) // error 事件（稳定错误码 + 可读说明）
 
 // ---------------- 大模型出题通道（试跑，不进闭环） ----------------
 const asking = ref(false)
@@ -140,6 +212,90 @@ const canSubmitAnswer = computed(
 )
 const isFinished = computed(() => !!session.value && session.value.status === 'finished')
 const isCreated = computed(() => !!session.value && session.value.status === 'created')
+
+// ---------------- 视频面试的派生状态（模式判定 + 五项展示） ----------------
+/**
+ * 当前会话的交互模式。**以库中的 `interview_mode` 为准**（不是 `form.mode`）——
+ * 恢复会话 / 刷新页面后 `form.mode` 已回到默认值，只有会话上的字段才是真相。
+ * 老会话（改造前建的）该列为 `text`，因此 `isAvatarMode` 恒为 false ⇒ 文字路径不变。
+ */
+const sessionMode = computed(() => (session.value && session.value.interview_mode) || MODE_TEXT)
+const isAvatarMode = computed(() => sessionMode.value === MODE_AVATAR)
+
+/** 面试状态（编排层 5 态）。未收到 `state` 事件时给占位符，不假装是「准备中」。 */
+const orchStateLabel = computed(() => {
+  if (!orchState.value) return '—'
+  return ORCH_STATE_LABELS[orchState.value] || `未收录的编排状态：${orchState.value}`
+})
+
+/** 视频流地址（数字人服务端下发；Mock provider 给的是 `mock://stream`）。 */
+const avatarStreamUrl = computed(() => (avatarState.value && avatarState.value.stream_url) || '')
+
+/**
+ * 该流地址浏览器能否真的播。
+ *
+ * Mock provider 下发的是 `mock://stream` 这类**自定义协议**——`<video>` 挂上去只会
+ * 得到一个破图。所以这里按协议白名单判断，不能播就渲染占位区并**说明原因**，
+ * 而不是把破播放器摆在那儿让人以为是功能坏了。
+ */
+const avatarStreamPlayable = computed(() => /^(https?:|blob:|data:)/i.test(avatarStreamUrl.value))
+
+/**
+ * 数字人状态文案 —— 三种情况**必须分开说**：
+ * - 没收到 `avatar` 事件：不知道；
+ * - `session_probed === false`：**尚未预检**（不是失败！`ok` 为 null）；
+ * - 有 `status`：按通道层的 7 档给中文。
+ */
+const avatarStatusText = computed(() => {
+  const st = avatarState.value
+  if (!st) return '尚未收到数字人状态'
+  if (st.session_probed === false) return '数字人尚未预检（发出「开始」后由服务端探测）'
+  if (st.status) return AVATAR_STATUS_LABELS[st.status] || `未收录的通道状态：${st.status}`
+  return st.ok ? '数字人已就绪' : '数字人未就绪'
+})
+
+/** 回答状态文案（`answer` 事件的提交结果）。 */
+const answerStatusText = computed(() => {
+  const s = answerStatus.value
+  if (!s) return '尚未提交回答'
+  if (s.status === ANSWER_SUBMITTED) {
+    return s.source === 'asr' ? '已收到语音作答并完成评分' : '已提交文字作答并完成评分'
+  }
+  return s.error || '作答未被接受'
+})
+
+/**
+ * ★ 视频模式：**编排状态是否允许作答**。
+ *
+ * 编排层是严格顺序的：只有 `waiting_answer` 能提交作答。答完一题后状态会回到
+ * `avatar_speaking`（数字人正在播报**下一题**）——此时提交只会拿到 `state_error`。
+ * 这条闸门是**真机端到端跑出来的**：假 WebSocket 的单元自检里没有编排状态，
+ * 界面照常「看起来能用」，一连真服务端就露馅。
+ */
+const canAnswerNow = computed(() => orchState.value === 'waiting_answer')
+
+/** 视频模式：数字人正在播报（此时该点「数字人播报完毕」）。 */
+const isAvatarSpeaking = computed(() => orchState.value === 'avatar_speaking')
+
+/** 视频模式：当前该做什么（**把编排状态翻译成一句人话**，不让用户猜按钮为什么是灰的）。 */
+const answerGateHint = computed(() => {
+  if (!isAvatarMode.value) return ''
+  if (!socketConnected.value) return '实时通道未连接，请先「重新连接」。'
+  switch (orchState.value) {
+    case 'avatar_speaking':
+      return '数字人正在播报，播报结束后点「数字人播报完毕」即可作答。'
+    case 'processing_answer':
+      return '正在评分，请稍候…'
+    case 'waiting_question':
+      return '正在准备题目…'
+    case 'finished':
+      return '本场面试已结束。'
+    case 'waiting_answer':
+      return '轮到你了：可用「语音作答（ASR）」，也可在下方打字作答。'
+    default:
+      return '正在等待服务端状态…'
+  }
+})
 
 /** 报告行：把 null 维度显式标出，避免「null 被当成 0 分」这类静默错误。 */
 const reportRows = computed(() => {
@@ -255,6 +411,250 @@ async function loadSession(sessionId) {
   }
 }
 
+// ============================================================
+// 视频面试 · 实时通道（仅 avatar 模式使用）
+// ============================================================
+/** 清空通道派生状态（**不动** `session` / `answers` / `report` 这些业务数据）。 */
+function resetSocketState() {
+  socketConnected.value = false
+  socketNotice.value = ''
+  helloInfo.value = null
+  orchState.value = null
+  avatarState.value = null
+  answerStatus.value = null
+  lastScore.value = null
+  wsError.value = null
+  answerPending.value = false
+}
+
+/** 主动断开（组件卸载 / 重新开始 / 换会话时必须调，否则会触发自动重连）。 */
+function disconnectSocket() {
+  if (activeSocket) {
+    activeSocket.close()
+    activeSocket = null
+  }
+  socketConnected.value = false
+}
+
+/** 把关闭码翻译成人话（**不跳转、不清 token**，与全项目登录态约定一致）。 */
+function describeClose(code, reason) {
+  if (code === WS_CLOSE_UNAUTHORIZED) return '登录状态已失效，请重新登录后再试（实时通道已关闭）'
+  if (code === WS_CLOSE_FORBIDDEN) return '没有权限访问该会话（实时通道已关闭）'
+  if (code === WS_CLOSE_NOT_FOUND) return '会话不存在或不属于当前用户（实时通道已关闭）'
+  if (code === WS_CLOSE_IDLE) return '长时间无操作，实时通道已自动关闭（重新进入面试间即可恢复进度）'
+  if (code === WS_CLOSE_BUSY) return '同时打开的面试窗口过多，请关闭其他窗口后重试（实时通道已关闭）'
+  if (code === 1000) return '实时通道已关闭'
+  return `实时通道已断开（code=${code}）${reason ? `：${reason}` : ''}`
+}
+
+/** 把通道推来的题目累积进 `questions`，好让 `questionNoOf` 能映射题号。 */
+function rememberQuestion(question) {
+  if (!question || question.id === undefined || question.id === null) return
+  if (questions.value.some((q) => q.id === question.id)) return
+  questions.value = [...questions.value, question]
+}
+
+/** `answer` 事件 → 回答状态 + 作答记录（`answer` 与 HTTP 契约**同一形状**）。 */
+function handleAnswerEvent(evt) {
+  answerPending.value = false
+  if (evt.status === ANSWER_SUBMITTED) {
+    answerStatus.value = { status: ANSWER_SUBMITTED, text: evt.text || '', source: evt.source || '' }
+    if (evt.answer) answers.value = [...answers.value, evt.answer]
+    answerDraft.value = ''
+  } else {
+    answerStatus.value = {
+      status: ANSWER_REJECTED,
+      text: '',
+      source: evt.source || '',
+      error: evt.error || '作答未被接受',
+      asr: evt.asr || null,
+    }
+  }
+}
+
+/** 服务端事件分发（9 种，`SERVER_EVENTS`）。未知类型**不静默丢弃**，挂到提示上。 */
+function handleSocketEvent(evt) {
+  if (!evt || typeof evt !== 'object') return
+  switch (evt.type) {
+    case 'hello':
+      helloInfo.value = evt
+      break
+    case 'state':
+      orchState.value = evt.state || null
+      break
+    case 'avatar':
+      avatarState.value = evt
+      break
+    case 'question':
+      if (evt.session) session.value = evt.session
+      currentQuestion.value = evt.question || null
+      allAnswered.value = !!evt.all_answered
+      rememberQuestion(evt.question)
+      if (!evt.question && evt.all_answered) {
+        statusMessage.value = '全部题目已作答，请结束面试并生成报告'
+      } else if (evt.question) {
+        statusMessage.value = ''
+      }
+      break
+    case 'answer':
+      handleAnswerEvent(evt)
+      break
+    case 'score':
+      lastScore.value = evt
+      break
+    case 'report':
+      if (evt.session) session.value = evt.session
+      report.value = evt.report || null
+      currentQuestion.value = null
+      allAnswered.value = true
+      statusMessage.value = '面试已结束'
+      break
+    case 'error':
+      wsError.value = evt
+      answerPending.value = false
+      break
+    case 'pong':
+      break
+    default:
+      socketNotice.value = `收到未收录的服务端事件：${evt.type}`
+  }
+}
+
+/**
+ * 建立实时通道。
+ *
+ * 服务端在**每次**连接建立后都会推一次快照（`hello` → `state` → `question` → `avatar`），
+ * 因此重连本身即完成界面恢复，不需要额外再要一次 `snapshot`。
+ *
+ * @param {number} sessionId
+ * @param {{autoStart?: boolean}} [options] `autoStart`：连上后立刻发 `start`
+ *   （仅用于「会话还是 created，题目还没生成」这一种情形）。
+ */
+function connectSocket(sessionId, options = {}) {
+  const autoStart = options.autoStart === true
+  disconnectSocket()
+  resetSocketState()
+
+  let instance = null
+  try {
+    instance = new InterviewSocket(sessionId, {
+      onEvent: handleSocketEvent,
+      onOpen: () => {
+        socketConnected.value = true
+        socketNotice.value = '实时通道已连接'
+        if (autoStart) instance.start()
+      },
+      onClose: (code, reason) => {
+        socketConnected.value = false
+        socketNotice.value = describeClose(code, reason)
+      },
+      onError: (err) => {
+        socketNotice.value = (err && err.message) || '实时通道异常'
+      },
+    })
+  } catch (e) {
+    socketNotice.value = (e && e.message) || '实时通道初始化失败'
+    return
+  }
+
+  activeSocket = instance
+  try {
+    instance.connect()
+  } catch (e) {
+    activeSocket = null
+    socketNotice.value =
+      e instanceof SocketAuthError ? e.message : (e && e.message) || '实时通道连接失败'
+  }
+}
+
+/** 手动重连（通道断开后由用户触发；不自动无限重试，避免刷屏）。 */
+function reconnectSocket() {
+  if (!session.value) return
+  connectSocket(session.value.id, { autoStart: session.value.status === 'created' })
+}
+
+/** `speech_done`：数字人播报完毕（真实接入时由音视频 `ended` 事件触发）。 */
+function socketSpeechDone() {
+  if (!activeSocket) {
+    ElMessage.warning('实时通道未连接')
+    return
+  }
+  activeSocket.speechDone()
+}
+
+/** `answer` + `mode=asr`：语音作答（服务端取讯飞虚拟人内置 ASR 的文本再评分）。 */
+function socketAnswerByVoice() {
+  if (!activeSocket) {
+    ElMessage.warning('实时通道未连接')
+    return
+  }
+  answerPending.value = true
+  if (!activeSocket.answerByVoice()) {
+    answerPending.value = false
+    ElMessage.warning('实时通道未连接，语音作答未发出')
+  }
+}
+
+/** `answer` + `mode=text`：打字作答（ASR 不可用时的兜底）。 */
+function socketAnswerByText() {
+  const text = answerDraft.value.trim()
+  if (!text) {
+    ElMessage.warning('请先输入回答内容')
+    return
+  }
+  if (!activeSocket) {
+    ElMessage.warning('实时通道未连接')
+    return
+  }
+  answerPending.value = true
+  if (!activeSocket.answerByText(text)) {
+    answerPending.value = false
+    ElMessage.warning('实时通道未连接，回答未发出')
+  }
+}
+
+/** `finish`：结束面试并生成报告（与 HTTP 版同款二次确认）。 */
+async function socketFinish() {
+  if (!activeSocket) {
+    ElMessage.warning('实时通道未连接')
+    return
+  }
+  if (answers.value.length === 0) {
+    ElMessage.warning('尚未提交任何回答，无法生成报告（后端同样会拒绝）')
+    return
+  }
+  try {
+    await ElMessageBox.confirm(
+      allAnswered.value
+        ? '全部题目已作答完毕。生成报告后本场面试即结束，不可再作答。是否继续？'
+        : `当前已作答 ${answers.value.length} 题，仍有题目未作答。提前结束会按已作答内容生成报告，且不可恢复。是否继续？`,
+      '结束面试并生成报告',
+      { type: 'warning', confirmButtonText: '结束并生成报告', cancelButtonText: '再想想' }
+    )
+  } catch (e) {
+    return // 用户取消，不视为错误
+  }
+  ending.value = true
+  try {
+    if (!activeSocket.finish()) ElMessage.warning('实时通道未连接，结束请求未发出')
+  } finally {
+    ending.value = false
+  }
+}
+
+/** 视频模式建会话后的落地：先把会话挂上（UI 切到视频面板），再连通道。 */
+function beginAvatarSession(sessionDict, jobNameText) {
+  session.value = sessionDict
+  jobName.value = jobNameText || ''
+  questions.value = []
+  answers.value = []
+  currentQuestion.value = null
+  allAnswered.value = false
+  report.value = null
+  answerDraft.value = ''
+  statusMessage.value = '正在建立实时通道…'
+}
+
 /** 建会话 → 开始面试 → 载入状态。三步都成功才算成功。 */
 async function startInterview() {
   starting.value = true
@@ -267,11 +667,22 @@ async function startInterview() {
         interview_type: form.interview_type,
         difficulty: form.difficulty,
         total_questions: form.total_questions,
+        // ★ 交互模式随建会话一起落库（后端字段 interview_mode，键名 mode 同样接受）。
+        mode: form.mode,
       },
     })
     const sessionId = created && created.session && created.session.id
     if (!sessionId) {
       ElMessage.error('创建会话未返回 session id，无法继续')
+      return
+    }
+
+    if (form.mode === MODE_AVATAR) {
+      // 视频模式：**不调** HTTP /start —— 题目由实时通道的 start 消息触发
+      // （服务端会先做数字人预检，再生成整场题目并播报第一题）。
+      beginAvatarSession(created.session, created.job_name)
+      connectSocket(sessionId, { autoStart: true })
+      ElMessage.success('视频面试已创建，正在建立实时通道…')
       return
     }
 
@@ -297,6 +708,11 @@ async function restoreSession() {
   agentResult.value = null
   try {
     await loadSession(id)
+    if (isAvatarMode.value) {
+      // 视频会话：通道一连上服务端就会推快照（状态 / 当前题 / 数字人），界面即恢复；
+      // 仅当会话还是 `created`（题目尚未生成）时才补发一次 start。
+      connectSocket(id, { autoStart: session.value.status === 'created' })
+    }
     ElMessage.success(`已恢复会话 #${id}`)
   } catch (e) {
     session.value = null
@@ -408,6 +824,8 @@ async function askNextQuestion() {
 }
 
 function reset() {
+  disconnectSocket()
+  resetSocketState()
   session.value = null
   jobName.value = ''
   questions.value = []
@@ -422,6 +840,8 @@ function reset() {
 }
 
 onMounted(loadJobs)
+// ★ 组件卸载必须断开实时通道：否则客户端会自动重连，用户已经离开页面了还在打后端。
+onUnmounted(disconnectSocket)
 </script>
 
 <template>
@@ -431,7 +851,10 @@ onMounted(loadJobs)
       <div class="ir-header">
         <div class="ir-title">
           <h2>AI 面试间</h2>
-          <p>作答 → 结束 → 八维报告（完整闭环）· 另含大模型出题试跑通道（可挂载 RAG 知识库）</p>
+          <p>
+            作答 → 结束 → 八维报告（完整闭环）· 另含大模型出题试跑通道（可挂载 RAG 知识库）·
+            支持文字面试与数字人视频面试
+          </p>
         </div>
         <div class="ir-header-actions">
           <button v-if="session" class="ghost-btn" @click="reset">重新开始</button>
@@ -441,6 +864,19 @@ onMounted(loadJobs)
       <!-- ============ 一、配置区（未开始） ============ -->
       <section v-if="!session" class="ir-section">
         <div class="ir-grid">
+          <label class="ir-field">
+            <span>面试模式</span>
+            <select v-model="form.mode">
+              <option v-for="opt in MODE_OPTIONS" :key="opt.value" :value="opt.value">
+                {{ opt.label }}
+              </option>
+            </select>
+            <small>
+              文字面试：现有流程，打字作答。<br />
+              视频面试：数字人播报 + 实时通道，支持语音（ASR）作答，也可打字兜底。
+            </small>
+          </label>
+
           <label class="ir-field">
             <span>目标岗位（可选）</span>
             <select v-model="form.job_id" :disabled="jobsLoading">
@@ -498,7 +934,13 @@ onMounted(loadJobs)
 
         <div class="ir-actions">
           <button class="primary-btn" :disabled="starting" @click="startInterview">
-            {{ starting ? '正在创建并开始…' : '开始面试' }}
+            {{
+              starting
+                ? '正在创建并开始…'
+                : form.mode === MODE_AVATAR
+                  ? '开始视频面试'
+                  : '开始面试'
+            }}
           </button>
         </div>
 
@@ -542,8 +984,8 @@ onMounted(loadJobs)
 
         <p v-if="statusMessage" class="ir-status-msg">{{ statusMessage }}</p>
 
-        <!-- created：已恢复但尚未开始 -->
-        <section v-if="isCreated" class="ir-section">
+        <!-- created：已恢复但尚未开始（视频模式的「未开始」由实时通道的 start 触发，不走这里） -->
+        <section v-if="isCreated && !isAvatarMode" class="ir-section">
           <h3 class="ir-section-title">这场面试还未开始</h3>
           <p class="ir-empty">
             会话已存在但题目尚未生成。点下方按钮调用
@@ -556,8 +998,8 @@ onMounted(loadJobs)
           </div>
         </section>
 
-        <!-- ============ 二·一、作答闭环 ============ -->
-        <section v-if="!isCreated" class="ir-section">
+        <!-- ============ 二·一、作答闭环（文字面试：与改造前逐字节一致） ============ -->
+        <section v-if="!isCreated && !isAvatarMode" class="ir-section">
           <h3 class="ir-section-title">
             本场作答
             <span class="tag">/start 一次性生成全部题目 · 逐题作答</span>
@@ -619,6 +1061,217 @@ onMounted(loadJobs)
           <!-- 进行中：提前结束 -->
           <div v-if="!isFinished && currentQuestion" class="ir-actions left ir-end-early">
             <button class="ghost-btn" :disabled="ending || answeredCount === 0" @click="endInterview">
+              {{ ending ? '正在生成报告…' : '提前结束面试并生成报告' }}
+            </button>
+            <small v-if="answeredCount === 0">至少作答 1 题才能生成报告</small>
+          </div>
+        </section>
+
+        <!-- ============ 二·一'、视频面试面板（仅 avatar 模式） ============ -->
+        <section v-if="isAvatarMode" class="ir-section ir-video">
+          <h3 class="ir-section-title">
+            视频面试
+            <span class="tag">数字人 + 实时通道（WebSocket）</span>
+            <span class="tag">会话 #{{ session.id }}</span>
+          </h3>
+
+          <div class="ir-video-grid">
+            <!-- ---- 数字人展示区域 + 视频流播放器 ---- -->
+            <div class="ir-avatar-stage">
+              <video
+                v-if="avatarStreamPlayable"
+                class="ir-video-stream"
+                :src="avatarStreamUrl"
+                autoplay
+                playsinline
+                controls
+              ></video>
+              <div v-else class="ir-avatar-placeholder">
+                <span class="ir-avatar-face">数字人</span>
+                <p class="ir-avatar-hint">{{ avatarStatusText }}</p>
+                <p v-if="avatarStreamUrl" class="ir-avatar-hint small">
+                  已下发流地址 <code>{{ avatarStreamUrl }}</code>，但它不是浏览器可直接播放的
+                  协议（Mock provider 的占位地址），因此这里只显示占位区。
+                </p>
+              </div>
+
+              <div class="ir-avatar-meta">
+                <span class="chip">{{ avatarStatusText }}</span>
+                <span v-if="avatarState" class="chip">
+                  provider：{{ avatarState.provider || '（未配置）' }}
+                </span>
+                <span v-if="avatarState" class="chip">
+                  configured：{{ avatarState.configured ? '是' : '否' }}
+                </span>
+                <span v-if="avatarState && avatarState.avatar_session_id" class="chip">
+                  数字人会话：{{ avatarState.avatar_session_id }}
+                </span>
+              </div>
+              <p v-if="avatarState && avatarState.error" class="ir-avatar-error">
+                数字人明细：{{ avatarState.error }}
+              </p>
+            </div>
+
+            <!-- ---- 面试状态 / 回答状态 / 通道状态 ---- -->
+            <div class="ir-video-side">
+              <div class="ir-state-box">
+                <span class="ir-state-label">面试状态</span>
+                <strong class="ir-state-value">{{ orchStateLabel }}</strong>
+                <small v-if="orchState" class="ir-state-code">state = {{ orchState }}</small>
+                <small v-else class="ir-state-code">尚未收到 state 事件</small>
+              </div>
+
+              <div class="ir-state-box" :class="answerStatus ? 'st-' + answerStatus.status : ''">
+                <span class="ir-state-label">回答状态</span>
+                <strong class="ir-state-value">{{ answerStatusText }}</strong>
+                <small v-if="answerStatus && answerStatus.source" class="ir-state-code">
+                  来源：{{ answerStatus.source === 'asr' ? '语音（ASR）' : '打字' }}
+                </small>
+                <small v-if="answerStatus && answerStatus.text" class="ir-state-code">
+                  文本：{{ answerStatus.text }}
+                </small>
+              </div>
+
+              <div class="ir-state-box">
+                <span class="ir-state-label">通道状态</span>
+                <strong class="ir-state-value">{{ socketConnected ? '已连接' : '未连接' }}</strong>
+                <small v-if="socketNotice" class="ir-state-code">{{ socketNotice }}</small>
+                <small v-if="helloInfo" class="ir-state-code">
+                  服务端协议：{{ (helloInfo.server_events || []).length }} 类事件 ·
+                  {{ (helloInfo.client_messages || []).length }} 类消息
+                </small>
+                <button
+                  v-if="!socketConnected"
+                  class="ghost-btn ir-mini-btn"
+                  @click="reconnectSocket"
+                >
+                  重新连接
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ---- score 结果（最近一题） ---- -->
+          <div v-if="lastScore" class="ir-score-strip">
+            <span class="chip score">
+              第 {{ questionNoOf(lastScore.question_id) ?? '?' }} 题得分
+              {{ lastScore.score ?? '—' }}
+            </span>
+            <span class="chip">技术 {{ lastScore.technical_score ?? '—' }}</span>
+            <span class="chip">逻辑 {{ lastScore.logic_score ?? '—' }}</span>
+            <span class="chip">表达 {{ lastScore.expression_score ?? '—' }}</span>
+            <span class="chip">应变 {{ lastScore.adaptability_score ?? '—' }}</span>
+          </div>
+          <p v-if="lastScore && lastScore.feedback" class="ir-score-feedback">
+            <strong>点评：</strong>{{ lastScore.feedback }}
+          </p>
+
+          <!-- ---- 服务端 error 事件（稳定错误码） ---- -->
+          <div v-if="wsError" class="ir-errors">
+            <h4>实时通道报错（稳定错误码）</h4>
+            <ul>
+              <li><code>{{ wsError.code }}</code> —— {{ wsError.message }}</li>
+            </ul>
+          </div>
+
+          <!-- ---- 当前问题显示 ---- -->
+          <div v-if="currentQuestion" class="q-card plain">
+            <div class="q-head">
+              <span class="q-no">
+                第 {{ currentQuestion.question_no }} / {{ session.total_questions }} 题
+              </span>
+              <span class="chip">{{ currentQuestion.question_type }}</span>
+              <span v-if="currentQuestion.topic" class="chip">
+                主题：{{ currentQuestion.topic }}
+              </span>
+              <span v-if="currentQuestion.difficulty" class="chip">
+                难度：{{ currentQuestion.difficulty }}
+              </span>
+            </div>
+            <p class="q-text">{{ currentQuestion.question }}</p>
+            <div
+              v-if="currentQuestion.expected_points && currentQuestion.expected_points.length"
+              class="q-points"
+            >
+              <span class="q-points-title">考察点</span>
+              <ul>
+                <li v-for="(point, index) in currentQuestion.expected_points" :key="index">
+                  {{ point }}
+                </li>
+              </ul>
+            </div>
+          </div>
+          <p v-else class="ir-empty">
+            {{ socketConnected ? '正在等待题目…' : '实时通道未连接，请先重新连接。' }}
+          </p>
+
+          <!-- ---- 作答操作 ---- -->
+          <p v-if="currentQuestion || isFinished" class="ir-gate-hint">{{ answerGateHint }}</p>
+          <div v-if="currentQuestion" class="ir-actions left">
+            <button
+              class="primary-btn"
+              :disabled="answerPending || !canAnswerNow"
+              @click="socketAnswerByVoice"
+            >
+              {{ answerPending ? '等待评分…' : '语音作答（ASR）' }}
+            </button>
+            <button
+              class="ghost-btn"
+              :disabled="!socketConnected || !isAvatarSpeaking"
+              @click="socketSpeechDone"
+            >
+              数字人播报完毕
+            </button>
+            <small>
+              语音作答走服务端讯飞虚拟人内置 ASR；取不到文本会被**拒收**且不落库，可用下方打字兜底。
+            </small>
+          </div>
+
+          <!-- ---- 打字兜底作答 ---- -->
+          <div v-if="currentQuestion" class="ir-answer-box">
+            <textarea
+              v-model="answerDraft"
+              rows="5"
+              maxlength="10000"
+              :disabled="!canAnswerNow"
+              placeholder="也可在此打字作答（ASR 不可用时的兜底）。提交后由后端规则评分并落库，一题只能作答一次。"
+            ></textarea>
+            <div class="ir-answer-foot">
+              <span class="ir-counter">{{ answerDraft.length }} / 10000</span>
+              <button
+                class="primary-btn"
+                :disabled="!canSubmitAnswer || answerPending || !socketConnected || !canAnswerNow"
+                @click="socketAnswerByText"
+              >
+                {{ answerPending ? '提交并评分中…' : '提交文字回答' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- ---- 全部作答完毕 → 结束 ---- -->
+          <div v-if="!currentQuestion && allAnswered && !isFinished" class="ir-done-box">
+            <p class="ir-done-text">
+              全部 {{ session.total_questions }} 题已作答完毕。点下方按钮通过实时通道发
+              <code>finish</code> 消息生成八维报告。
+            </p>
+            <div class="ir-actions left">
+              <button
+                class="primary-btn"
+                :disabled="ending || !socketConnected"
+                @click="socketFinish"
+              >
+                {{ ending ? '正在生成报告…' : '结束面试并生成报告' }}
+              </button>
+            </div>
+          </div>
+
+          <!-- ---- 进行中：提前结束 ---- -->
+          <div v-if="!isFinished && currentQuestion" class="ir-actions left ir-end-early">
+            <button
+              class="ghost-btn"
+              :disabled="ending || answeredCount === 0 || !socketConnected"
+              @click="socketFinish"
+            >
               {{ ending ? '正在生成报告…' : '提前结束面试并生成报告' }}
             </button>
             <small v-if="answeredCount === 0">至少作答 1 题才能生成报告</small>
@@ -1509,5 +2162,181 @@ onMounted(loadJobs)
   font-size: 13.5px;
   line-height: 1.8;
   color: var(--text-muted);
+}
+
+/* ---------------- 视频面试面板（仅 avatar 模式） ---------------- */
+.ir-video {
+  padding-top: 22px;
+  border-top: 1px dashed var(--border-glass);
+}
+
+.ir-video-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 720px) {
+  .ir-video-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- 数字人展示区域 + 视频流播放器 ---- */
+.ir-actions.left small {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+
+.ir-avatar-stage {
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+}
+
+.ir-video-stream {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: rgba(45, 42, 38, 0.06);
+  border-radius: var(--radius-sm);
+}
+
+.ir-avatar-placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  aspect-ratio: 16 / 9;
+  padding: 16px;
+  text-align: center;
+  background: linear-gradient(135deg, rgba(201, 162, 39, 0.07), rgba(0, 168, 150, 0.07));
+  border: 1px dashed var(--border-glass-strong);
+  border-radius: var(--radius-sm);
+}
+
+.ir-avatar-face {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--accent-gold);
+  letter-spacing: 0.08em;
+}
+
+.ir-avatar-hint {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.ir-avatar-hint.small {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.ir-avatar-hint code,
+.ir-avatar-error code {
+  padding: 1px 5px;
+  font-size: 12px;
+  background: rgba(45, 42, 38, 0.06);
+  border-radius: 4px;
+}
+
+.ir-avatar-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.ir-avatar-error {
+  margin: 10px 0 0;
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--warning);
+  word-break: break-word;
+}
+
+/* ---- 面试状态 / 回答状态 / 通道状态 ---- */
+.ir-video-side {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.ir-state-box {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 13px 15px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-md);
+}
+
+.ir-state-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.ir-state-value {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ir-state-code {
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  word-break: break-word;
+}
+
+/* 回答状态：提交成功 / 被拒收（拒收不是错误，是「这一条没被接受」） */
+.ir-state-box.st-submitted {
+  background: rgba(0, 168, 150, 0.06);
+  border-color: rgba(0, 168, 150, 0.28);
+}
+
+.ir-state-box.st-rejected {
+  background: rgba(201, 162, 39, 0.08);
+  border-color: rgba(201, 162, 39, 0.3);
+}
+
+.ir-mini-btn {
+  align-self: flex-start;
+  margin-top: 6px;
+  padding: 5px 12px;
+  font-size: 12.5px;
+}
+
+/* ---- score 结果 ---- */
+.ir-score-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.ir-score-feedback {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--text-secondary);
+}
+
+/* 当前该做什么（把编排状态翻译成人话） */
+.ir-gate-hint {
+  margin: 16px 0 0;
+  padding: 10px 14px;
+  font-size: 13px;
+  line-height: 1.7;
+  color: var(--accent-gold);
+  background: rgba(201, 162, 39, 0.08);
+  border: 1px solid rgba(201, 162, 39, 0.28);
+  border-radius: var(--radius-sm);
 }
 </style>

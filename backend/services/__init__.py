@@ -29,7 +29,24 @@ AI 模拟面试（四层分层 + 生成策略层）
 
     交互通道层（按 interview_mode 分流「怎么交付」，不参与「面什么」）：
     interview_service._deliver ──┬── text   → 原样返回（既有流程）
-                                 └── avatar → avatar_interview.enter（空实现）
+                                 └── avatar → avatar_interview.enter（通道层）
+                                       └── avatar_provider（接口 + Mock，零第三方依赖）
+                                             └── avatar_provider_iflytek（讯飞，显式 opt-in）
+    通道层的另两项**显式能力**（不属「交付」，故不走 _deliver；供数字人闭环用）：
+    interview_service.ensure_avatar       → avatar_interview.ensure_ready   （Avatar 启动 / 预检）
+    interview_service.capture_avatar_answer → avatar_interview.capture_answer（**ASR 取文本**）
+    （两者都返回**恒定键集信封**，失败以 ok=False + status 如实上报，**不抛 provider 异常**）
+
+    编排层（**可选**，把上面这些「单步能力」串成数字人面试的完整时间线）：
+    interview_orchestrator ──→ interview_service（复用 start/submit/end/generate，不重造）
+                           ──→ interview_core.score_answer（评分**直通**，不做第二套）
+    （维护 5 状态编排状态机 waiting_question → avatar_speaking → waiting_answer
+      → processing_answer → finished；状态是**进程内**运行态，不落库、不加列）
+    ★ 唯一消费者：``api/interview_ws.py``（**全项目唯一** import 编排层的模块，
+      即「实时通道」WebSocket 路由；由 ``tests/test_interview_ws.py`` 断言收口为闭集）
+    数字人闭环（两条新增入口，**仍只依赖 interview_service**，不加新的分层边）：
+    prepare_avatar（Avatar 启动预检）
+    answer_from_asr（**讯飞虚拟人 ASR → 取文本 → submit_answer()** → 评分 → 交付下一题）
 
     RAG 接线（唯一一处，只服务 agent 出题路径；默认关闭）：
     generate_next_question(use_rag=True)
@@ -52,13 +69,65 @@ AI 模拟面试（四层分层 + 生成策略层）
         用哪个后端由 ``VECTOR_STORE`` 决定，不设 = vector_store_sql）
 
 - ``avatar_interview``：**数字人视频面试通道**（``interview_mode == "avatar"`` 的入口）。
-  **预留入口，当前为空实现**：``enter(db, session, payload)`` 原样透传交付内容，
-  因此 avatar 会话与 text 会话拿到完全一样的结果，**不会阻塞任何流程**。
-  ``STATUS = "pending"``、``INTEGRATIONS = {iflytek: False, asr: False, tts: False}``
-  明确标注**未接讯飞数字人 / ASR / TTS**。接入时**只改 ``enter`` 函数体**
-  （签名已预留 ``db`` / ``session`` 供登记数字人会话），Service 与 Core 都不用动。
+  ``enter(db, session, payload)`` 是**交付边界分流点**（由 ``interview_service._deliver``
+  在 4 个交互入口调用），按 payload 形状判定阶段（start / current / answer / end），
+  驱动 ``avatar_provider`` 完成「建会话 → 初始化 → 播报 → 取回答 → 停止」。
+  **两处 try/except 全兜底 ⇒ 始终返回传入的同一个对象**：provider 解析失败或
+  驱动失败都只记 warning，**绝不阻断面试**（数字人故障时退化为 text 体验）。
+  ``STATUS = "ready"``、``INTEGRATIONS = {iflytek: True, asr: True, tts: True}``
+  ——「已接」指的是**接口层已就位**（Mock 可离线跑通全流程），真实讯飞端点仍是占位。
+  ``create_session`` 对同一 ``session_ref`` **幂等**（4 个入口都会调它，不会重复建会话）。
   **不参与出题 / 评分 / 报告**，且**不反向 import** ``interview_core`` /
-  ``interview_service`` / ``main``（避免环与拉入 Spark）。
+  ``interview_service`` / ``main``（避免环与拉入 Spark）；顶层也不 import 具体厂商实现
+  （``avatar_provider_iflytek`` 在 ``_build_provider()`` 内**延迟导入**）。
+  另有两项**显式能力**（闭环用，不是「交付」）：``ensure_ready``（Avatar 启动 / 预检）
+  与 ``capture_answer``（**ASR 取文本**，即 ``provider.fetch_answer``）。
+  二者返回**恒定键集信封**（``READY_FIELDS`` 7 键 / ``CAPTURE_FIELDS`` 8 键，
+  成功与失败**同形状**），**永不抛 provider 异常**，而是把故障分类进 ``status``：
+  ``ok`` / ``empty``（没听到，可重试）/ ``unavailable``（网络，可重试）/
+  ``expired``（**会话失效，重试无用，需重建**）/ ``unsupported``（非 avatar 会话）/
+  ``disabled``（配置错）/ ``failed``。
+  **不新增独立 ASR / TTS Provider**：语音识别就是 ``provider.fetch_answer``、
+  文本驱动就是 ``provider.speak``，都是**讯飞虚拟人的内置能力**，本模块只做分类封装。
+
+- ``avatar_provider`` / ``avatar_provider_iflytek``：**数字人 Provider 层**
+  （接口 + Mock / 讯飞实现），详见 ``docs/数字人Provider接入说明.md``。
+  接口模块**零第三方依赖**（顶层只有 ``__future__`` / ``abc`` / ``dataclasses`` /
+  ``typing``，全文不 import httpx）；讯飞模块的 ``httpx`` 只在函数体内延迟导入。
+  ``AVATAR_PROVIDER`` 空 / ``mock`` ⇒ Mock（离线）；``iflytek`` **显式 opt-in**；
+  其它取值**启动即报错**。运行态经 ``GET /api/health`` 的 ``avatar`` 键上报。
+
+- ``interview_orchestrator``：**数字人面试全生命周期编排层**（**可选层**，
+  唯一消费者是 ``api/interview_ws.py`` 的实时通道路由）。
+  ``interview_service`` 提供的是**无状态单步能力**（创建 / 开始 / 取题 / 提交 / 结束），
+  本模块把「创建 Session → 初始化 Avatar → 生成问题 → 数字人播报 → 等待回答 →
+  提交答案 → 评分 → 下一题」这条**有状态时间线**显式化，并对非法顺序报错。
+  5 个状态：``waiting_question`` / ``avatar_speaking`` / ``waiting_answer`` /
+  ``processing_answer`` / ``finished``；转移表 ``TRANSITIONS`` 是唯一权威，
+  纯函数 ``transition(state, event)`` 可脱离 DB 单测。
+  **三条不变量**：① **不修改** ``interview_core``（出题 / 评分 / 报告一行不动）；
+  ② **不新增数据库列**（状态是**进程内** ``_STATES``，重启后自愈）；
+  ③ **依赖单向** ``interview_orchestrator → interview_service``，
+  除 ``api/interview_ws.py`` 这**一个刻意为之的例外**（它存在的意义就是把这条时间线
+  暴露给前端）外，**不得被** ``core`` / ``service`` / 其它 ``api`` 反向 import
+  （否则「可选编排」会变成「必经路径」，改变现有行为）。
+  复用而非重造：``start_session`` / ``submit_answer`` /
+  ``end_session`` / ``generate_next_question`` 全部委托 ``interview_service``，
+  ``score_answer`` 是 ``interview_core.score_answer`` 的**名字绑定**（同一对象）。
+  **顺序守卫**：``assert_can(session_id, event)`` 是 ``_assert_can`` 的**公开别名**
+  （同一函数对象，只做名字绑定）——只校验不落位，供 ``api`` 层在**打 provider 之前**
+  判定顺序是否合法（否则会白建一次数字人会话，前端还会先收到一个无意义的 ``avatar``
+  事件再收到 ``state_error``）。
+  **数字人闭环**：``prepare_avatar``（Avatar 启动预检）与 ``answer_from_asr``
+  （**讯飞虚拟人 ASR → 取文本 → ``submit_answer()``** → 评分 → 交付下一题）。
+  两条入口**仍只依赖 ``interview_service``**（经 ``ensure_avatar`` /
+  ``capture_avatar_answer`` 两个 Service 包装拿 session 行与 ASR 文本），
+  **不新增「编排 → 通道层」的边**；``schemas`` 在函数体内**延迟导入**，
+  顶层依赖因此逐项不变。``answer_from_asr`` 返回恒定 7 键（``ASR_RESULT_FIELDS``）：
+  ``ok`` / ``source``（``asr`` 或 ``fallback``）/ ``text`` / ``state`` / ``error`` /
+  ``asr``（通道层信封）/ ``result``（``submit_answer`` 原始返回）。
+  红线：**ASR 失败绝不调用 ``submit_answer``**（不写空答案）、
+  **顺序不对在调 provider 之前**就抛 ``OrchestratorStateError``。
 
 - ``knowledge_retriever``：**知识检索接口（RAG 扩展点，不实现真实 RAG）**。
   ``KnowledgeRetriever.retrieve(job_info, topic, context) -> List[KnowledgeChunk]``
@@ -381,8 +450,16 @@ AI 模拟面试（四层分层 + 生成策略层）
   另有 ``generate_next_question``（按需出题的**大模型通道**）：Service 只做归属校验，
   其余全部委托 ``interview_core``——**Service 永不直接调用 Agent / Validator**。
   **交互模式分流**只在 ``_deliver``（交付边界）一处：``text`` 原样返回（默认路径
-  零变化），``avatar`` 交给 ``avatar_interview.enter``。**面试逻辑一行都不分流**——
-  出题 / 评分 / 报告 / 状态机对两种模式完全共享。
+  零变化），``avatar`` 交给 ``avatar_interview.enter``。它被**全部交互入口**复用
+  （``start_session`` / ``get_current_question`` / ``submit_answer`` /
+  ``end_session``；只读投影 ``get_session_detail`` / ``get_report`` 不分流）。
+  **面试逻辑一行都不分流**——出题 / 评分 / 报告 / 状态机对两种模式完全共享。
+  另有**数字人闭环的两个薄包装**（不属交付边界，故不走 ``_deliver``）：
+  ``ensure_avatar``（Avatar 启动 / 预检）与 ``capture_avatar_answer``（**ASR 取文本**）。
+  它们存在的唯一理由是**让编排层不必越界**：session 行与归属校验（404）只能在本层做，
+  因此 ``interview_orchestrator`` 只需依赖 ``interview_service``，
+  **不必新增「编排 → 通道层」的边**。两者都**不抛 provider 异常**（以 ``ok=False`` +
+  ``status`` 上报），只有「会话不存在 / 非本人」照旧 404（与其余入口同口径）。
   **不再自行实现**出题计划 / 评分 / 报告——这些已迁至 ``interview_core``；
   为兼容既有调用方，旧名字（``score_answer`` / ``_plan_question_types`` 等）
   以**别名再导出**，与 Core 是同一对象（非复制实现）。
@@ -449,6 +526,51 @@ AI 模拟面试（四层分层 + 生成策略层）
   ``prompts`` 严格模式双向校验变量，单模板在空知识时也会渲染出「参考知识：（无）」。
   两模板一致性由 ``tests/test_agent_knowledge.py`` 的漂移守卫锁死。
   **修复路径不含知识**（``question_repair.txt`` 未引入该变量）。
+- ``interview_context_pack``：**面试上下文整合**（任务 95）——把「这场面试进行到此刻，
+  模型应当看到的全部背景」整合成一个**恒定 17 键**的上下文包：
+  **简历 + 岗位 + 知识库 + 历史回答**。与 ``interview_context`` 分工不同：
+  后者是**状态机侧**上下文（阶段 / 已问 / 覆盖 / 薄弱 / 追问次数，**落库**），
+  本模块是**出题视野侧**上下文（**纯派生、不落库**），它**读取**前者的产出而不修改它。
+  ``history`` 由题目行 × 作答行合并而成（**只保留已作答的题**、按题号升序、
+  最近 N 条、单条与总量双上限 + 显式截断标记）；``focus_topics`` = 薄弱点 +
+  计划缺口 + 计划全量 + 目标（保序去重）。**零 LLM、零检索**：
+  知识由调用方经 ``attach_knowledge`` 填进来（``knowledge_count`` = **原始片段条数**，
+  与 ``interview_core.knowledge_chunks`` 同口径）。``sqlalchemy`` / ``models``
+  只在 ``load_context_pack`` 内延迟导入；占位串与 ``interview_agent`` 的私有常量
+  **同字面量**（漂移守卫锁死，刻意不跨模块 import 私有名）。
+- ``interview_followup_agent``：**追问生成 Agent**（任务 95）——与 ``interview_agent``
+  **同一类角色**（只生成、不检索、不读库、不写库），但输入多了一层
+  「候选人刚才答了什么」：``followup.txt`` 需要 **14 个变量**
+  （简历 / 岗位 / 本题 / 回答 / **回答分析** / **历史问答** / 进度）。
+  之所以另起模块而不是改 ``interview_agent``：后者被源码指纹冻结，且
+  「出题」与「追问」是**两套变量契约**。
+  **空知识 → 走 ``followup.txt``；非空 → 走 ``followup_knowledge.txt``**
+  （原 14 变量 + ``knowledge_context``），漂移守卫锁死两模板一致性。
+  模板放在**新分组** ``prompts/interview_followup/``——
+  ``prompts/interview/`` 被 ``test_interview_prompts`` 断言**恰好 5 个**模板，
+  不得污染。复用（**同一对象**，非复制）``interview_agent`` 的
+  ``_is_spark_failure`` / ``_clip`` / ``_default_spark`` / ``validate_question`` /
+  ``is_duplicate_question`` / ``format_knowledge_context`` / ``failure``——
+  那份源码冻结，无法把私有名公开，只能按原名复用（复制 Spark 失败哨兵串必然脱节）。
+- ``interview_followup``：**追问链编排**（任务 95）——用户要求的五步
+  「用户回答 → **分析回答** → **Retriever 检索** → **Agent 生成追问** →
+  Avatar 继续提问」就落在这里。① 分析回答复用 ``interview_core.score_answer``
+  （**不另造评分口径**）并推导 ``hit_points`` / ``missed_points`` / ``weak_points`` /
+  ``focus``；② 检索只经 ``interview_core.resolve_retriever`` +
+  ``retrieve_knowledge``（**不 import** ``knowledge_rag``），检索线索 =
+  ``analysis.focus`` → ``pack.focus_topics`` → ``weak_topics`` → ``current_stage``；
+  ③ 生成交给 ``interview_followup_agent``；④ 交付由
+  ``interview_service.generate_followup`` 经 ``_deliver`` 按通道分流
+  （``avatar`` → ``avatar_interview.enter``）。
+  结果字段集恒定（``FOLLOWUP_RESULT_FIELDS``，**16 键**，与出题结果契约
+  ``QUESTION_RESULT_FIELDS`` 是**两个**契约）；错误码
+  ``session_not_found`` / ``session_finished`` / ``answer_required`` /
+  ``question_required`` / ``agent_failed``。**检索是可选增强**：
+  ``use_rag=False`` 且不注入 ``retriever`` ⇒ **一次检索都不发生**；
+  组装 / 检索失败静默降级为「无知识」+ ``knowledge_retrieval_failed``。
+  **不写库、不推进题号**（追问持久化与 ``interview_context.increment_follow_up``
+  由调用方决定），因此重复调用安全。对外入口
+  ``POST /api/interview/{session_id}/follow-up``。
 - ``question_validator``：面试问题的**校验器 + 标准化器**。
   ``QuestionValidator.validate(question_data, context, plan) -> ValidationResult``，
   ``errors`` 中为**稳定错误码**（``question_empty`` / ``topic_empty`` /
@@ -469,8 +591,30 @@ AI 模拟面试（四层分层 + 生成策略层）
   （依赖注入），返回普通 dict；HTTP 相关职责由 ``api/`` 层承担。
 - 分数一律由确定性规则产出，保证同输入同输出、可复现、可申诉。
 - 依赖方向严格单向：``api → service → core → (context | planner | agent | validator)``，
-  另有两条**旁支**边：策略层 ``question_generator → core``、
-  通道层 ``service → avatar_interview``（两者都**不得反向**被 core 依赖），
+  另有三条**旁支**边：策略层 ``question_generator → core``、
+  通道层 ``service → avatar_interview → avatar_provider → avatar_provider_iflytek``、
+  编排层 ``interview_orchestrator → interview_service``
+  （三条都**不得反向**被 core 依赖；编排层也不得被 ``service`` / 其它 ``api`` 反向 import，
+  否则「可选编排」会变成「必经路径」），
+  ★ 追问链（任务 95）是**第四条旁支边**，方向同样单向、同样不得反向::
+
+      api/interview.py → interview_service → interview_followup
+                          ├── interview_core            （评分 / 检索接缝 / 只读加载）
+                          ├── interview_context_pack    （上下文整合，只被 followup 消费）
+                          └── interview_followup_agent  （只生成；不 import 检索层）
+
+  ``interview_followup`` **不 import** ``interview_service``（否则成环），
+  ``interview_followup_agent`` **不 import** 任何检索 / 向量 / Embedding 模块
+  （知识只经 ``knowledge_context`` 参数进入），
+  ``interview_context_pack`` 只被追问链消费、**不反向**依赖任何编排层。
+  ★ 编排层**唯一**的例外是 ``api/interview_ws.py``（实时通道路由，只服务视频面试）：
+  它刻意 import 编排层，是为了把这条**有状态时间线**暴露给前端；
+  消费者被守卫断言**收口为闭集** ``["api/interview_ws.py"]``，
+  且该模块**不 import** 任何 provider / 通道层 / core / agent / validator
+  （provider 细节不下沉到 api 层），``api/interview.py`` 保持不含编排层与 ``WebSocket``，
+  ★ 数字人闭环**没有新增第四条旁支边**：``answer_from_asr`` / ``prepare_avatar``
+  仍只经 ``interview_service`` 的两个包装函数触达通道层，
+  编排层顶层依赖与引入闭环之前**逐项相同**（守卫测试断言），
   再加一条**可选**依赖 ``core → knowledge_retriever``（Core 在
   ``retrieve_knowledge`` 内**延迟导入**；``knowledge_retriever`` 零依赖、不反向），
   以及组装器边 ``core → knowledge_rag → (embedding_service | vector_store_sql

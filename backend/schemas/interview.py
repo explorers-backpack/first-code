@@ -91,6 +91,37 @@ class NextQuestionRequest(BaseModel):
     )
 
 
+class FollowUpRequest(BaseModel):
+    """根据候选人的回答生成**一道追问**（数字人面试的「继续提问」入口）。
+
+    链路：**分析回答 → Retriever 检索 → Agent 生成追问 → Avatar 继续提问**。
+    上下文同时带上**简历 + 岗位 + 知识库 + 历史回答**（见
+    ``services.interview_context_pack``）。
+
+    ``use_rag`` / ``top_k`` / ``min_score`` 的语义与 ``/next-question`` **完全一致**
+    （同一套开关、同一个组装器）：默认关闭，不显式要求就不会检索；
+    组装 / 检索失败**静默降级为「无知识」**（只在结果的 ``warnings`` 里体现）。
+    """
+
+    answer_text: str = Field(
+        ..., min_length=1, max_length=10000, description="候选人刚才的回答文本（ASR 或打字）"
+    )
+    question_no: Optional[int] = Field(
+        default=None,
+        ge=1,
+        description="追问所针对的题号；缺省取「最近一道已作答的题」",
+    )
+    use_rag: bool = Field(
+        default=False, description="是否启用 RAG 知识检索（默认关闭，不传即不检索）"
+    )
+    top_k: Optional[int] = Field(
+        default=None, ge=1, le=100, description="检索候选条数（仅 use_rag=true 时生效）"
+    )
+    min_score: Optional[float] = Field(
+        default=None, ge=-1, le=1, description="相似度下限，取值域 [-1, 1]（仅 use_rag=true 时生效）"
+    )
+
+
 # ============================================================
 # 响应体
 # ============================================================
@@ -298,6 +329,43 @@ class NextQuestionResponse(BaseModel):
     errors: List[str] = Field(default_factory=list)
     error: Optional[str] = None
     knowledge_chunks: int = 0
+
+
+class FollowUpResponse(BaseModel):
+    """追问结果 —— 即 ``services.interview_followup`` 的结果字典。
+
+    字段集**恒定**（成功与失败同形状），与
+    ``services.interview_followup.FOLLOWUP_RESULT_FIELDS`` 一一对应，
+    调用方无需按 ``ok`` 分支取值。约定：
+
+    - ``ok=False`` 时 ``question`` 恒为 ``""``（**绝不放行未校验的问题**）
+    - ``errors`` 放**稳定错误码**（``session_not_found`` / ``session_finished`` /
+      ``answer_required`` / ``question_required`` / ``agent_failed``）
+    - ``based_on`` 是**追问所针对的题目原文**，``focus`` 是本次追问的聚焦点
+      （同时也是检索线索），两者一起构成「为什么问这一句」的取证
+    - ``analysis`` 是回答分析（规则评分 + 命中 / 未命中的采分点 + 薄弱点），
+      字段集见 ``services.interview_followup.ANALYSIS_FIELDS``；失败时为空 dict
+    - 知识检索失败**不是失败**：``ok`` 不受影响，只在 ``warnings`` 里记
+      ``knowledge_retrieval_failed``；``knowledge_chunks`` 是**正向信号**
+      （本次真正注入 Prompt 的切片条数）
+    """
+
+    ok: bool
+    question_no: Optional[int] = None
+    question: str = ""
+    question_type: str = ""
+    topic: str = ""
+    difficulty: str = ""
+    expected_points: List[str] = Field(default_factory=list)
+    reason: str = ""
+    based_on: str = ""
+    follow_up_no: int = 1
+    focus: str = ""
+    analysis: Dict[str, Any] = Field(default_factory=dict)
+    knowledge_chunks: int = 0
+    warnings: List[str] = Field(default_factory=list)
+    errors: List[str] = Field(default_factory=list)
+    error: Optional[str] = None
 
 
 class ErrorResponse(BaseModel):

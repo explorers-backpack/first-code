@@ -6,8 +6,8 @@
 
 覆盖范围
 --------
-- **通道模块契约**：``services/avatar_interview.py`` 是**空实现**（原样透传、
-  协程入口、签名预留 ``db`` / ``session``），且元信息标明未接外部能力
+- **通道模块契约**：``services/avatar_interview.py`` 已接入 **Avatar Provider 抽象层**
+  （``services/avatar_provider``），元信息标明四项外部能力已具备（provider 层实现）
 - **text 流程不变**：``start_session`` 在 text 模式下**完全不碰** avatar 入口，
   返回结构与改动前逐字段一致（恰好 4 个键）
 - **avatar 可以创建 session**：service 层 + HTTP 全链路
@@ -15,9 +15,11 @@
   且收到的就是 Service 组装好的 payload、返回值被原样交回调用方
 - **两种模式互不影响**：同岗位下题目完全一致；交错作答时题号各自独立推进；
   一边结束不影响另一边状态
-- **边界**：未接讯飞数字人 / ASR / TTS；InterviewCore 不反向依赖通道层
+- **边界**：通道层不认识厂商 SDK（无 websocket / requests）；驱动逻辑下沉到 provider；
+  InterviewCore 不反向依赖通道层
 
 数据库使用 SQLite 内存库（``StaticPool``），不触碰本机 MySQL。
+``AVATAR_PROVIDER`` 由 ``regression_env`` 钉成空串 ⇒ 通道走 **Mock**，零联网。
 """
 
 import asyncio
@@ -30,7 +32,11 @@ import textwrap
 
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+_BACKEND = pathlib.Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(_BACKEND))
+sys.path.insert(0, str(_BACKEND / "tests"))
+
+import regression_env  # noqa: E402,F401  （钉住 AVATAR_* ⇒ 通道走 Mock，不联网）
 
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 from sqlalchemy.ext.asyncio import (  # noqa: E402
@@ -103,6 +109,19 @@ def _imported_modules(source: str):
     return names
 
 
+def _top_level_imports(source: str):
+    """只取**模块顶层** import（函数体内的延迟导入不算）——判「模块级耦合」用这个。"""
+    names = set()
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.Import):
+            names.update(alias.name for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            if node.module:
+                names.add(node.module)
+                names.update(f"{node.module}.{a.name}" for a in node.names)
+    return names
+
+
 def _build_session_factory():
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
@@ -147,28 +166,29 @@ async def run() -> bool:
     print("=" * 68)
 
     # ------------------------------------------------------------
-    # [1] 通道模块契约（空实现）
+    # [1] 通道模块契约（已接 Provider 抽象层）
     # ------------------------------------------------------------
     print("\n[1] 数字人通道入口（services/avatar_interview.py）")
     _check("CHANNEL == 'avatar'", avatar_interview.CHANNEL == "avatar",
            avatar_interview.CHANNEL)
-    _check("STATUS == pending（通道尚未接入）",
-           avatar_interview.STATUS == avatar_interview.STATUS_PENDING == "pending",
+    _check("STATUS == ready（通道已实现，provider 层已接入）",
+           avatar_interview.STATUS == avatar_interview.STATUS_READY == "ready",
            avatar_interview.STATUS)
-    _check("未接外部能力：iflytek / asr / tts 全为 False",
-           avatar_interview.INTEGRATIONS == {"iflytek": False, "asr": False, "tts": False},
+    _check("四项外部能力在 provider 层已具备：iflytek / asr / tts 全为 True",
+           avatar_interview.INTEGRATIONS == {"iflytek": True, "asr": True, "tts": True},
            str(avatar_interview.INTEGRATIONS))
     _check("enter 是协程函数", inspect.iscoroutinefunction(avatar_interview.enter))
-    _check("enter 签名预留 db / session / payload",
+    _check("enter 签名保持 db / session / payload（未为 provider 改签名）",
            list(inspect.signature(avatar_interview.enter).parameters) == ["db", "session", "payload"],
            str(list(inspect.signature(avatar_interview.enter).parameters)))
     _check("__all__ 覆盖公开常量与入口",
            {"CHANNEL", "STATUS", "STATUS_PENDING", "STATUS_READY", "INTEGRATIONS", "enter"}
            <= set(avatar_interview.__all__))
 
+    # 交付内容形状不变：enter 仍返回**同一对象**（数字人信息不塞进 payload）
     payload = {"session": {"id": 1}, "question": None, "job_name": None, "message": "面试已开始"}
     out = await avatar_interview.enter(None, None, payload)
-    _check("空实现：原样透传（返回同一对象）", out is payload)
+    _check("enter 始终原样返回同一对象（不新增 / 不改写交付字段）", out is payload)
 
     # ------------------------------------------------------------
     # [2] text 流程不变
@@ -257,7 +277,7 @@ async def run() -> bool:
                str(sorted(args[2])) if args else "")
         _check("  └ payload 里已带 interview_mode=avatar",
                args and args[2]["session"]["interview_mode"] == "avatar")
-        _check("入口返回值被原样交回调用方（空实现不改变交付内容）",
+        _check("入口返回值被原样交回调用方（驱动 provider 不改变交付内容）",
                avatar_started is args[2] if args else False)
         _check("avatar 会话状态机正常推进（分流不阻塞流程）",
                avatar_started["session"]["status"] == "ongoing"
@@ -359,7 +379,7 @@ async def run() -> bool:
         _check("POST /{id}/start（avatar）→ 200 且返回第一题",
                r.status_code == 200 and r.json()["question"]["question_no"] == 1,
                f"{r.status_code} {r.text[:160]}")
-        _check("  └ 出参仍为 4 键（空实现未污染 API 契约）",
+        _check("  └ 出参仍为 4 键（provider 驱动未污染 API 契约）",
                set(r.json()) == {"session", "question", "job_name", "message"},
                str(sorted(r.json())))
 
@@ -371,21 +391,39 @@ async def run() -> bool:
                r.status_code == 200 and r.json()["session"]["interview_mode"] == "text",
                f"{r.status_code} {r.text[:160]}")
 
+        # ---- 健康检查：数字人通道状态可见（否则「静默降级」无从察觉） ----
+        r = await client.get("/api/health")
+        _check("GET /api/health 回带 avatar 状态（未配置 ⇒ mock）",
+               r.status_code == 200 and (r.json().get("avatar") or {}).get("provider") == "mock",
+               f"{r.status_code} {r.json().get('avatar')}")
+        _check("  └ avatar 与 main.avatar_status() 同源（逐键相等）",
+               r.json().get("avatar") == main.avatar_status(),
+               f"{r.json().get('avatar')} vs {main.avatar_status()}")
+        _check("  └ 既有键 status / service 未变（加键不改键）",
+               r.json().get("status") == "ok"
+               and r.json().get("service") == "Career.ai FastAPI")
+
     main.app.dependency_overrides.clear()
 
     # ------------------------------------------------------------
-    # [7] 边界：未接外部能力 / 分层不被破坏
+    # [7] 边界：厂商细节不下沉 / 分层不被破坏
     # ------------------------------------------------------------
-    print("\n[7] 边界（未接讯飞 / ASR / TTS，分层不被破坏）")
+    print("\n[7] 边界（通道层不认识厂商 SDK，分层不被破坏）")
     avatar_src = pathlib.Path(avatar_interview.__file__).read_text(encoding="utf-8")
     avatar_imports = _imported_modules(avatar_src)
-    _check("通道模块只 import 标准库 + sqlalchemy（无 websocket / requests）",
+    _check("通道模块顶层只 import 标准库 + sqlalchemy + provider 接口（无 websocket / requests）",
            not any(
-               name in {"websocket", "websockets", "requests", "aiohttp"} or
+               name in {"websocket", "websockets", "requests", "aiohttp", "httpx"} or
                name.startswith(("websocket", "requests"))
-               for name in avatar_imports
+               for name in _top_level_imports(avatar_src)
            ),
-           str(sorted(avatar_imports)))
+           str(sorted(_top_level_imports(avatar_src))))
+    _check("  └ 已接 provider 抽象层（import services.avatar_provider）",
+           "services.avatar_provider" in avatar_imports, str(sorted(avatar_imports)))
+    _check("  └ 顶层不 import 具体讯飞实现（延迟到 _build_provider 内，换厂商不用改顶层）",
+           not any(name.startswith("services.avatar_provider_iflytek")
+                   for name in _top_level_imports(avatar_src)),
+           str(sorted(_top_level_imports(avatar_src))))
     _check("  └ 不 import main（避免拉入 Spark / 循环依赖）",
            "main" not in avatar_imports, str(sorted(avatar_imports)))
     _check("  └ 不 import interview_core / interview_service（通道层不反向依赖业务层）",
@@ -399,23 +437,48 @@ async def run() -> bool:
     _check("  └ Service 仍不直接 import Agent / Validator（既有约束未被破坏）",
            not {"services.interview_agent", "services.question_validator"} & service_imports,
            str(sorted(service_imports)))
+    _check("  └ Service 不直接 import provider（必须经通道层）",
+           not any(name.startswith("services.avatar_provider") for name in service_imports),
+           str(sorted(service_imports)))
 
     core_src = pathlib.Path(interview_core.__file__).read_text(encoding="utf-8")
     _check("InterviewCore 未反向依赖通道层（源码不含 avatar_interview）",
            "avatar_interview" not in core_src)
 
+    # enter 已从「空实现」变为「驱动 provider + 失败降级」——仍必须**始终**返回 payload
     enter_src = inspect.getsource(avatar_interview.enter)
     enter_def = ast.parse(textwrap.dedent(enter_src)).body[0]
     statements = [
         node for node in enter_def.body
         if not (isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant))
     ]
-    _check("enter 函数体只有一条 return（确实是空实现，无任何外部调用）",
-           len(statements) == 1
-           and isinstance(statements[0], ast.Return)
-           and isinstance(statements[0].value, ast.Name)
-           and statements[0].value.id == "payload",
+    _check("enter 是「驱动 + 降级」结构（含 try/except，不再是空实现）",
+           any(isinstance(node, ast.Try) for node in statements)
+           and any(isinstance(node, ast.Call) for node in ast.walk(enter_def)),
            f"{[type(n).__name__ for n in statements]}")
+    _check("  └ 函数体最后一条仍是 return payload（交付契约恒定）",
+           isinstance(statements[-1], ast.Return)
+           and isinstance(statements[-1].value, ast.Name)
+           and statements[-1].value.id == "payload",
+           f"{type(statements[-1]).__name__}")
+    _check("  └ 阶段判别 / 驱动已下沉到纯函数（classify_payload / spoken_text / drive）",
+           all(callable(getattr(avatar_interview, fn, None))
+               for fn in ("classify_payload", "spoken_text", "drive")))
+
+    # main.avatar_status：健康检查用的只读上报，**配置非法也不许抛**
+    st = main.avatar_status()
+    _check("main.avatar_status 固定 7 键、未配置 ⇒ mock / configured=True / error=None",
+           set(st) == {"provider", "known", "configured", "host", "base_path",
+                       "masked_api_key", "error"}
+           and st["provider"] == "mock" and st["configured"] is True and st["error"] is None,
+           str(st))
+    os.environ["AVATAR_PROVIDER"] = "bogus"
+    try:
+        st_bad = main.avatar_status()
+        _check("  └ 配置非法时**不抛异常**（健康检查永不 500），把原因塞进 error",
+               bool(st_bad["error"]) and st_bad["configured"] is False, str(st_bad))
+    finally:
+        os.environ["AVATAR_PROVIDER"] = ""  # 还原成 regression_env 钉的「未配置」
 
     await engine.dispose()
 

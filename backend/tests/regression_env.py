@@ -19,6 +19,16 @@
                         （实测 3 套失败：``test_rag_interview`` /
                         ``test_rag_param_passthrough`` / ``test_rag_production_route``）；
                         相对阈值 α 同属部署配置，一并钉住
+``VECTOR_STORE``        换后端会换**召回集合**（``chroma`` 是派生索引，权威行在、
+                        索引空 ⇒ 检索静默返回 0 条）⇒ 断言「检索到 N 条」的套件
+                        会**因部署配置**而红；空串恰好等于「未配置」⇒ 默认 ``sql``
+``CHROMA_PATH``         ANN 索引目录。空串 ⇒ ``open_client`` 回落到
+                        ``backend/data/chroma``（与未配置一致）；钉住是为了防止
+                        将来有人往 ``.env`` 里指到某个已有索引目录、把测试串起来
+``AVATAR_PROVIDER`` +   数字人通道。``AVATAR_PROVIDER`` 空串 = 未配置 = **Mock**
+``AVATAR_IFLYTEK_*``    （离线）；若被设成 ``iflytek``，avatar 套件会去构造真实
+                        讯飞 provider（缺凭据报错 / 真打网络耗配额）。凭据与端点
+                        一并钉空 —— 空串对每个旋钮都等价于「未配置」
 ===================  ==========================================================
 
 回归套件必须**不受部署配置影响**（否则「本机绿、CI 红」且原因与代码无关），
@@ -66,6 +76,23 @@ PINNED = {
     "RAG_TOP_K": "",
     "RAG_MIN_SCORE": "",
     "RAG_MIN_SCORE_RATIO": "",
+    # 向量后端：空串 = 未配置 = 默认 sql（**不改变任何既有断言**）；
+    # 钉住是为了防「有人往 .env 里设了 VECTOR_STORE=chroma，回归全线变红」。
+    "VECTOR_STORE": "",
+    "CHROMA_PATH": "",
+    # 数字人通道：``AVATAR_PROVIDER`` 空串 = 未配置 = **Mock**（离线、确定性）。
+    # 钉住是为了防「有人往 .env 里设了 AVATAR_PROVIDER=iflytek」——那样 avatar
+    # 相关套件会去构造真实讯飞 provider：轻则缺凭据报错、重则**真打网络**消耗配额。
+    # 凭据 / 端点一并钉空（空串 = 未配置，``load_avatar_config`` 回落到默认占位）。
+    "AVATAR_PROVIDER": "",
+    "AVATAR_IFLYTEK_APP_ID": "",
+    "AVATAR_IFLYTEK_API_KEY": "",
+    "AVATAR_IFLYTEK_API_SECRET": "",
+    "AVATAR_IFLYTEK_HOST": "",
+    "AVATAR_IFLYTEK_BASE_PATH": "",
+    "AVATAR_IFLYTEK_AVATAR_ID": "",
+    "AVATAR_IFLYTEK_VCN": "",
+    "AVATAR_TIMEOUT": "",
 }
 
 
