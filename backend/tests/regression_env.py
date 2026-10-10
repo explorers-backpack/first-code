@@ -29,6 +29,11 @@
 ``AVATAR_IFLYTEK_*``    （离线）；若被设成 ``iflytek``，avatar 套件会去构造真实
                         讯飞 provider（缺凭据报错 / 真打网络耗配额）。凭据与端点
                         一并钉空 —— 空串对每个旋钮都等价于「未配置」
+``INTERVIEW_AVATAR_``   数字人「LLM 单题出题」**默认开启**，会让数字人闭环套件
+``LLM_QUESTIONS``       在**提交答案**时走一次大模型（本机 ``.env`` 带真实
+                        ``SPARK_*`` ⇒ **真打星火**，单次 > 8s、耗配额、结果依赖
+                        网络）。★ 空串在这里等价于「未配置」= **开启**，所以这是
+                        **唯一一个必须钉成非空串（``"0"``）**的旋钮
 ===================  ==========================================================
 
 回归套件必须**不受部署配置影响**（否则「本机绿、CI 红」且原因与代码无关），
@@ -39,6 +44,11 @@
   - ``EMBEDDING_PROVIDER`` 空 → 自动分支 → 无密钥 → ``HashEmbeddingService``（离线占位）；
   - ``RAG_TOP_K`` / ``RAG_MIN_SCORE`` 空 → ``resolve_retriever_defaults`` 返回 ``{}``
     ⇒ 检索器用自己的默认（``top_k=5`` / ``min_score=None``），与引入配置前**逐字节一致**。
+
+★★ **唯一的例外是 ``INTERVIEW_AVATAR_LLM_QUESTIONS``**：该能力的「未配置」= **开启**
+（见 ``services/interview_service.avatar_llm_questions_enabled``），所以空串**达不到**
+「钉住」的目的，必须显式钉成 ``"0"``（= 显式关闭）。判据是「套件不得真打网络」，
+而不是「值必须是空串」——这两条冲突时，前者优先。
 
 为什么是「设成空串」而不是「pop 掉」
 ------------------------------------
@@ -93,6 +103,18 @@ PINNED = {
     "AVATAR_IFLYTEK_AVATAR_ID": "",
     "AVATAR_IFLYTEK_VCN": "",
     "AVATAR_TIMEOUT": "",
+    # ★★ 唯一的**非空串**钉扎，且**必须**非空：数字人「LLM 单题出题」默认**开启**，
+    #    而 ``main.spark_api`` 是**无条件构造**的模块级单例（``SparkAPI()`` 不看凭据
+    #    是否存在）⇒ 只把 ``SPARK_*`` 钉空**没用**，``_default_spark()`` 照样拿得到
+    #    真实客户端。空串在这里等价于「未配置」= **开启**，因此只能显式钉成 ``"0"``
+    #    （等价于「显式关闭」）。
+    #    不钉的后果：所有走数字人闭环的套件（``test_avatar_loop`` /
+    #    ``test_interview_orchestrator`` / ``test_interview_ws`` /
+    #    ``test_interview_production`` / ``test_interview_mode_channels`` …）
+    #    都会在**提交答案**时真的去打星火：单次 > 8s、耗配额、结果依赖网络。
+    #    开关的**两个状态**都由 ``tests/test_avatar_llm_flow.py`` 自己显式覆盖，
+    #    所以这里钉住不会造成覆盖缺口。
+    "INTERVIEW_AVATAR_LLM_QUESTIONS": "0",
 }
 
 

@@ -63,8 +63,9 @@ interview_core``，不要依赖这些别名。
 
 from __future__ import annotations
 
+import os
 from datetime import datetime
-from typing import Any, Dict, List, Mapping, Optional
+from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from fastapi import HTTPException
 from sqlalchemy import select
@@ -91,7 +92,12 @@ from schemas.interview import (
     FollowUpRequest,
     SessionCreateRequest,
 )
-from services import avatar_interview, interview_core, interview_followup
+from services import (
+    avatar_interview,
+    interview_core,
+    interview_followup,
+    interview_next_flow,
+)
 from services.resume_scoring import extract_skills
 
 # ============================================================
@@ -112,6 +118,61 @@ _plan_question_types = interview_core.plan_question_types
 _build_question_text = interview_core.build_question_text
 _build_question_plan = interview_core.build_question_plan
 _build_feedback = interview_core.build_answer_feedback
+
+# ============================================================
+# 〇·二、数字人「LLM 单题出题」开关（**默认开启**）
+# ============================================================
+# 打开后，数字人面试的「下一题」由大模型**逐题**生成（携带历史回答 + 可选知识），
+# 代价是**答题提交路径上多一次网络调用**（数秒）；模型失败自动回退为规则计划的
+# 第 k 项，因此出题失败**不会**打断面试。
+#
+# ★ 默认开启（不配置即生效）：产品语义上，数字人面试本来就该「听一句、追一句」。
+#
+# ★★ 但默认开启会撞上另一条硬约定——「**回归套件必须不受部署配置影响、且不真打网络**」：
+#   本机 ``.env`` 带着**真实** ``SPARK_*`` 凭据，而 ``main.spark_api`` 是**无条件
+#   构造**的模块级单例（``SparkAPI()`` 不看凭据是否存在），``_default_spark()``
+#   必然拿得到它 ⇒ 任何走数字人闭环的套件都会在**提交答案**时真的去打星火
+#   （实测单次 > 8s、消耗配额、结果依赖网络）。
+#   ⇒ 因此 ``tests/regression_env.py`` 把本开关**钉成 ``"0"``**（回归里等价于
+#     「显式关闭」），套件行为与引入本能力之前逐字节一致；
+#     两个状态都由 ``tests/test_avatar_llm_flow.py`` 显式覆盖。
+#
+# 关闭方式（回到「整场规则题目一次性落库、下一题从库里取」）：``.env`` 里
+# ``INTERVIEW_AVATAR_LLM_QUESTIONS=0``。见 ``.env.example``。
+AVATAR_LLM_QUESTIONS_ENV = "INTERVIEW_AVATAR_LLM_QUESTIONS"
+
+#: 视为「打开」的取值（大小写不敏感；**未配置 / 空串也等价于此**）。
+_AVATAR_LLM_TRUTHY = ("1", "true", "yes", "on")
+#: 视为「关闭」的取值（必须**显式**写，才会回到旧行为）。
+_AVATAR_LLM_FALSY = ("0", "false", "no", "off")
+
+
+def avatar_llm_questions_enabled() -> bool:
+    """数字人面试是否走「LLM 单题出题」链路。
+
+    - **未配置 / 空串 ⇒ ``True``**（**默认开启**）
+    - ``1`` / ``true`` / ``yes`` / ``on`` ⇒ ``True``
+    - ``0`` / ``false`` / ``no`` / ``off`` ⇒ ``False``（显式关闭 = 旧行为）
+    - **其它取值 ⇒ 记一条 ERROR 日志后按默认（``True``）处理**——非法配置
+      **不静默**（有日志可查），但也不让一次配置笔误把请求打成 500。
+
+    ★ 默认开启 ⇒ **回归环境必须显式关闭它**：``tests/regression_env.py`` 把它钉成
+    ``"0"``（本机 ``.env`` 带真实 ``SPARK_*``，不钉就会在提交答案时真打星火）。
+
+    在**调用时**读环境变量（而非 import 期缓存成常量）：这样测试可以按用例
+    开关它，部署侧改 ``.env`` 后重启即生效、不会出现「半个进程用旧值」。
+    """
+    raw = (os.environ.get(AVATAR_LLM_QUESTIONS_ENV) or "").strip().lower()
+    if raw in _AVATAR_LLM_FALSY:
+        return False
+    if not raw or raw in _AVATAR_LLM_TRUTHY:
+        return True
+    print(
+        f"[interview][ERROR] {AVATAR_LLM_QUESTIONS_ENV}={raw!r} 取值非法，"
+        f"已按默认（开启）处理；允许：{'/'.join(_AVATAR_LLM_TRUTHY + _AVATAR_LLM_FALSY)}"
+    )
+    return True
+
 
 # ============================================================
 # 一、序列化辅助（前端交互契约）
@@ -398,20 +459,17 @@ async def create_session(
     }
 
 
-async def start_session(
-    db: AsyncSession, user_id: int, session_id: int
-) -> Dict[str, Any]:
-    """开始面试：生成整场题目计划并置为 ``ongoing``。
-
-    题目计划一次性生成（当前为确定性规则，不依赖作答内容），
-    因此 ``start`` 可安全重入判断——重复调用会被状态校验拦下。
-
-    **交互模式分流**（本次新增）：状态守卫与出题**两种模式完全共享**，
-    只在最后「交付第一题」这一步按 ``session.interview_mode`` 分流——
-    ``text`` 原样返回（默认路径，行为不变），``avatar`` 走数字人通道入口。
-    """
-    session = await _load_session(db, session_id, user_id)
-
+# ============================================================
+# 二·七、开始面试的**共享原语**（规则出题 / 策略化出题 共用）
+# ============================================================
+# 为什么要把「校验 → 落库 → 置 ongoing → 交付第一题」拆成原语：
+#   ``start_session`` 与 ``begin_session_with_questions`` 只差**题目从哪来**
+#   （前者内部调 Core 的确定性规则出题，后者接收调用方算好的题目，例如出题
+#   **策略层**的产出）。除题目来源外，两处的归属校验 / 状态守卫 / 落库 /
+#   状态推进 / 交付分流必须**逐字节一致**，因此共用同一批原语。
+#   这样「换出题方式」就只是换「谁来提供 items」，而不是复制一遍流程。
+def _ensure_startable(session: InterviewSession) -> None:
+    """开始面试的**前置状态守卫**（两个入口共用，口径只有一份）。"""
     if session.status == SESSION_STATUS_FINISHED:
         raise HTTPException(status_code=400, detail="面试已结束，无法重新开始")
     if session.status == SESSION_STATUS_ONGOING:
@@ -419,15 +477,18 @@ async def start_session(
             status_code=400, detail="面试已在进行中，请直接获取当前题目"
         )
 
-    job = await _load_job(db, session.job_id)
-    resume_skills = await _load_resume_skills(db, session.resume_id)
-    # 出题计划由 Core 负责（纯规则、确定性）；本层只负责读数据与落库
-    plan = interview_core.build_question_plan(session, job, resume_skills)
 
-    if not plan:
-        raise HTTPException(status_code=500, detail="题目计划生成失败，请检查会话配置")
+def _persist_question_items(
+    db: AsyncSession, session: InterviewSession, items: List[Mapping[str, Any]]
+) -> int:
+    """把出题结果**逐条**落库（**不提交**），返回落库条数。
 
-    for item in plan:
+    ``items`` 中每一项恒为 6 个字段（与 ``interview_core.build_question_plan``
+    的产出一致）：``question_no`` / ``question`` / ``question_type`` /
+    ``topic`` / ``difficulty`` / ``expected_points``。
+    """
+    added = 0
+    for item in items:
         db.add(
             InterviewQuestion(
                 session_id=session.id,
@@ -439,24 +500,127 @@ async def start_session(
                 expected_points=item["expected_points"],
             )
         )
+        added += 1
+    return added
 
+
+async def _activate_session(
+    db: AsyncSession, session: InterviewSession, items: List[Mapping[str, Any]]
+) -> InterviewSession:
+    """落库题目 + 把会话置 ``ongoing`` 并指向第 1 题（**共享原语**）。
+
+    「校验之后」的全部副作用都收在这里——两个开始入口因此不可能出现
+    「一个置了 ``started_at``、另一个没置」这类漂移。
+    """
+    _persist_question_items(db, session, items)
     session.status = SESSION_STATUS_ONGOING
     session.started_at = datetime.utcnow()
     session.current_question_no = 1
     await db.commit()
     await db.refresh(session)
+    return session
 
+
+async def _start_payload(
+    db: AsyncSession, session: InterviewSession, job: Optional[Job]
+) -> Dict[str, Any]:
+    """构造「面试已开始」的**交付载荷**（会话 + 第一题 + 岗位名）。"""
     questions = await _load_questions(db, session.id)
     first = questions[0] if questions else None
-
-    payload = {
+    return {
         "session": _session_to_dict(session),
         "question": _question_to_dict(first) if first else None,
         "job_name": job.job_name if job else None,
         "message": "面试已开始",
     }
+
+
+def _questions_to_persist(
+    session: InterviewSession, plan: List[Mapping[str, Any]]
+) -> List[Mapping[str, Any]]:
+    """开场时**落库哪些题目**（数字人 LLM 单题链的分岔点）。
+
+    - **开关显式关闭（``=0``）/ 非数字人**：整场一次性落库——与引入本能力之前
+      **逐字节一致**（下一题仍从库里取）。
+    - **数字人 + 开关打开（默认）**：只落**第 1 题**。开场题保持规则题（确定性、
+      零延迟、开场惯例固定），第 2 题起由 :func:`generate_and_persist_next` 逐题生成。
+
+    抽成独立函数是为了让 ``start_session`` 的源码里**仍然只出现规则出题**
+    （守卫测试断言 ``start_session`` 直调 ``build_question_plan``，
+    且不认识任何出题策略）。
+    """
+    if session.interview_mode == INTERVIEW_MODE_AVATAR and avatar_llm_questions_enabled():
+        return list(plan[:1])
+    return plan
+
+
+async def begin_session_with_questions(
+    db: AsyncSession,
+    user_id: int,
+    session_id: int,
+    items: List[Mapping[str, Any]],
+) -> Dict[str, Any]:
+    """**公开原语**：把**给定的**出题结果落库、置 ``ongoing``，并交付第一题。
+
+    与 :func:`start_session` 的唯一差别是**题目从哪来**：
+
+    - ``start_session``：内部调 ``interview_core.build_question_plan``
+      （确定性规则、整场批量）；
+    - 本函数：接收调用方算好的题目——典型调用方是出题**策略层**
+      （``question_generator``，由编排层 ``interview_orchestrator.start_questions``
+      按 ``mode`` 选策略后落库）。
+
+    除题目来源外，**归属校验 / 状态守卫 / 落库 / 状态推进 / 交付分流**与
+    ``start_session`` 完全一致（共用 :func:`_ensure_startable` /
+    :func:`_activate_session` / :func:`_start_payload`），因此 text 会话下
+    两者的返回形状与副作用**逐字段相同**。
+    """
+    session = await _load_session(db, session_id, user_id)
+    _ensure_startable(session)
+    if not items:
+        raise HTTPException(status_code=500, detail="题目计划生成失败，请检查会话配置")
+    await _activate_session(db, session, items)
+    job = await _load_job(db, session.job_id)
     # 交付边界分流：text 原样返回（默认路径）；avatar 走数字人通道入口
-    return await _deliver(db, session, payload)
+    return await _deliver(db, session, await _start_payload(db, session, job))
+
+
+async def start_session(
+    db: AsyncSession, user_id: int, session_id: int
+) -> Dict[str, Any]:
+    """开始面试：生成整场题目计划并置为 ``ongoing``。
+
+    题目计划一次性生成（当前为确定性规则，不依赖作答内容），
+    因此 ``start`` 可安全重入判断——重复调用会被状态校验拦下。
+
+    **交互模式分流**（本次新增）：状态守卫与出题**两种模式完全共享**，
+    只在最后「交付第一题」这一步按 ``session.interview_mode`` 分流——
+    ``text`` 原样返回（默认路径，行为不变），``avatar`` 走数字人通道入口。
+
+    ★ 本入口的题目来源**固定**为 ``interview_core.build_question_plan``
+    （确定性规则、整场批量），**不认识任何出题策略**——「由策略决定题目」
+    的路径是 :func:`begin_session_with_questions`（由编排层的策略化入口调用）。
+    这条分工是刻意的：默认路径不因引入策略而变。
+
+    ★ **落库几道题**由 :func:`_questions_to_persist` 决定：默认（开关打开）只落
+    **第 1 题**（第 2 题起由 :func:`generate_and_persist_next` 逐题生成）；
+    开关被显式关掉（``INTERVIEW_AVATAR_LLM_QUESTIONS=0``）时整场一次性落库。
+    """
+    session = await _load_session(db, session_id, user_id)
+    _ensure_startable(session)
+
+    job = await _load_job(db, session.job_id)
+    resume_skills = await _load_resume_skills(db, session.resume_id)
+    # 出题计划由 Core 负责（纯规则、确定性）；本层只负责读数据与落库
+    plan = interview_core.build_question_plan(session, job, resume_skills)
+
+    if not plan:
+        raise HTTPException(status_code=500, detail="题目计划生成失败，请检查会话配置")
+
+    await _activate_session(db, session, _questions_to_persist(session, plan))
+
+    # 交付边界分流：text 原样返回（默认路径）；avatar 走数字人通道入口
+    return await _deliver(db, session, await _start_payload(db, session, job))
 
 
 async def get_session_detail(
@@ -616,15 +780,29 @@ async def submit_answer(
 
     all_answered = session.current_question_no > session.total_questions
     next_question = None
+    next_question_dict = None
     if not all_answered:
         next_question = next(
             (q for q in questions if q.question_no == session.current_question_no), None
         )
+        if next_question is not None:
+            next_question_dict = _question_to_dict(next_question)
+        elif (
+            session.interview_mode == INTERVIEW_MODE_AVATAR
+            and avatar_llm_questions_enabled()
+        ):
+            # ★ 数字人 LLM 单题链：库里还没有下一题 ⇒ 现场生成 + 落库。
+            #   **必须在 ``_deliver`` 之前完成**——交付出去的题一定已在库里，
+            #   否则重连 / 重播会拿到空题。生成失败时该函数自行降级
+            #   （规则兜底 → 仍失败则 ``question=None``），**不抛异常**，
+            #   因此不会把「答完这一题」这件事连带打断。
+            generated = await generate_and_persist_next(db, user_id, session_id)
+            next_question_dict = generated.get("question")
 
     result = {
         "answer": _answer_to_dict(answer),
         "session": _session_to_dict(session),
-        "next_question": _question_to_dict(next_question) if next_question else None,
+        "next_question": next_question_dict,
         "all_answered": all_answered,
         "message": "全部题目已作答，请调用 end 接口生成报告" if all_answered else "回答已提交",
     }
@@ -764,6 +942,223 @@ async def generate_next_question(
         retriever=retriever, use_rag=use_rag,
         retriever_kwargs=retriever_kwargs,
     )
+
+
+# ============================================================
+# 四·五、数字人 LLM 单题链：生成下一题并**落库**
+# ============================================================
+# 与 ``generate_next_question`` 的分工：后者是**只读的按需出题接缝**（不落库、
+# 不推进题号），本节的函数把「生成」与「落库」合成一步，供数字人答题提交路径
+# 直接使用——因为那条路径必须保证「交付出去的题一定已在库里」。
+#
+# ★ 为什么这里**不走出题策略层**（``question_generator``）：
+#   本模块有一条守卫断言——``interview_service`` **绝不 import**
+#   ``services.question_generator``（策略选择在 Service 之上）。因此策略层只从
+#   编排层进入生产链路（``interview_orchestrator.start_questions``），
+#   Service 侧的落库原语则对「题目从哪来」保持中立。
+#
+# ★ 另一条守卫：本模块**源码全文**不得出现 Agent / Context 的接缝字面量
+#   （连 docstring / 注释都不行，因为判据是 ``inspect.getsource``）⇒
+#   「取上下文 + 检索 + 调模型」三步**全部委托**
+#   ``interview_next_flow.generate_candidate``，本节只保留
+#   「归属校验 + 状态机口径 + 幂等 + 规则兜底 + 落库」。
+#
+#: 题目项的 6 个字段（与 ``interview_core.build_question_plan`` 的产出一致）。
+_QUESTION_ITEM_FIELDS: Tuple[str, ...] = (
+    "question_no",
+    "question",
+    "question_type",
+    "topic",
+    "difficulty",
+    "expected_points",
+)
+
+#: ``generate_and_persist_next`` 返回值的**恒定键集**（成功与失败**同形状**）。
+NEXT_QUESTION_FIELDS: Tuple[str, ...] = ("ok", "question", "source", "errors", "error")
+
+#: ``source`` 取值：题目来自大模型生成。
+SOURCE_LLM = "llm"
+#: ``source`` 取值：大模型失败，题目来自**规则兜底**（``build_question_plan`` 第 k 项）。
+SOURCE_RULE_FALLBACK = "rule_fallback"
+#: ``source`` 取值：幂等命中——该题号已落库，直接返回既有行。
+SOURCE_EXISTING = "existing"
+#: ``source`` 取值：全部题目已作答，没有下一题。
+SOURCE_ALL_ANSWERED = "all_answered"
+#: ``source`` 取值：两条路都没能出题（LLM 失败且规则兜底也取不到）。
+SOURCE_FAILED = "failed"
+
+#: 稳定错误码：下一题生成失败（LLM 与规则兜底都没成功）。
+ERROR_QUESTION_GENERATE_FAILED = "question_generate_failed"
+
+
+async def _rule_plan(
+    db: AsyncSession, session: InterviewSession
+) -> List[Dict[str, Any]]:
+    """本场的**规则出题计划**（6 字段题目项，题号升序）。
+
+    用途有两个：① 兜底取第 k 项；② 作为下一题 Prompt 里的「本场面试计划」。
+    规则出题是确定性的，因此它与「整场一次性落库」得到的题目**逐字段相同**。
+    """
+    job = await _load_job(db, session.job_id)
+    resume_skills = await _load_resume_skills(db, session.resume_id)
+    return [
+        dict(item)
+        for item in interview_core.build_question_plan(session, job, resume_skills)
+    ]
+
+
+async def _rule_plan_item(
+    db: AsyncSession, session: InterviewSession, question_no: int
+) -> Optional[Dict[str, Any]]:
+    """**规则兜底**：取 ``build_question_plan`` 的第 ``question_no`` 项。
+
+    规则出题是确定性的，因此「只落第 1 题」时按题号取第 k 项，与「整场一次性
+    落库」得到的第 k 题**逐字段相同**——兜底出来的题与正常路径同源、同质。
+    """
+    for item in await _rule_plan(db, session):
+        if item["question_no"] == question_no:
+            return item
+    return None
+
+
+async def generate_and_persist_next(
+    db: AsyncSession,
+    user_id: int,
+    session_id: int,
+    *,
+    spark: Any = None,
+    retriever: Any = None,
+    use_rag: bool = True,
+    retriever_kwargs: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    """生成**下一题**并**落库**（数字人 LLM 单题链的核心步骤）。
+
+    这是「只落第 1 题」模式的补题入口：``submit_answer`` 在评分推进后发现
+    **库里没有下一题**时调用它，把题目补上**再**交付给通道播报。
+
+    流程（**两级 fail-soft**，绝不因为出题失败打断面试）
+    ----------------------------------------------------
+    1. **归属 / 状态校验**：不存在 / 非本人 → 404；非 ``ongoing`` / 未开始 → 400
+       （与其余入口同口径）。
+    2. **幂等**：目标题号已落库 ⇒ 直接返回既有行（``source="existing"``）——
+       重复调用**不会插出重复题**。
+    3. **组装 + 生成**：委托 ``interview_next_flow.generate_candidate``——取上下文包
+       （简历 + 岗位 + **历史回答** + 进度）→ 知识检索（可选增强，故障静默降级）
+       → 调用模型（``interview_next/`` Prompt 组，携带历史回答）。
+       ★ 接缝调用**全部收在组装层**，Service 侧只管落库与状态机口径；
+       题号以**状态机**（``current_question_no``）为准，不信模型自报的题号。
+    4. **规则兜底**：生成失败 ⇒ ``build_question_plan`` 的第 k 项
+       （确定性，必然可得）。
+    5. **落库**：投影成 6 字段写入 ``InterviewQuestion``。
+       两条路都失败 ⇒ ``ok=False`` + ``errors=["question_generate_failed"]``，
+       ``question=None``——**不抛异常**（调用方只需判 ``question`` 是否为空）。
+
+    返回（恒定键集 ``NEXT_QUESTION_FIELDS``）::
+
+        {
+          "ok": bool,
+          "question": dict | None,   # 已落库题目的序列化结果（含 id）
+          "source": "llm" | "rule_fallback" | "existing" | "all_answered" | "failed",
+          "errors": [稳定错误码, ...],   # 失败时 ``question_generate_failed`` **恒在最前**，
+                                        # 其后跟 ``agent_failed`` 等诊断码
+          "error": str | None,
+        }
+
+    ``use_rag`` 默认 ``True``（与按需出题入口的 HTTP 契约默认一致）；
+    注入 ``retriever`` 时以注入者为准。
+    """
+    session = await _load_session(db, session_id, user_id)  # 归属校验：404
+
+    if session.status != SESSION_STATUS_ONGOING:
+        raise HTTPException(
+            status_code=400,
+            detail=f"当前状态为 {session.status}，仅 ongoing 状态可生成下一题",
+        )
+    if session.current_question_no <= 0:
+        raise HTTPException(status_code=400, detail="面试尚未开始，请先调用 start 接口")
+
+    question_no = session.current_question_no
+    if question_no > session.total_questions:
+        return {
+            "ok": True,
+            "question": None,
+            "source": SOURCE_ALL_ANSWERED,
+            "errors": [],
+            "error": None,
+        }
+
+    # ① 幂等：该题号已落库 ⇒ 直接返回（重复调用安全）
+    for row in await _load_questions(db, session.id):
+        if row.question_no == question_no:
+            return {
+                "ok": True,
+                "question": _question_to_dict(row),
+                "source": SOURCE_EXISTING,
+                "errors": [],
+                "error": None,
+            }
+
+    # ② 组装（上下文 + 知识检索）并调用模型：接缝调用集中在组装层，
+    #    Service 侧只保留「落库 + 状态机口径」——本模块有源码级守卫，
+    #    全文不得出现 Agent / Context 的接缝字面量。
+    plan_items = await _rule_plan(db, session)
+    candidate = await interview_next_flow.generate_candidate(
+        db,
+        session,
+        plan_items,
+        question_no=question_no,
+        spark=spark,
+        retriever=retriever,
+        use_rag=use_rag,
+        retriever_kwargs=retriever_kwargs,
+    )
+
+    errors: List[Any] = []
+    if candidate.get("ok"):
+        item: Optional[Dict[str, Any]] = {
+            key: candidate.get(key) for key in _QUESTION_ITEM_FIELDS
+        }
+        item["expected_points"] = list(item.get("expected_points") or [])
+        item["question_no"] = question_no  # 题号以状态机为准（权威）
+        source = SOURCE_LLM
+    else:
+        # ⑤ 规则兜底：LLM 失败不放弃这一题（出题失败不该让面试断掉）
+        errors = [interview_core.ERROR_AGENT_FAILED]
+        item = await _rule_plan_item(db, session, question_no)
+        source = SOURCE_RULE_FALLBACK if item is not None else SOURCE_FAILED
+
+    if item is None:
+        # 稳定错误码**恒在最前**：调用方按它分支即可；其余码跟在后面做诊断。
+        stable: List[Any] = [ERROR_QUESTION_GENERATE_FAILED]
+        stable += [code for code in errors if code not in stable]
+        return {
+            "ok": False,
+            "question": None,
+            "source": SOURCE_FAILED,
+            "errors": stable,
+            "error": candidate.get("error") or "下一题生成失败",
+        }
+
+    row = InterviewQuestion(
+        session_id=session.id,
+        question_no=item["question_no"],
+        question=item["question"],
+        question_type=item["question_type"],
+        topic=item["topic"],
+        difficulty=item["difficulty"],
+        expected_points=item["expected_points"],
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+
+    return {
+        "ok": True,
+        "question": _question_to_dict(row),
+        "source": source,
+        "errors": errors,
+        "error": None,
+    }
 
 
 # ============================================================

@@ -31,6 +31,12 @@ import sys
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+
+# 钉扎部署配置（必须早于项目模块 import）。★ 本套件会**完整跑完一场 avatar 会话**
+# （含 POST /answer），而数字人「LLM 单题出题」**默认开启** ⇒ 不钉扎就会在本机
+# 真的去打星火（单次 > 8s、耗配额）。见 regression_env 的说明。
+import regression_env  # noqa: E402,F401
 
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 from sqlalchemy import select  # noqa: E402

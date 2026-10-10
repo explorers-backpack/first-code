@@ -84,6 +84,18 @@
 **编排层不直接碰通道层**（``avatar_interview``），也不碰 DB、不碰 provider：
 「取 session 行 / 归属校验 / 调 provider」全部留在 Service 与通道层。
 
+出题**策略**的接线点（本次新增）
+--------------------------------
+第 ③ 步有两种入口，**互为等价（``mode="rule"`` 时）**：
+
+- ``start``：题目来源写死为规则（``interview_service.start_session``）；
+- ``start_questions(mode=...)``：题目来源由**策略层** ``question_generator`` 决定，
+  落库仍复用 ``interview_service.begin_session_with_questions``。
+
+★ ``question_generator`` **在函数体内延迟导入**——编排层**顶层**只依赖
+``{interview_core, interview_service}``（有守卫断言锁死），策略层因此不进顶层
+依赖面（与 ``schemas`` 的延迟导入同一手法）。
+
 异常处置（4 类，全部**如实上报而非静默**）
 ------------------------------------------
 ============================  ==================================================
@@ -157,6 +169,7 @@ __all__ = [
     # ---- 编排（复用 interview_service / interview_core）----
     "create_session",
     "start",
+    "start_questions",
     "speech_done",
     "generate_question",
     "submit_answer",
@@ -425,6 +438,72 @@ async def start(db: Any, user_id: int, session_id: int) -> Dict[str, Any]:
         _advance(session_id, EVENT_QUESTION_READY)
         result = await interview_service.start_session(db, user_id, session_id)
     return {**result, "state": get_state(session_id)}
+
+
+async def start_questions(
+    db: Any,
+    user_id: int,
+    session_id: int,
+    *,
+    mode: str = "rule",
+    spark: Any = None,
+    use_rag: bool = False,
+    retriever_kwargs: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    """**策略化开始面试**：按 ``mode`` 选出题**策略** → 落库 → 播报第一题。
+
+    与 :func:`start` 的关系
+    -----------------------
+    ``start`` 固定走 ``interview_service.start_session``——题目来源写死为
+    ``interview_core.build_question_plan``（规则、整场批量）。
+    本入口把「题目怎么来」变成**入参**：由策略层 ``question_generator`` 的
+    ``get_generator(mode)`` 决定，而**落库与状态推进仍全部复用 Service**
+    （``interview_service.begin_session_with_questions``）——编排层依旧不碰 DB。
+
+    - ``mode="rule"``（**默认**）→ 与 :func:`start` **行为等价**：
+      ``RuleQuestionGenerator`` 内部调 ``interview_core.build_question_plan``，
+      产出整场题目、逐字段一致（有等价性自检锁死）。
+    - ``mode="agent"`` → 单题（大模型 + 可选 RAG）；**失败自动降级为规则策略**
+      （``get_generator(DEFAULT_MODE)``）——保证面试一定拿得到题目，
+      「出题失败 ⇒ 连面试都进不去」这件事不会发生。
+
+    形状适配
+    --------
+    策略层返回 ``GENERATED_SET_FIELDS`` 信封（9 键），其中 ``questions`` 每项恒为
+    6 字段（``QUESTION_ITEM_FIELDS``）——正好是 ``begin_session_with_questions``
+    需要的落库形状，故此处**只做一次投影**（取 ``questions`` 转成普通 dict），
+    ``reason`` / ``stage`` / ``errors`` 等策略层元信息**不进入 HTTP 契约**
+    （本入口只服务编排 / WS，不新增对外响应字段）。
+
+    ★ **延迟导入** ``question_generator``：编排层顶层只依赖
+    ``{interview_core, interview_service}``（有守卫断言锁死），因此策略层在
+    函数体内 import——与 :func:`_answer_request` 延迟导入 ``schemas`` 同一手法。
+
+    前置状态：``waiting_question``（与 :func:`start` 相同；重复调用因状态机报错）。
+    """
+    with _rollback_state_on_error(session_id):
+        _advance(session_id, EVENT_QUESTION_READY)
+
+        from services import question_generator  # noqa: PLC0415
+
+        result = await question_generator.get_generator(mode).generate(
+            db,
+            session_id,
+            use_rag=use_rag,
+            spark=spark,
+            retriever_kwargs=retriever_kwargs,
+        )
+        if not result.get("ok") and mode != question_generator.DEFAULT_MODE:
+            # **策略互换**：agent 失败 ⇒ 换成规则策略（确定性、必然有题）
+            result = await question_generator.get_generator(
+                question_generator.DEFAULT_MODE
+            ).generate(db, session_id)
+
+        items = [dict(item) for item in (result.get("questions") or [])]
+        delivered = await interview_service.begin_session_with_questions(
+            db, user_id, session_id, items
+        )
+    return {**delivered, "state": get_state(session_id)}
 
 
 def speech_done(session_id: int) -> str:

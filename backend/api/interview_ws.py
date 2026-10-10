@@ -438,11 +438,15 @@ async def _sweep_expired_sessions() -> None:
 
 
 async def _handle_start(websocket: WebSocket, db: AsyncSession, user_id: int, sid: int) -> None:
-    """``start``：Avatar 启动预检 → 开始面试（生成整场题目 + 播报第一题）。
+    """``start``：Avatar 启动预检 → 开始面试（生成题目 + 播报第一题）。
 
     ★ 第一行做**顺序守卫**——与 ``orch.answer_from_asr`` 同一条红线：顺序不对就
     **不打 provider、也不打服务层**。否则会白建一次数字人会话，而且前端会先收到
     一个无意义的 ``avatar`` 事件再收到 ``state_error``，界面状态对不上。
+
+    ★ 出题走 ``orch.start_questions``（**策略化入口**，默认 ``mode="rule"``）：
+    与原先的 ``orch.start`` **行为等价**（规则策略内部即 ``build_question_plan``，
+    整场批量、逐字段一致），区别只是「题目怎么来」由策略层决定、后续可换。
     """
     orch.assert_can(sid, orch.EVENT_QUESTION_READY)
 
@@ -455,7 +459,7 @@ async def _handle_start(websocket: WebSocket, db: AsyncSession, user_id: int, si
             error_event(ERROR_STATE, f"数字人未就绪（{ready.get('status')}），已降级为文字交付"),
         )
 
-    started = await orch.start(db, user_id, sid)
+    started = await orch.start_questions(db, user_id, sid)
     await _send(websocket, state_event(sid))
     await _send(
         websocket,

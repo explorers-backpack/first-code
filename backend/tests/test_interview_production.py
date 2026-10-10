@@ -556,8 +556,26 @@ def run() -> bool:  # noqa: C901 - 自检脚本，顺序即文档
     body = health.json()
     _check("GET /api/health 返回 200", health.status_code == 200, str(health.status_code))
     _check("★ 新增 metrics 键", isinstance(body.get("metrics"), dict), str(type(body.get("metrics"))))
-    _check("  └ 与 main.production_status() **同源**（逐键相等）",
-           body.get("metrics") == main.production_status(), str(body.get("metrics")))
+    # ★ 不能拿两份快照做**全等**：内层 ``metrics.uptime_seconds`` 是
+    #   ``time.monotonic()`` 的**实时采样**（``round(..., 3)``），两次调用跨毫秒
+    #   边界就必然不等 ⇒ 原写法「两次快照全等」会**偶发假红**
+    #   （全量回归时实测复现一次，单独复跑 3 次却全绿——典型的时序偶发）。
+    #   改为：把**非确定性的** ``uptime_seconds`` 摘掉后逐键全等（其余 11 键 +
+    #   counters / gauges 全部照比——health 若返回缓存/陈旧字典仍会在这里露出来），
+    #   uptime 单独断言形状。
+    def _stable(snapshot: dict) -> dict:
+        stable = dict(snapshot)
+        inner = dict(stable.get("metrics") or {})
+        inner.pop("uptime_seconds", None)
+        stable["metrics"] = inner
+        return stable
+
+    _health_metrics = body.get("metrics") or {}
+    _status_metrics = main.production_status()
+    _check("  └ 与 main.production_status() **同源**（除实时 uptime 外逐键相等）",
+           _stable(_health_metrics) == _stable(_status_metrics)
+           and isinstance((_health_metrics.get("metrics") or {}).get("uptime_seconds"), float),
+           str(_health_metrics))
     _check("  └ metrics 固定 12 键",
            set(body.get("metrics") or {}) == set(prod.PRODUCTION_STATUS_FIELDS),
            str(sorted(body.get("metrics") or {})))
