@@ -21,7 +21,7 @@
 覆盖
 ----
 [1] 生产库快照可用（文档 / 切片 / 维度 / 模型）
-[2] ``use_rag=false``（默认）⇒ 不检索，Prompt 无知识小节
+[2] 显式 ``use_rag=false`` ⇒ 不检索，Prompt 无知识小节（缺省已**默认开启**）
 [3] ``use_rag=true`` ⇒ **真实检索**、Prompt 含知识小节、含**生产来源串**、无降级 warning
 [4] 请求级 ``top_k`` / ``min_score`` 在真实链路上**真的覆盖** ``.env`` 默认值
 [5] **降级**：Embedding 不可用时 ⇒ **200 + ok=true + warning**（不 500、不阻塞出题）
@@ -306,11 +306,11 @@ async def main_async(args: argparse.Namespace) -> int:
             session_id = r.json()["session"]["id"]
             await client.post(f"{API}/{session_id}/start")
 
-            # ---------------- [2] 默认不检索 ----------------
-            print("\n[2] use_rag=false（默认）")
+            # ---------------- [2] 显式关闭检索 ----------------
+            print("\n[2] 显式 use_rag=false（缺省已默认开启）")
             spark.prompts.clear()
             recorder.calls.clear()
-            r = await client.post(f"{API}/{session_id}/next-question", json={})
+            r = await client.post(f"{API}/{session_id}/next-question", json={"use_rag": False})
             body = r.json()
             prompt_off = spark.prompts[-1] if spark.prompts else ""
             _check("HTTP 200", r.status_code == 200, f"{r.status_code} {r.text[:160]}")

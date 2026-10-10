@@ -1,6 +1,6 @@
 <script setup>
 /**
- * AI 面试间 —— 完整面试闭环（作答 → 结束 → 八维报告）+ 大模型出题通道（可挂载 RAG）
+ * AI 面试间 —— 完整面试闭环（作答 → 结束 → 八维报告）+ 大模型出题通道（RAG 默认开启）
  * ================================================================================
  * 本组件是面试功能在生产 UI 上的**唯一入口**，覆盖后端 `api/interview.py` 的 8 条路由：
  *
@@ -13,7 +13,7 @@
  * | 提交作答 | `POST /api/interview/{id}/answer` | 规则评分并落库，返回下一题 |
  * | 结束面试 | `POST /api/interview/{id}/end` | `ongoing` → `finished`，生成八维报告 |
  * | 获取报告 | `GET /api/interview/{id}/report` | 已结束会话恢复时取报告 |
- * | 大模型出题 | `POST /api/interview/{id}/next-question` | **试跑通道**，`use_rag` 是 RAG 的生产开关 |
+ * | 大模型出题 | `POST /api/interview/{id}/next-question` | **试跑通道**，RAG **默认开启**（后端契约层默认） |
  *
  * 注：后端没有 `POST /api/interview/start`（不带 id）这一条——`/start` 必须带 `session_id`，
  * 所以「建会话 + 开始」是两次调用，本组件把它们串成一步。
@@ -27,8 +27,9 @@
  *    它在失败时同样返回 200（字段集恒定，成功失败同形状）；
  * 4. **知识检索状态如实表述**：后端除失败信号 `knowledge_retrieval_failed` 外，
  *    还会回传正向信号 `knowledge_chunks`（本次真正注入 Prompt 的切片条数）。
- *    本页据此区分**四态**——未启用 / 已注入 N 条 / 命中 0 条 / 检索失败
- *    （见 `knowledgeStatus`）。**不把「命中 0 条」说成「已用到知识」**；
+ *    RAG 已**默认开启**（本页不再提供开关），因此本页只区分**三态**——
+ *    已注入 N 条 / 命中 0 条 / 检索失败（见 `knowledgeStatus`）。
+ *    **不把「命中 0 条」说成「已用到知识」**；
  * 5. **评分是纯规则评分，不是大模型评分**：`interview_core.score_answer` 按文本特征词表
  *    计分，确定性、可复现（见其 docstring）。本页如实标注为「规则评分」；
  * 6. **大模型出题通道与面试闭环是两条独立的线**：`/next-question` **不落库、不推进题号**
@@ -158,9 +159,8 @@ const form = reactive({
   interview_type: 'comprehensive',
   difficulty: 'mid',
   total_questions: 5,
-  // ★ 本页存在的意义之一就是跑通 RAG 出题通道，因此**默认打开**知识库检索。
-  //   关掉它即可对照「无知识」时的出题结果。
-  use_rag: true,
+  // ★ 知识库检索（RAG）已由**后端契约层默认开启**，本页不再提供开关：
+  //   请求体不带 `use_rag` ⇒ 后端 `NextQuestionRequest.use_rag` 的默认值（True）生效。
 })
 
 // ---------------- 会话与面试闭环 ----------------
@@ -322,14 +322,11 @@ const countedDimensions = computed(() => reportRows.value.filter((r) => !r.missi
  * - `knowledge_chunks`（**正向信号**）⇒ 本次真正注入 Prompt 的切片条数。
  *
  * 「命中 0 条」与「已注入 N 条」在只失败信号的时代**无法区分**，现在可以了。
- * 注意 0 有两种来源：`use_rag=false`（没检索）与「检索了但没命中」——
- * 前者由 `form.use_rag` 判掉，因此走到最后那条分支时 0 一定是「真的没命中」。
+ * RAG 已由后端契约层默认开启，本页**不再有「未启用」这一态**：
+ * 走到「命中 0 条」分支时，0 一定是「检索了但真的没命中」。
  */
 const knowledgeStatus = computed(() => {
   if (!agentResult.value) return null
-  if (!form.use_rag) {
-    return { level: 'off', text: '本次未启用知识检索（未组装检索链路，与引入 RAG 前的行为一致）' }
-  }
   if (warnings.value.includes('knowledge_retrieval_failed')) {
     return { level: 'failed', text: '知识检索失败 → 本次出题**未使用知识库**（已降级为无知识）' }
   }
@@ -805,8 +802,9 @@ async function askNextQuestion() {
   if (!session.value) return
   asking.value = true
   try {
+    // 不带 `use_rag`：由后端契约层默认值决定（默认开启知识检索）
     const data = await apiClient.post(`${API}/${session.value.id}/next-question`, {
-      body: { use_rag: form.use_rag },
+      body: {},
     })
     agentResult.value = data
     if (data.ok) {
@@ -909,27 +907,6 @@ onUnmounted(disconnectSocket)
             <input v-model.number="form.total_questions" type="number" min="1" max="20" />
             <small>1 ~ 20 题</small>
           </label>
-        </div>
-
-        <!-- RAG 开关（作用于下方「大模型出题试跑通道」） -->
-        <div class="ir-rag-box" :class="{ on: form.use_rag }">
-          <label class="ir-switch">
-            <input v-model="form.use_rag" type="checkbox" />
-            <span class="ir-switch-label">启用知识库检索（RAG）</span>
-          </label>
-          <p class="ir-rag-hint">
-            打开后，每次「生成下一题」都会走
-            <code>POST /api/interview/{id}/next-question</code> 且带 <code>use_rag: true</code>：
-            组装 Embedding + 向量后端 + 检索器，把命中的语料注入出题 Prompt。<br />
-            检索参数（<code>top_k</code> / <code>min_score</code>）不在此处传，由后端
-            <code>.env</code> 的 <code>RAG_*</code> 决定。<br />
-            <strong>检索失败不会让出题失败</strong>——会静默降级为「无知识」，并在下方
-            <code>warnings</code> 里给出 <code>knowledge_retrieval_failed</code>。<br />
-            命中的条数由响应体的 <code>knowledge_chunks</code> 如实回传，
-            下方状态条据此区分「已注入 N 条」与「命中 0 条」。<br />
-            注：本场面试的题目由 <code>/start</code> 一次性生成，<strong>RAG 试跑通道产出的候选
-            题不落库、不进本场记录</strong>。
-          </p>
         </div>
 
         <div class="ir-actions">
@@ -1372,17 +1349,15 @@ onUnmounted(disconnectSocket)
           <p class="ir-empty">
             该通道走 Core 编排的「上下文 → 计划 → 知识检索 → Agent → Validator」生成
             <strong>一道候选题</strong>，用于验证 RAG 出题效果。
-            <strong>它不落库、不推进题号</strong>，产出不会出现在上方的本场作答与报告里。
+            <strong>它不落库、不推进题号</strong>，产出不会出现在上方的本场作答与报告里。<br />
+            知识库检索（RAG）<strong>默认开启</strong>，检索参数由后端 <code>.env</code> 的
+            <code>RAG_*</code> 决定；检索失败不会让出题失败——会静默降级为「无知识」。
           </p>
 
           <div class="ir-actions left">
             <button class="primary-btn" :disabled="asking" @click="askNextQuestion">
               {{ asking ? '生成中…（真实模型约 10~30 秒）' : '生成一道候选题' }}
             </button>
-            <label class="ir-switch inline">
-              <input v-model="form.use_rag" type="checkbox" />
-              <span class="ir-switch-label">启用知识库</span>
-            </label>
           </div>
 
           <!-- 知识检索状态（如实表述，不宣称「已用到知识」） -->
@@ -1571,53 +1546,6 @@ onUnmounted(disconnectSocket)
   color: var(--text-muted);
 }
 
-.ir-rag-box {
-  margin-top: 18px;
-  padding: 16px 18px;
-  background: rgba(122, 117, 109, 0.05);
-  border: 1px solid var(--border-glass);
-  border-radius: var(--radius-md);
-  transition: all 0.2s;
-}
-
-.ir-rag-box.on {
-  background: rgba(0, 168, 150, 0.06);
-  border-color: rgba(0, 168, 150, 0.3);
-}
-
-.ir-switch {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
-}
-
-.ir-switch input {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--accent-cyan);
-  cursor: pointer;
-}
-
-.ir-switch-label {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-.ir-switch.inline .ir-switch-label {
-  font-size: 13px;
-  font-weight: 400;
-  color: var(--text-secondary);
-}
-
-.ir-rag-hint {
-  margin: 10px 0 0;
-  font-size: 12.5px;
-  line-height: 1.7;
-  color: var(--text-secondary);
-}
-
-.ir-rag-hint code,
 .q-fail code,
 .ir-warnings code,
 .ir-errors code,
@@ -2094,12 +2022,6 @@ onUnmounted(disconnectSocket)
   color: var(--warning);
   background: rgba(232, 93, 61, 0.08);
   border: 1px solid rgba(232, 93, 61, 0.28);
-}
-
-.ir-knowledge.off {
-  color: var(--text-secondary);
-  background: rgba(122, 117, 109, 0.07);
-  border: 1px solid var(--border-glass);
 }
 
 /* ---------------- warnings / errors ---------------- */

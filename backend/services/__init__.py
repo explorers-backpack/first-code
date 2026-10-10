@@ -48,7 +48,7 @@ AI 模拟面试（四层分层 + 生成策略层）
     prepare_avatar（Avatar 启动预检）
     answer_from_asr（**讯飞虚拟人 ASR → 取文本 → submit_answer()** → 评分 → 交付下一题）
 
-    RAG 接线（唯一一处，只服务 agent 出题路径；默认关闭）：
+    RAG 接线（唯一一处，只服务 agent 出题路径；**生产 HTTP 入口默认开启**）：
     generate_next_question(use_rag=True)
       → resolve_retriever（唯一开关：显式 retriever > use_rag=True > 不接）
       → retrieve_knowledge → retriever.retrieve(job, topic, context)
@@ -479,7 +479,10 @@ AI 模拟面试（四层分层 + 生成策略层）
   ——**全项目唯一的「RAG 开关」**（同步、不发起 IO）：显式 ``retriever`` 优先 >
   ``use_rag=True`` 时调用组装器 > 都不给则 ``None``。组装失败**不抛异常**，
   降级为 ``(None, [WARNING_KNOWLEDGE_FAILED])``（与检索失败同一约定）。
-  ``use_rag`` **默认 False**：不显式要求就绝不打开 RAG，既有行为逐字节不变；
+  ``use_rag`` 是**函数级默认** ``False``（保守库层默认）：不显式要求就绝不打开 RAG，
+  **内部直接调用不会隐式检索**；而**生产 HTTP 契约层已改为默认开启**
+  （``schemas.interview.NextQuestionRequest.use_rag`` / ``FollowUpRequest.use_rag``
+  默认 ``True``，由路由原样透传进来）；
   (3) **流程入口 ``generate_next_question(db, session_id, *, user_id=None, spark=None,
   context=None, plan=None, retriever=None, use_rag=False)``**
   ——「文字面试」与「数字人面试」共享的**同一个面试核心**：``session → context → plan
@@ -636,7 +639,8 @@ AI 模拟面试（四层分层 + 生成策略层）
   **这两条是「实现 / 消费接口」，不是「接线」**。
   **真正把 RAG 接进业务路径的只有两处**：组装器 ``knowledge_rag``
   （选择用哪个 Embedding / 向量后端）与 Core 的 ``resolve_retriever``（决定要不要接）。
-  且**默认关闭**（``use_rag=False``）、``start_session`` 仍走纯规则——
+  且**开关只落在 HTTP 契约层**（``use_rag`` 的库层函数默认仍 ``False``）、
+  ``start_session`` 仍走纯规则——
   所以「RAG 不影响既有业务」是结构事实，不是口头承诺。
   这样每一环都能脱离 DB 与 HTTP 单测。
 - 判断「A 是否 import B」**必须用 AST 解析 import 语句**，不要用 ``"B" in source``

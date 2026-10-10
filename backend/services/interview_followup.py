@@ -25,8 +25,10 @@
 
 硬约束（与全项目一致）
 ----------------------
-- **RAG 默认关闭**：``use_rag=False`` 且不注入 ``retriever`` ⇒ 不检索、Prompt 与
-  「引入知识能力之前」逐字节相同。真实检索链路只经
+- **RAG 默认开启（HTTP 契约层）**：``schemas.interview.FollowUpRequest.use_rag``
+  默认 ``True`` ⇒ 生产入口默认检索；本模块**函数级默认仍保守 ``False``**
+  （``use_rag=False`` 且不注入 ``retriever`` ⇒ 不检索、Prompt 与
+  「引入知识能力之前」逐字节相同），避免内部直接调用时隐式检索。真实检索链路只经
   ``interview_core.resolve_retriever`` 组装（本模块**不 import** ``knowledge_rag``）。
 - **检索是可选增强**：组装失败 / 检索抛异常 ⇒ 静默降级为「无知识」+ 记一条
   :data:`WARNING_KNOWLEDGE_FAILED`，**绝不中断追问**。

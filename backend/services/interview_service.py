@@ -743,8 +743,10 @@ async def generate_next_question(
     - **Core**：session → context → plan → Retriever → Agent → Validator 全流程
     - **Agent / Validator**：只被 Core 调用，Service **不 import、不依赖**
     - **RAG**：``use_rag=True`` 时由 Core 组装真实链路（Embedding + 向量库 + 检索器）；
-      ``retriever=`` 可直接注入现成检索器（优先级更高）。**默认都不开**——
-      不显式要求就不会打开 RAG。Service 只做透传，**不自己组装**检索器
+      ``retriever=`` 可直接注入现成检索器（优先级更高）。**本函数级默认 ``False``**
+      （保守库层默认 ⇒ 内部直接调用不隐式检索）；**生产 HTTP 契约层已默认开启**
+      （``schemas.interview.NextQuestionRequest.use_rag`` 默认 ``True``，由路由透传进来）。
+      Service 只做透传，**不自己组装**检索器
       （组装归 ``services.knowledge_rag``，见那里的模块文档）。
       ``retriever_kwargs=`` 一并透传给 Core，**只在 ``use_rag=True`` 组装时生效**
       （``top_k`` / ``min_score`` / ``category`` / ``document_id`` / ``dedup``），
@@ -791,7 +793,8 @@ async def generate_followup(
     - **Service**：归属校验（不存在 / 非本人 → 404）+ **交付分流**（``_deliver``）
     - **Core**：评分 / 检索接缝 / 只读加载——Service 不直接 import Agent / Validator
     - **RAG**：``use_rag=True`` 才组装真实链路；``retriever=`` 可直接注入
-      （优先级更高）。默认都不开——不显式要求就不会打开 RAG。
+      （优先级更高）。开关来自 ``payload.use_rag``（``FollowUpRequest`` 默认 ``True``
+      ⇒ 生产入口默认检索；显式传 ``False`` 才关闭）。
 
     **交付分流**是本函数与 ``generate_next_question`` 的关键差别：追问是「要立刻
     播报出去的一句话」，因此结果会经 ``_deliver`` 交给对应通道——

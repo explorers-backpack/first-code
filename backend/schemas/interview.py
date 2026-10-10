@@ -69,11 +69,15 @@ class AnswerSubmitRequest(BaseModel):
 class NextQuestionRequest(BaseModel):
     """按需生成下一题（大模型出题通道）—— **RAG 的生产开关就在这里**。
 
-    ``use_rag`` 默认 ``False``：不显式要求就不会组装检索链路，
-    出题行为与引入本接口前**逐字节一致**。
-    置 ``True`` 时由 ``interview_core.resolve_retriever`` 组装真实链路
-    （Embedding + 向量后端 + 检索器），组装/检索失败**静默降级为「无知识」**
+    ``use_rag`` 默认 ``True``（**默认开启**）：不显式关闭就由
+    ``interview_core.resolve_retriever`` 组装真实检索链路
+    （Embedding + 向量后端 + 检索器），把命中的语料注入出题 Prompt；
+    组装/检索失败**静默降级为「无知识」**
     （只在结果的 ``warnings`` 里记 ``knowledge_retrieval_failed``，不算失败）。
+    显式传 ``False`` 可回到「不检索」——出题行为与引入本接口前**逐字节一致**。
+
+    ★ 默认值只落在**本 HTTP 契约层**：``interview_service`` / ``interview_core``
+    的函数默认参数仍保守为 ``False``，避免**内部直接调用**时隐式触发检索。
 
     ``top_k`` / ``min_score`` 是**检索参数**，只在 ``use_rag=True`` 时生效
     （一并透传给 ``services.knowledge_rag.build_vector_retriever``）；
@@ -81,7 +85,7 @@ class NextQuestionRequest(BaseModel):
     """
 
     use_rag: bool = Field(
-        default=False, description="是否启用 RAG 知识检索（默认关闭，不传即不检索）"
+        default=True, description="是否启用 RAG 知识检索（默认开启，传 false 即关闭）"
     )
     top_k: Optional[int] = Field(
         default=None, ge=1, le=100, description="检索候选条数（仅 use_rag=true 时生效）"
@@ -99,8 +103,9 @@ class FollowUpRequest(BaseModel):
     ``services.interview_context_pack``）。
 
     ``use_rag`` / ``top_k`` / ``min_score`` 的语义与 ``/next-question`` **完全一致**
-    （同一套开关、同一个组装器）：默认关闭，不显式要求就不会检索；
-    组装 / 检索失败**静默降级为「无知识」**（只在结果的 ``warnings`` 里体现）。
+    （同一套开关、同一个组装器）：``use_rag`` **默认开启**，显式传 ``False``
+    才回到「不检索」；组装 / 检索失败**静默降级为「无知识」**（只在结果的
+    ``warnings`` 里体现）。默认值同样只落在**本 HTTP 契约层**。
     """
 
     answer_text: str = Field(
@@ -112,7 +117,7 @@ class FollowUpRequest(BaseModel):
         description="追问所针对的题号；缺省取「最近一道已作答的题」",
     )
     use_rag: bool = Field(
-        default=False, description="是否启用 RAG 知识检索（默认关闭，不传即不检索）"
+        default=True, description="是否启用 RAG 知识检索（默认开启，传 false 即关闭）"
     )
     top_k: Optional[int] = Field(
         default=None, ge=1, le=100, description="检索候选条数（仅 use_rag=true 时生效）"

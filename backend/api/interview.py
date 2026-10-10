@@ -210,13 +210,13 @@ async def get_report(
 @router.post(
     "/{session_id}/next-question",
     response_model=NextQuestionResponse,
-    summary="按需生成下一题（可启用 RAG）",
+    summary="按需生成下一题（默认启用 RAG）",
     description=(
         "走**大模型出题通道**：Core 编排「上下文 → 计划 → 知识检索 → Agent → Validator」"
         "生成**一道**候选题。与 `/start` 的**规则出题路径互不影响**——"
         "`/start` 仍一次性生成全部题目，本接口不会接管现有流程。\n\n"
-        "**RAG 开关**：`use_rag=true` 时才组装真实检索链路（Embedding + 向量后端 + 检索器），"
-        "缺省 `false` ⇒ 不检索。`top_k` / `min_score` 为检索参数，仅 `use_rag=true` 时生效。\n\n"
+        "**RAG 开关**：`use_rag` **默认开启**（缺省即组装真实检索链路：Embedding + 向量后端 + "
+        "检索器）；显式传 `false` ⇒ 不检索。`top_k` / `min_score` 为检索参数，仅 `use_rag=true` 时生效。\n\n"
         "**本接口不落库**（除幂等创建上下文）：题目持久化由 `/start` 负责，"
         "因此重复调用是安全的。知识检索失败**不算失败**，只在 `warnings` 中体现。"
     ),
@@ -256,8 +256,8 @@ async def next_question(
         "Avatar 继续提问`。上下文同时带上**简历 + 岗位 + 知识库 + 历史回答**。\n\n"
         "与 `/next-question` 的区别：追问**必须**针对候选人刚说的那一句，"
         "因此要求 `answer_text`；`question_no` 缺省时取「最近一道已作答的题」。\n\n"
-        "**RAG 开关**与 `/next-question` 完全一致：`use_rag=true` 才组装真实检索链路，"
-        "缺省 `false` ⇒ 不检索（Prompt 与引入知识能力之前逐字节相同）。"
+        "**RAG 开关**与 `/next-question` 完全一致：`use_rag` **默认开启**，缺省即组装真实检索链路；"
+        "显式传 `false` ⇒ 不检索（Prompt 与引入知识能力之前逐字节相同）。"
         "组装 / 检索失败**静默降级为「无知识」**，只在 `warnings` 里体现。\n\n"
         "**本接口不落库**、不推进题号，因此重复调用是安全的。"
         "`avatar` 模式下的结果会经数字人通道交付（失败一律降级为原样返回，"

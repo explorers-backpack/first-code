@@ -4,24 +4,25 @@
 无需 pytest，直接运行：
     python backend/tests/test_rag_production_route.py
 
-本套件回答一个问题：**生产 HTTP 路径上到底能不能用上 RAG，而且默认不用**。
+本套件回答一个问题：**生产 HTTP 路径上到底能不能用上 RAG，以及是不是默认就用**。
 
 覆盖：
 [1] 路由与鉴权（路由存在 + 无 token 401）
-[2] 默认不检索（`use_rag` 缺省 ⇒ 检索器组装器**一次都没被调用**）
+[2] 默认开启检索（`use_rag` 缺省 ⇒ 检索器组装器**被调用 1 次**）
 [3] `use_rag=true` 时组装器被调用，且**没给参数就不传参数**（默认值由组装器决定）
 [4] `top_k` / `min_score` **真的透传**到组装器
 [5] `use_rag=false` 时 `top_k` / `min_score` **不生效**（组装器不被调用）
 [6] 端到端：库里有知识 + `use_rag=true` ⇒ Agent 收到的 Prompt **含知识小节**
-[7] 对照：同一份库 + `use_rag=false` ⇒ Agent 收到的 Prompt **不含知识小节**
+[7] 对照：同一份库 + 显式 `use_rag=false` ⇒ Agent 收到的 Prompt **不含知识小节**
 [8] 归属校验：会话不存在 ⇒ **404**（Service 先拦；Core 里的 `session_not_found` 是纵深防御）
-[9] 契约与源码守卫（AST）：schema 默认 `False`；路由的 `use_rag` 由**请求**驱动
+[9] 契约与源码守卫（AST）：schema 默认 `True`；路由的 `use_rag` 由**请求**驱动
 
 不触碰本机 MySQL（SQLite 内存库），不调真实星火（替换 `main.spark_api` 为替身）。
 """
 
 import ast
 import asyncio
+import inspect
 import json
 import os
 import pathlib
@@ -47,6 +48,7 @@ from database import Base, get_db  # noqa: E402
 from deps import get_current_user  # noqa: E402
 from models import Job, User  # noqa: E402
 from schemas.interview import NextQuestionRequest  # noqa: E402
+from services import interview_service  # noqa: E402
 from services import knowledge_import_pipeline  # noqa: E402
 from services import knowledge_rag  # noqa: E402
 
@@ -231,19 +233,19 @@ async def run() -> bool:
         session_id = r.json()["session"]["id"]
         await client.post(f"{API}/{session_id}/start")
 
-        # ---------------- [2] 默认不检索 ----------------
-        print("\n[2] 默认（use_rag 缺省）")
+        # ---------------- [2] 默认开启检索 ----------------
+        print("\n[2] 默认（use_rag 缺省 ⇒ 默认开启，组装器被调用）")
         spy.calls.clear()
         spark.prompts.clear()
         r = await client.post(f"{API}/{session_id}/next-question", json={})
         _check("状态码 200", r.status_code == 200, f"{r.status_code} {r.text[:160]}")
         body = r.json()
         _check("ok=true", body.get("ok") is True, str(body)[:200])
-        _check("组装器未被调用（默认不检索）", spy.calls == [], str(spy.calls))
+        _check("★ 组装器被调用 1 次（缺省即开启 RAG）", len(spy.calls) == 1, str(spy.calls))
         _check(
-            "Prompt 不含知识小节",
-            spark.prompts and KNOWLEDGE_MARKER not in spark.prompts[-1],
-            "prompt 缺失或含知识小节",
+            "  └ 不给检索参数就不传参数（默认值由组装器决定）",
+            spy.calls == [{}],
+            str(spy.calls),
         )
         _check(
             "结果字段集恒定（13 键）",
@@ -318,10 +320,10 @@ async def run() -> bool:
             "prompt 未含知识小节",
         )
 
-        # ---------------- [7] 对照：同一份库，关闭 RAG ----------------
-        print("\n[7] 对照：同一份库 + use_rag=false")
+        # ---------------- [7] 对照：同一份库，显式关闭 RAG ----------------
+        print("\n[7] 对照：同一份库 + 显式 use_rag=false")
         spark.prompts.clear()
-        r = await client.post(f"{API}/{session_id}/next-question", json={})
+        r = await client.post(f"{API}/{session_id}/next-question", json={"use_rag": False})
         _check(
             "Prompt 不含知识小节",
             bool(spark.prompts) and KNOWLEDGE_MARKER not in spark.prompts[-1],
@@ -347,13 +349,20 @@ async def run() -> bool:
     # ---------------- [9] 契约与源码守卫 ----------------
     print("\n[9] 契约与源码守卫")
     _check(
-        "NextQuestionRequest.use_rag 默认 False",
-        NextQuestionRequest.model_fields["use_rag"].default is False,
+        "NextQuestionRequest.use_rag 默认 True（默认开启检索）",
+        NextQuestionRequest.model_fields["use_rag"].default is True,
         str(NextQuestionRequest.model_fields["use_rag"].default),
     )
     _check(
-        "NextQuestionRequest 默认实例 use_rag=False",
-        NextQuestionRequest().use_rag is False,
+        "NextQuestionRequest 默认实例 use_rag=True",
+        NextQuestionRequest().use_rag is True,
+    )
+    _check(
+        "★ 库层默认仍保守：Service 的 use_rag 默认 False"
+        "（默认开启只落在 HTTP 契约层，内部直接调用不会隐式检索）",
+        inspect.signature(
+            interview_service.generate_next_question
+        ).parameters["use_rag"].default is False,
     )
 
     api_path = pathlib.Path(__file__).resolve().parents[1] / "api" / "interview.py"
@@ -367,7 +376,7 @@ async def run() -> bool:
     )
     hardcoded = "use_rag" + "=True"
     _check(
-        "源码未硬编码开启 RAG",
+        "路由未硬编码 use_rag=True（默认值只落在 schema，仍由请求驱动）",
         hardcoded not in source,
         hardcoded,
     )
