@@ -37,11 +37,13 @@ auth_origin = (
     f'signature="{signature_b64}"'
 )
 authorization = base64.b64encode(auth_origin.encode()).decode()
-print(f"Authorization: {authorization[:60]}...")
+# 凭据不落终端 / CI 日志：只打印长度用于确认已生成
+print(f"Authorization: <redacted, {len(authorization)} chars>")
 
 params = {"authorization": authorization, "date": date_str, "host": host}
 url = f"{spark_url}?{urlencode(params)}"
-print(f"\nWebSocket URL (first 100 chars):\n{url[:100]}...")
+# URL 的 query 里含 authorization，同样不能整段打印
+print(f"\nWebSocket URL: {spark_url}?<redacted query>")
 
 # 建立连接
 print("\nConnecting...")

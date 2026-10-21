@@ -85,6 +85,19 @@ DESIRED_COLUMNS: Dict[str, Dict[str, Dict[str, Any]]] = {
             "nullable": False,
         },
     },
+    # ---- 用户会话（models/user.py）----
+    # 可空列：历史行无过期/撤销概念，由应用层按 created_at + TTL 折算兜底
+    "user_session": {
+        "expires_at": {"type": "DATETIME"},
+        "revoked_at": {"type": "DATETIME"},
+    },
+    # ---- WS 一次性连接凭证（models/user.py）----
+    # ★ 这一列是**既有表新增的列**，`create_all` 不会补 ⇒ 必须登记，
+    #   否则升级上来的库在 WS 握手时会报 Unknown column 'auth_session_id'。
+    # 可空（历史 ticket 没有这个值 ⇒ 复核退化为「用户仍存在」并记 WARNING）。
+    "ws_ticket": {
+        "auth_session_id": {"type": "INTEGER"},
+    },
     # ---- 知识库两张表（models/knowledge.py）----
     # 说明：这两张是**新表**，首次启动由 create_all 一次建全，本模块对它们
     # 通常是空操作。登记的意义是**为将来加列兜底**：模型一旦新增字段，

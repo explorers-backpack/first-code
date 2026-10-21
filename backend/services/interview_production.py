@@ -290,8 +290,9 @@ def mask_secret(value: Any, *, keep: int = 4) -> str:
 
 
 #: 形如 ``api_key=xxx`` / ``Authorization: Bearer xxx`` 的**行内**凭据。
+#: ``ticket`` 也在此列：WS 一次性连接凭证虽然短时，但同样不应落进访问日志。
 _INLINE_SECRET_RE = re.compile(
-    r"(?i)\b(api[_-]?key|api[_-]?secret|secret|password|passwd|token|authorization|signature)"
+    r"(?i)\b(api[_-]?key|api[_-]?secret|secret|password|passwd|token|ticket|authorization|signature)"
     r"\b(\s*[:=]\s*)(\S+)"
 )
 

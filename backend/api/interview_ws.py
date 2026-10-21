@@ -26,12 +26,57 @@ import」——否则会把「可选编排」变成「必经路径」，改变�
 
 鉴权
 ----
-浏览器 ``WebSocket`` **无法自定义请求头**，因此 token 走 query：
-``ws://host/api/interview/{session_id}/ws?token=<登录 token>``。
+浏览器 ``WebSocket`` **无法自定义请求头**，因此凭证走 query：
+
+- **首选**：先 ``POST /api/interview/{id}/ws-ticket``（带 Bearer）拿一次性
+  ticket，再连 ``ws://host/api/interview/{id}/ws?ticket=<ticket>``；
+- **历史兼容**：``?token=<长期登录 token>``。见下方「兼容路径」。
+
+ticket 存在 **MySQL 表 ``ws_ticket``**（``services/ws_ticket_store.py``）里，
+**不是进程内字典** ⇒ 多 worker / 多副本下「A 签发、B 校验」也能工作。
+见该模块文档与 ``CONCURRENCY_CONSISTENCY_REPORT.md`` §9。
 
 顺序刻意是 **先 ``accept()`` 再校验**：这样未登录时能给客户端一个**明确的关闭码**
-（``4401``），而不是让浏览器只看到一个「握手失败」。校验口径与
-``deps.get_current_user`` **完全一致**（token 命中 ``user_session`` 表即视为登录）。
+（``4401``），而不是让浏览器只看到一个「握手失败」。两条路径的复核口径**统一**为
+``user_session``：``token`` 路径按 token 查，ticket 路径按 ticket 里绑定的
+``auth_session_id`` 查——**都覆盖撤销与过期**，见 :func:`_auth_still_valid`。
+
+兼容路径（``?token=``）的边界
+-----------------------------
+**为什么还留着**：非浏览器客户端（``tests/test_interview_ws.py``、
+``frontend/tests/interview_ws_integration_run.js``、命令行排障脚本）没有
+「先 HTTP 换票」这一步的便利；且已发布的旧版前端在用户刷新页面之前仍在用它。
+**它是什么**：一条**独立的、走完整 ``user_session`` 校验**的鉴权分支，
+不是「ticket 验不过就用 token 兜底」——两者是并列关系，ticket 失败**绝不**回落
+到 token（回落会让「票据存储故障」静默变成「换个凭证继续」）。
+
+**边界**：这条路径把**长期凭证**放进 URL query ⇒ 会被 uvicorn 访问日志、
+反向代理日志记录。本仓库已用 ``main._LogRedactingFilter`` 在**格式化前**脱敏
+（``tests/test_auth_security.py`` §[14] 实测断言），但**反向代理侧的日志不归本仓库管**。
+
+**怎么关**：``INTERVIEW_WS_TOKEN_AUTH=0``（也接受 ``false`` / ``no`` / ``off``）。
+**默认开启**（未配置 / 空串 = 开启）以保持既有行为不变；前端已**不再**使用这条路径
+（``frontend/src/api/interviewSocket.js`` 改为 fail closed，取不到 ticket 就不建连），
+因此**新部署建议显式关闭**。关闭后仍带 ``?token=`` 的连接按「未登录」处理（``4401``）。
+
+撤销（踢下线 / 登出）怎么作用到**已建立**的连接
+----------------------------------------------
+长连接不会自己回头查库，所以必须由**服务端主动**断。三层配合：
+
+1. **共享广播**（``services/ws_revocation``）：撤销时往 ``ws_revocation`` 表追加一行
+   （只追加、单调 id）。为什么不用进程内事件：撤销发生在某个实例上，连接可能长在
+   另一个实例上，进程内通知**到不了**那边。
+2. **每实例一个轮询器**（``services/ws_revocation_watcher``）：每 ``2s`` 一条
+   ``SELECT … WHERE id > watermark``，把新记录交给 ``close_revoked_connections``，
+   由它断开**本进程**上匹配的连接（关闭码 ``4401``，前端不重连）。
+   ★ 一条查询/实例/周期，与连接数**无关**——不是「每条连接每秒查一次」。
+3. **兜底**：``AUTH_RECHECK_SECONDS``（60s）的周期性复核 + **高风险操作执行前**
+   （``answer`` / ``finish``）再验一次会话。第三层保证「广播丢了 / 轮询器被关了 /
+   存储故障」时仍有**有界**的失效延迟，而不是无限期。
+
+实测（``tests/test_ws_revocation.py``，50ms 采样步长）：同实例 **0.31s**、
+跨实例 **0.38s**（测试轮询周期 0.2s；生产默认 2.0s ⇒ 目标 ≤ 3s）。
+改造前基线：ticket 路径 **>20s 完全不生效**、token 路径 **61.7s**。
 
 生产化
 ------
@@ -52,21 +97,345 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from datetime import date, datetime, time
+import os
+import time
+from datetime import date, datetime
+from datetime import time as dtime
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, Path, WebSocket, WebSocketDisconnect
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import get_db
-from models import UserSession
+from deps import get_current_user, get_optional_session
+from models import User, UserSession
+from security import load_valid_session, session_is_valid
 from schemas.interview import AnswerSubmitRequest
 from services import interview_orchestrator as orch
 from services import interview_production as prod
 from services import interview_service
+from services import ws_revocation
+from services import ws_ticket_store as ticket_store
+
+# ============================================================
+# WebSocket 一次性连接凭证（Ticket）
+# ============================================================
+# 浏览器 WebSocket 无法自定义请求头，长期 Bearer Token 走 URL query
+# 会被代理/网关日志记录。改用短时（30 秒）、单次使用的 ticket：
+#   1. 前端先 HTTP POST /api/interview/{session_id}/ws-ticket（带 Bearer）
+#   2. 后端返回一次性 ticket
+#   3. 前端用 ticket 连接 WS：?ticket=xxx
+#   4. ticket 校验通过后**原子消费**，不可复用
+#   5. 无 ticket 时可用 Bearer token（**历史兼容**，默认开、可显式关闭，
+#      见下方「兼容路径」）；前端已不再使用它
+#
+# ★ 存储是 **MySQL 表 ``ws_ticket``**（``services/ws_ticket_store.py``），
+#   不是进程内字典。多 worker / 多副本下「A 签发、B 校验」也能工作；
+#   「单次使用」由 ``UPDATE … WHERE used_at IS NULL`` 的 rowcount 全局保证。
+#   ★ 存储不可用时**安全失败**（签发 503 / 握手 1011），绝不退回进程内字典——
+#     那会让多实例在故障时静默退化成随机 4401，比直接失败危险得多。
+# ★ ticket 里还存了 **auth_session_id**（``user_session.id``）：连接存续期间的
+#   复核要靠它判定「是否已被踢下线 / 登出」。
+_TICKET_TTL_SECONDS = ticket_store.TICKET_TTL_SECONDS
+
+
+async def create_ws_ticket(
+    db: AsyncSession,
+    session_id: int,
+    user_id: int,
+    auth_session_id: Optional[int] = None,
+) -> str:
+    """签发一次性 WS 连接 ticket（委托给共享存储）。
+
+    :param auth_session_id: 绑定的**登录会话** id。带上它，连接存续期间的复核
+        才能沿 ``user_session.revoked_at`` 判定「是否已被踢下线」；不带则退化为
+        「用户仍存在」（历史兼容，会记 WARNING）。
+
+    存储不可用时抛 ``TicketStoreUnavailable``，由端点转成 503——
+    **绝不返回一个注定验不过的 ticket**（那会让故障现场离真因很远）。
+    """
+    return await ticket_store.issue(
+        db,
+        session_id=session_id,
+        user_id=user_id,
+        auth_session_id=auth_session_id,
+    )
+
+
+async def verify_ws_ticket(
+    db: AsyncSession, ticket: str, expected_session_id: int
+) -> Optional[ticket_store.ConsumedTicket]:
+    """校验并**原子消费** ticket；有效返回 ``ConsumedTicket``，无效返回 ``None``。
+
+    两个进程并发校验同一个 ticket 时**最多一个**能拿到结果：
+    数据库条件更新的 rowcount 是唯一权威，不依赖任何进程内状态。
+    """
+    return await ticket_store.consume_ticket(
+        db, ticket=ticket, expected_session_id=expected_session_id
+    )
+
 
 router = APIRouter(tags=["AI 面试 · 实时通道"])
+
+# ============================================================
+# Origin 校验（防跨站 WebSocket 劫持 / 浏览器侧来源收口）
+# ============================================================
+# 浏览器在 WS 握手时会带 ``Origin``；非浏览器客户端（脚本 / 移动端）通常不带。
+# 口径：**带了 Origin 就必须命中白名单**；不带 Origin 时仍要求有效凭证
+# （鉴权才是主防线，Origin 是纵深防御）。
+# 默认值与 CORS 保持一致（本地 Vite 两个入口）；分域部署时用
+# ``WS_ALLOWED_ORIGINS``（优先）或 ``CORS_ALLOW_ORIGINS`` 显式配置。
+_DEFAULT_WS_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
+
+
+def _parse_ws_origins() -> tuple:
+    raw = (
+        os.getenv("WS_ALLOWED_ORIGINS", "").strip()
+        or os.getenv("CORS_ALLOW_ORIGINS", "").strip()
+    )
+    if not raw:
+        return _DEFAULT_WS_ORIGINS
+    return tuple(item.strip() for item in raw.split(",") if item.strip())
+
+
+ALLOWED_WS_ORIGINS = _parse_ws_origins()
+
+# ============================================================
+# 兼容路径开关：``?token=<长期登录 token>`` 是否允许
+# ============================================================
+# **默认开启**（未配置 / 空串）⇒ 行为与改造前**完全一致**。
+# 前端已不再使用这条路径（取不到 ticket 就 fail closed），因此**新部署建议关闭**：
+#
+#     INTERVIEW_WS_TOKEN_AUTH=0
+#
+# ★ 每次握手**实时读环境变量**（不在 import 期缓存）：与 ``prod.safe_config()``
+#   同一口径，运维改完配置重启即可，且测试可以逐用例切换两个状态。
+# ★ 非法值**不静默**：记 WARNING 后按默认（开启）走，避免「配错了以为关上了」。
+_TOKEN_AUTH_TRUE = ("1", "true", "yes", "on")
+_TOKEN_AUTH_FALSE = ("0", "false", "no", "off")
+
+
+def token_auth_enabled() -> bool:
+    """是否允许用长期登录 token 建连（``INTERVIEW_WS_TOKEN_AUTH``）。"""
+    raw = os.getenv("INTERVIEW_WS_TOKEN_AUTH", "").strip().lower()
+    if not raw:
+        return True
+    if raw in _TOKEN_AUTH_FALSE:
+        return False
+    if raw in _TOKEN_AUTH_TRUE:
+        return True
+    prod.log_event(
+        "ws_token_auth_invalid_config",
+        level=logging.WARNING,
+        value=raw[:32],
+        fallback="enabled",
+    )
+    return True
+
+
+#: 连接建立后重新校验登录态的最小间隔（秒）。
+#: 撤销 / 过期不必等到空闲超时（默认 300s）才生效，也不能每条消息都查库。
+AUTH_RECHECK_SECONDS = 60.0
+
+
+def origin_allowed(origin: str, host: str = "") -> bool:
+    """``Origin`` 为空视为非浏览器客户端（放行，仍要过鉴权）。
+
+    放行顺序：通配符 → 显式白名单 → **同源**（Origin 的 netloc 与请求 Host 一致）。
+    同源判定让「前后端同域部署」无需任何配置即可工作。
+    """
+    if not origin:
+        return True
+    if "*" in ALLOWED_WS_ORIGINS:
+        return True
+    if origin in ALLOWED_WS_ORIGINS:
+        return True
+    try:
+        from urllib.parse import urlparse
+
+        return bool(host) and urlparse(origin).netloc == host
+    except Exception:  # noqa: BLE001 - 畸形 Origin 一律拒绝
+        return False
+
+
+async def _auth_still_valid(
+    db: AsyncSession,
+    *,
+    auth_token: str,
+    auth_session_id: Optional[int],
+    user_id: int,
+) -> bool:
+    """连接存续期间复核登录态（**唯一口径**，与 ``deps.get_current_session`` 一致）。
+
+    三条路径，从严到宽：
+
+    1. **有 token**（历史兼容路径）：重新查 ``user_session``，覆盖撤销与过期；
+    2. **有 auth_session_id**（ticket 正常路径）：按主键查 ``user_session``，
+       同样覆盖撤销与过期。★ 这条路径是「管理员踢下线能踢掉已建立连接」的关键
+       —— ticket 本身一次性、消费后就没有可复核的东西了，所以把**登录会话 id**
+       一起存进 ticket（``ws_ticket.auth_session_id``），复核时沿它回查；
+    3. **两者都没有**（历史 ticket / 测试里无 Authorization 头）：退化为
+       「用户仍存在」。★ 这是**已知的弱口径**，不是设计意图：它意味着连接存续
+       期间无法感知撤销。降级时记 WARNING（不静默），让它在日志里可被发现。
+    """
+    if auth_token:
+        session = await load_valid_session(db, auth_token)
+        return session is not None and session.user_id == user_id
+
+    if auth_session_id is not None:
+        row = (
+            await db.execute(
+                select(UserSession).where(UserSession.id == int(auth_session_id))
+            )
+        ).scalar_one_or_none()
+        if row is None or int(row.user_id) != int(user_id):
+            return False
+        return session_is_valid(row)
+
+    logger_warning_unbound(user_id)
+    result = await db.execute(select(User.id).where(User.id == user_id))
+    return result.scalar_one_or_none() is not None
+
+
+#: 「无绑定」降级的告警节流（秒）：同一条连接每 60s 最多记一次，避免刷日志。
+_UNBOUND_WARN_INTERVAL_SECONDS = 60.0
+_unbound_warned: Dict[int, float] = {}
+
+
+def logger_warning_unbound(user_id: int) -> None:
+    """对「无法复核撤销」的连接记一条节流 WARNING（排障用，不含任何凭据）。"""
+    now = time.monotonic()
+    last = _unbound_warned.get(user_id, 0.0)
+    if now - last < _UNBOUND_WARN_INTERVAL_SECONDS:
+        return
+    _unbound_warned[user_id] = now
+    prod.log_event(
+        "ws_auth_unbound_session",
+        level=logging.WARNING,
+        user_id=user_id,
+        reason="ticket_without_auth_session_id",
+    )
+
+
+# ============================================================
+# 本进程的活动连接注册表（**只用于断开自己身上的连接**）
+# ============================================================
+# ★ 它**不承担任何正确性**：连接对象只存在于某一个进程里，所以「谁来断它」
+#   必须由那个进程自己完成。跨实例的**通知**走 ``services/ws_revocation``
+#   的只追加表（共享存储），而不是这张表。
+# ★ 因此这张表里存的东西都只是「本进程的内存句柄」：丢了最多是漏断一次，
+#   由周期性复核（``AUTH_RECHECK_SECONDS``）兜底。
+class _ActiveConn:
+    """一条活动连接的最小描述（够用来判断"该不该断它"）。"""
+
+    __slots__ = ("user_id", "auth_session_id", "websocket", "closed")
+
+    def __init__(
+        self,
+        user_id: int,
+        auth_session_id: Optional[int],
+        websocket: WebSocket,
+    ) -> None:
+        self.user_id = int(user_id)
+        self.auth_session_id = auth_session_id
+        self.websocket = websocket
+        self.closed = False
+
+
+_ACTIVE_CONNS: Dict[int, _ActiveConn] = {}
+_next_conn_id = [0]
+
+
+def register_active_conn(
+    user_id: int, auth_session_id: Optional[int], websocket: WebSocket
+) -> int:
+    """登记一条活动连接，返回本进程内的连接序号（用于注销）。"""
+    _next_conn_id[0] += 1
+    cid = _next_conn_id[0]
+    _ACTIVE_CONNS[cid] = _ActiveConn(user_id, auth_session_id, websocket)
+    return cid
+
+
+def unregister_active_conn(conn_id: int) -> None:
+    """注销连接（幂等）。"""
+    _ACTIVE_CONNS.pop(int(conn_id), None)
+
+
+def _conn_closed(conn_id: int) -> bool:
+    """该连接是否已被**主动断开**（撤销广播 / 空闲超时）。
+
+    ★ 为什么需要它：主动断开发生在**另一个任务**里，而本任务的循环可能正卡在
+    ``receive_json`` 上。醒来后如果还继续 ``send``（比如回一个 pong），
+    Starlette 会抛 ``Cannot call "send" once a close message has been sent``。
+    这里在每轮开头挡一下，属于"已知会被并发关闭"的显式处理，而不是靠异常兜底。
+    """
+    conn = _ACTIVE_CONNS.get(int(conn_id))
+    return conn is None or conn.closed
+
+
+def active_conn_count() -> int:
+    """本进程当前登记的活动连接数（排障 / 测试用）。"""
+    return len(_ACTIVE_CONNS)
+
+
+def reset_active_conns() -> None:
+    """清空注册表（测试用；生产代码不应调用）。"""
+    _ACTIVE_CONNS.clear()
+    _unbound_warned.clear()
+
+
+async def close_revoked_connections(rows) -> int:
+    """把「已撤销」的连接**主动断开**，返回断开条数。
+
+    由 ``services/ws_revocation_watcher`` 在轮询到新撤销记录时调用
+    （通过 ``ws_revocation.register_handler`` 注册，避免反向依赖）。
+
+    关闭码用 **4401**：语义就是「登录态失效」，且前端对 4401 **不重连**
+    ——被踢下线的人不该被自动重连回来。
+    """
+    if not rows:
+        return 0
+    closed = 0
+    for cid, conn in list(_ACTIVE_CONNS.items()):
+        if conn.closed:
+            continue
+        hit = any(
+            ws_revocation.matches(
+                row, user_id=conn.user_id, auth_session_id=conn.auth_session_id
+            )
+            for row in rows
+        )
+        if not hit:
+            continue
+        # ★ 先置位再 await：`_close` 会让对端收到 FIN，对方可能立刻重连并
+        #   触发一次新的轮询；不置位就会对同一条连接重复 close（有些 ASGI
+        #   实现会因此抛 RuntimeError）。
+        # ★ **不从 _ACTIVE_CONNS 里删**：删了 `_conn_closed(conn_id)` 就查不到
+        #   状态，连接自己的循环会继续 send。注销交给它的 finally。
+        conn.closed = True
+        try:
+            await _send(
+                conn.websocket,
+                error_event(ERROR_UNAUTHORIZED, "登录状态已失效，请重新登录"),
+            )
+            await _close(conn.websocket, WS_CLOSE_UNAUTHORIZED, "登录状态已失效")
+            closed += 1
+            prod.log_event(
+                "ws_closed_by_revocation",
+                level=logging.WARNING,
+                user_id=conn.user_id,
+                reason="session_revoked",
+            )
+        except Exception as exc:  # noqa: BLE001 - 连接可能已死，断开失败不影响其他连接
+            prod.log_event(
+                "ws_close_on_revocation_failed",
+                level=logging.WARNING,
+                user_id=conn.user_id,
+                error=type(exc).__name__,
+            )
+    return closed
+
 
 #: 路由模板（前端 ``interviewSocket.buildSocketUrl`` 必须与本值一致，有守卫测试）。
 WS_PATH = "/api/interview/{session_id}/ws"
@@ -135,6 +504,12 @@ WS_CLOSE_IDLE = 4408
 #: 并发超限：该用户的连接数 / 并发会话数已达上限 ⇒ 拒绝新连接。
 #: 前端**不重连**（立刻重连必然再次被拒，会把提示刷屏）。
 WS_CLOSE_BUSY = 4409
+#: 凭证存储暂时不可用（ticket 表缺失 / MySQL 不可用）⇒ **安全失败**。
+#: ★ 刻意用**标准码 1011**（Internal Error）而不是 4xxx：
+#:   前端对 4xxx 一律**不重连**，而这里"稍后重试"才是正确行为
+#:   （前端会重连并重新签发 ticket）。用标准码也就不必新增 4xxx 常量，
+#:   不破坏「4xxx = 应用自定义」的既有约定。
+WS_CLOSE_UNAVAILABLE = 1011
 
 # ---- 稳定错误码（``error`` 事件的 ``code``；前端据此分支，不解析长句） ----
 ERROR_BAD_MESSAGE = "bad_message"
@@ -291,14 +666,20 @@ def answer_event(
 # 三、鉴权（口径与 deps.get_current_user 一致）
 # ============================================================
 async def resolve_user(db: AsyncSession, token: str) -> Optional[dict]:
-    """按 token 解析登录态；无效返回 ``None``（**不抛异常**，由调用方决定关闭码）。"""
-    if not token:
-        return None
-    result = await db.execute(select(UserSession).where(UserSession.token == token))
-    session = result.scalar_one_or_none()
+    """按 token 解析登录态；无效返回 ``None``（**不抛异常**，由调用方决定关闭码）。
+
+    ``session_id`` 是 ``user_session.id``（**登录会话**，不是面试会话）：
+    有了它，连接存续期间的复核可以走主键查询并覆盖撤销/过期。
+    """
+    session = await load_valid_session(db, token)
     if session is None:
         return None
-    return {"user_id": session.user_id, "email": session.email, "role": session.role}
+    return {
+        "user_id": session.user_id,
+        "email": session.email,
+        "role": session.role,
+        "session_id": session.id,
+    }
 
 
 # ============================================================
@@ -314,15 +695,35 @@ async def _send(websocket: WebSocket, payload: Dict[str, Any]) -> None:
     ``TypeError: Object of type datetime is not JSON serializable``。
     因此这里显式提供一个只认「日期时间」的 ``default``：**其它类型仍然报错**
     （不静默 ``str()`` 兜底——那会把契约错误变成前端拿到一串不可解析的文本）。
+
+    ★ 还会把「已经发过 close 之后再 send」的 ``RuntimeError`` 收敛成
+    ``WebSocketDisconnect``：**主动断开**（撤销广播 / 空闲超时）发生在**另一个
+    任务**里，而本任务可能正好卡在 ``receive_json`` 上、手里握着一条待回的
+    ``ping``。此时 Starlette 会抛
+    ``RuntimeError: Cannot call "send" once a close message has been sent.``，
+    不收敛的话它会以「未知内部错误」的形式冒到最外层（日志噪音 + 可能被误判成
+    业务异常）。语义上它就是「连接已经没了」，与 ``WebSocketDisconnect`` 完全一致。
     """
-    await websocket.send_text(
-        json.dumps(payload, ensure_ascii=False, default=_json_default)
-    )
+    try:
+        await websocket.send_text(
+            json.dumps(payload, ensure_ascii=False, default=_json_default)
+        )
+    except RuntimeError as exc:
+        if "close message has been sent" in str(exc):
+            raise WebSocketDisconnect(code=1006, reason="连接已被服务端关闭") from exc
+        raise
 
 
 def _json_default(value: Any) -> str:
-    """``json.dumps`` 的 ``default``：日期时间 → ISO 字符串；其余**显式报错**。"""
-    if isinstance(value, (datetime, date, time)):
+    """``json.dumps`` 的 ``default``：日期时间 → ISO 字符串；其余**显式报错**。
+
+    ★ 这里的 ``time`` 是 ``datetime.time``（导入时别名 ``dtime``）：
+    本模块同时 ``import time``（标准库，用于 ``time.monotonic()``），
+    若两个名字撞在一起，``isinstance(value, (datetime, date, time))`` 会拿到
+    模块对象并抛 ``TypeError: isinstance() arg 2 must be a type``——
+    错误信息会指向 isinstance 而不是真正无法序列化的值。
+    """
+    if isinstance(value, (datetime, date, dtime)):
         return value.isoformat()
     raise TypeError(f"实时通道无法序列化 {type(value).__name__}：{value!r}")
 
@@ -580,6 +981,56 @@ async def _handle_speech_done(websocket: WebSocket, sid: int) -> None:
     await _send(websocket, state_event(sid))
 
 
+@router.post(
+    "/api/interview/{session_id}/ws-ticket",
+    summary="获取 WebSocket 连接一次性凭证",
+    description=(
+        "浏览器 WebSocket 无法自定义请求头，长期 Bearer Token 走 URL query "
+        "会被代理 / 网关的访问日志记录下来。本接口签发**短时（30 秒）、"
+        "单次使用**的 ticket，供 WS 握手时代替长期 token。"
+        "签发前先做会话归属校验：不是本人的会话一律 404（与 HTTP 面试接口同口径）。"
+    ),
+    tags=["AI 面试 · 实时通道"],
+)
+async def create_ws_ticket_endpoint(
+    session_id: int = Path(..., ge=1, description="面试会话 id"),
+    current_user: dict = Depends(get_current_user),
+    auth_session=Depends(get_optional_session),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """签发 WS 连接 ticket（归属校验通过后才发放）。
+
+    存储不可用时返回 **503**（不是 500，也不是"发一张废票"）：
+    503 语义上就是"服务暂时不可用，请稍后重试"，且前端不会把它当成鉴权失败。
+
+    ★ ``get_optional_session`` 只用来拿 ``user_session.id``（写进 ticket，
+    供连接存续期间复核撤销）。它**永不抛 401**——鉴权仍由 ``get_current_user``
+    负责，因此既有的 ``dependency_overrides[get_current_user]`` 覆盖链不受影响
+    （那类测试没有 Authorization 头，这里拿到 ``None``，ticket 退化为不绑定会话）。
+    """
+    # 归属校验复用 service 口径：会话不存在 / 不属于当前用户 → 404。
+    await interview_service.get_session_detail(db, current_user["user_id"], session_id)
+    try:
+        ticket = await create_ws_ticket(
+            db,
+            session_id,
+            current_user["user_id"],
+            auth_session_id=None if auth_session is None else auth_session.id,
+        )
+    except ticket_store.TicketStoreUnavailable as exc:
+        prod.log_event(
+            "ws_ticket_issue_unavailable",
+            level=logging.ERROR,
+            session_id=session_id,
+            user_id=current_user["user_id"],
+            error=str(exc),
+        )
+        raise HTTPException(
+            status_code=503, detail="连接凭证服务暂时不可用，请稍后重试"
+        ) from exc
+    return {"ticket": ticket, "expires_in": _TICKET_TTL_SECONDS}
+
+
 @router.websocket(WS_PATH)
 async def interview_socket(
     websocket: WebSocket,
@@ -604,6 +1055,22 @@ async def interview_socket(
     # 而不是让浏览器只看到「握手失败」。校验口径与 deps.get_current_user 一致。
     await websocket.accept()
 
+    # ★ Origin 校验（在鉴权之前）：带了 Origin 却不在白名单 ⇒ 直接拒绝。
+    #   浏览器跨站页面无法读取本站 localStorage 里的 token，这条是**纵深防御**，
+    #   不是替代鉴权。
+    origin = websocket.headers.get("origin", "")
+    if not origin_allowed(origin, websocket.headers.get("host", "")):
+        prod.METRICS.incr(prod.M_WS_UNAUTHORIZED)
+        prod.log_event(
+            "ws_origin_rejected",
+            level=logging.WARNING,
+            session_id=session_id,
+            origin=origin,
+        )
+        await _send(websocket, error_event(ERROR_UNAUTHORIZED, "来源不被允许"))
+        await _close(websocket, WS_CLOSE_FORBIDDEN, "来源不被允许")
+        return
+
     # 生产化策略（**默认值即现状**；配置非法时降级为默认值并**响亮记录**，不中断面试）
     config = prod.safe_config()
     tracker = prod.get_tracker()
@@ -616,15 +1083,59 @@ async def interview_socket(
     tracker.register_evict_hook(orch.reset_state)
 
     token = websocket.query_params.get("token", "")
-    user = await resolve_user(db, token)
-    if user is None:
+    ticket = websocket.query_params.get("ticket", "")
+
+    user_id: Optional[int] = None
+    #: 用于连接存续期间复核登录态的长期 token（ticket 路径下为空）
+    auth_token = ""
+    #: 绑定的**登录会话** id（ticket 路径来自 ticket；token 路径来自会话行）
+    auth_session_id: Optional[int] = None
+    if ticket:
+        try:
+            consumed = await verify_ws_ticket(db, ticket, session_id)
+        except ticket_store.TicketStoreUnavailable as exc:
+            # ★ 安全失败：既**不**降级到 token 路径（那是静默降级），
+            #   也**不**当作"未登录"（那会把运维事故伪装成登录过期）。
+            prod.METRICS.incr(prod.M_WS_UNAUTHORIZED)
+            prod.log_event(
+                "ws_ticket_store_unavailable",
+                level=logging.ERROR,
+                session_id=session_id,
+                error=str(exc),
+            )
+            await _send(
+                websocket,
+                error_event(ERROR_SERVICE, "连接凭证校验暂时不可用，请稍后重试"),
+            )
+            await _close(websocket, WS_CLOSE_UNAVAILABLE, "凭证存储暂时不可用")
+            return
+        if consumed is not None:
+            user_id = consumed.user_id
+            auth_session_id = consumed.auth_session_id
+
+    if user_id is None and token:
+        if token_auth_enabled():
+            user = await resolve_user(db, token)
+            if user is not None:
+                user_id = user["user_id"]
+                auth_token = token
+                auth_session_id = user.get("session_id")
+        else:
+            # 兼容路径已被显式关闭：**不区分**「开关关了」与「凭证无效」，
+            # 统一落到下面的 4401 —— 不给探测者「这台机器关了 token 登录」这种信号。
+            prod.log_event(
+                "ws_token_auth_rejected",
+                level=logging.WARNING,
+                session_id=session_id,
+                reason="token_auth_disabled",
+            )
+
+    if user_id is None:
         prod.METRICS.incr(prod.M_WS_UNAUTHORIZED)
         prod.log_event("ws_unauthorized", level=logging.WARNING, session_id=session_id)
         await _send(websocket, error_event(ERROR_UNAUTHORIZED, "登录状态无效或已过期，请重新登录"))
         await _close(websocket, WS_CLOSE_UNAUTHORIZED, "登录状态无效或已过期")
         return
-
-    user_id = user["user_id"]
 
     # 归属校验：复用 service 的既有口径（不存在 / 非本人一律 404，不泄露他人会话存在性）
     try:
@@ -684,6 +1195,11 @@ async def interview_socket(
         idle_timeout=config.idle_timeout_seconds,
     )
 
+    # ★ 登记到本进程的连接表：撤销广播到达时，本进程才有办法**主动断开**它。
+    #   这张表只在本进程内有效（连接对象不可能跨进程），跨实例的「通知」由
+    #   services/ws_revocation 的只追加表承担。
+    conn_id = register_active_conn(user_id, auth_session_id, websocket)
+
     try:
         await _send(
             websocket,
@@ -699,6 +1215,7 @@ async def interview_socket(
         )
         await _push_snapshot(websocket, db, user_id, session_id)
 
+        last_auth_check = time.monotonic()
         while True:
             # ★ 空闲超时：超时后**服务端主动关闭**，把「拔网线 / 进程被杀 / 浏览器崩溃」
             #   这类**不会发 FIN** 的半开连接真正释放掉（前端有心跳，活着的连接不会命中）。
@@ -725,6 +1242,36 @@ async def interview_socket(
             # 任何一条客户端消息都算「活跃」（含 ping / snapshot）——心跳即续期。
             tracker.touch(session_id)
             prod.METRICS.incr(prod.M_WS_MESSAGES)
+
+            # ★ 醒来先看自己是不是已经被**主动断开**了（撤销广播 / 空闲超时）：
+            #   是就直接收尾，别再 send（否则会撞上 "close message has been sent"）。
+            if _conn_closed(conn_id):
+                return
+
+            # ★ 连接存续期间的登录态复核（**按时间节流**，不是每条消息都查库）：
+            #   撤销 / 过期最多延迟 AUTH_RECHECK_SECONDS 生效，而不是等空闲超时。
+            now = time.monotonic()
+            if now - last_auth_check >= AUTH_RECHECK_SECONDS:
+                last_auth_check = now
+                if not await _auth_still_valid(
+                    db,
+                    auth_token=auth_token,
+                    auth_session_id=auth_session_id,
+                    user_id=user_id,
+                ):
+                    prod.METRICS.incr(prod.M_WS_UNAUTHORIZED)
+                    prod.log_event(
+                        "ws_auth_revoked",
+                        level=logging.WARNING,
+                        session_id=session_id,
+                        user_id=user_id,
+                    )
+                    await _send(
+                        websocket,
+                        error_event(ERROR_UNAUTHORIZED, "登录状态已失效，请重新登录"),
+                    )
+                    await _close(websocket, WS_CLOSE_UNAUTHORIZED, "登录状态已失效")
+                    return
 
             msg = normalize_client_message(raw)
             msg_type = msg["type"]
@@ -757,6 +1304,33 @@ async def interview_socket(
                                  error="提交过于频繁，请稍候再试"),
                 )
                 continue
+
+            # ★ 高风险操作**执行前**再验一次会话。
+            #   为什么不能只靠「建连时鉴权一次」+ 60s 节流复核：
+            #   作答会写库、结束会生成报告——被踢下线的人在这两个动作上
+            #   造成的后果是**持久**的（数据 / 报告），不像读快照那样可以重来。
+            #   成本是一条主键（或 token 唯一索引）查询，远低于「撤销后仍能写数据」。
+            if msg_type in (CLIENT_ANSWER, CLIENT_FINISH):
+                if not await _auth_still_valid(
+                    db,
+                    auth_token=auth_token,
+                    auth_session_id=auth_session_id,
+                    user_id=user_id,
+                ):
+                    prod.METRICS.incr(prod.M_WS_UNAUTHORIZED)
+                    prod.log_event(
+                        "ws_auth_revoked_on_high_risk",
+                        level=logging.WARNING,
+                        session_id=session_id,
+                        user_id=user_id,
+                        msg_type=msg_type,
+                    )
+                    await _send(
+                        websocket,
+                        error_event(ERROR_UNAUTHORIZED, "登录状态已失效，请重新登录"),
+                    )
+                    await _close(websocket, WS_CLOSE_UNAUTHORIZED, "登录状态已失效")
+                    return
 
             # ★ 每会话非阻塞互斥：两个标签页同时作答时，只放行先到的那个
             #   （排队会让用户看到「点了没反应」，直接拒绝反而能给出可理解的反馈）。
@@ -812,6 +1386,7 @@ async def interview_socket(
         #   否则额度会随连接次数单调泄漏，最终把用户自己挡在门外。
         # ★ 会话活跃记录**刻意不 forget**：它由 TTL 淘汰（淘汰时才 reset 编排状态），
         #   这样「断开后 5 分钟内重连」仍能拿到原状态；而 `acquire_session` 是幂等的。
+        unregister_active_conn(conn_id)
         gate.release_connection(user_id)
         gate.release_session(user_id, session_id)
         prod.METRICS.set_gauge(prod.M_WS_ACTIVE, gate.active_connections())

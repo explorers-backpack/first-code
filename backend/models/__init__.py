@@ -40,7 +40,14 @@ from models.knowledge import (
     KnowledgeDocument,
 )
 from models.resume import ChatHistory, Resume
-from models.user import User, UserLoginLog, UserSession
+from models.user import (
+    LoginFailure,
+    User,
+    UserLoginLog,
+    UserSession,
+    WsRevocation,
+    WsTicket,
+)
 
 __all__ = [
     # 既有模型
@@ -50,6 +57,11 @@ __all__ = [
     "Resume",
     "ChatHistory",
     "Job",
+    # WS 一次性连接凭证（跨进程共享，见 models/user.py 的说明）
+    "WsTicket",
+    # 跨实例的「会话已撤销」广播（实时通道主动断开用）
+    "LoginFailure",
+    "WsRevocation",
     # AI 面试模型
     "InterviewSession",
     "InterviewQuestion",

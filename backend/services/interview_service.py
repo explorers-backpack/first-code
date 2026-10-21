@@ -63,12 +63,14 @@ interview_core``，不要依赖这些别名。
 
 from __future__ import annotations
 
+import logging
 import os
 from datetime import datetime
 from typing import Any, Dict, List, Mapping, Optional, Tuple
 
 from fastapi import HTTPException
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from models import (
@@ -99,6 +101,8 @@ from services import (
     interview_next_flow,
 )
 from services.resume_scoring import extract_skills
+
+logger = logging.getLogger("careerai.interview")
 
 # ============================================================
 # 〇、向后兼容：旧符号再导出（业务实现已迁至 interview_core）
@@ -266,6 +270,46 @@ async def _load_session(
     return session
 
 
+async def _load_session_for_update(
+    db: AsyncSession, session_id: int, user_id: int
+) -> InterviewSession:
+    """按 id 加载会话并加行锁（FOR UPDATE），用于写路径。"""
+    result = await db.execute(
+        select(InterviewSession)
+        .where(InterviewSession.id == session_id)
+        .with_for_update()
+    )
+    session = result.scalar_one_or_none()
+    if session is None or session.user_id != user_id:
+        raise HTTPException(status_code=404, detail=f"面试会话 {session_id} 不存在")
+    return session
+
+
+async def _end_read_transaction(db: AsyncSession) -> None:
+    """主动结束一个**只读**事务（不写任何数据）。
+
+    ★ 用途：把**长耗时外部调用**（大模型实测 8~19 秒、向量化 ~0.3 秒/条）
+    挪到事务边界之外。否则一条 `REPEATABLE READ` 长读事务会：
+    ① 让 InnoDB 长时间保留 undo 快照；② 长期占用连接池连接
+    ⇒ 高并发下表现为「超时」，而不是「报错」，极难归因。
+
+    ★ 为什么用 ``commit()`` 而不是 ``rollback()``：
+    ``database.async_session`` 配的是 ``expire_on_commit=False``，
+    提交后 ORM 属性**仍然可用**；而 ``rollback()`` 会**过期所有对象**，
+    之后读 `session.user_id` 这类属性会在异步上下文里触发惰性加载
+    并抛 ``MissingGreenlet``。
+
+    ★ 安全闸：若真有未提交的写入，这里**显式报错**而不是悄悄提交——
+    本函数只允许在只读阶段调用，误用必须立刻可见。
+    """
+    if db.new or db.dirty or db.deleted:
+        raise RuntimeError(
+            "_end_read_transaction 只允许在只读阶段调用"
+            "（当前存在未提交的新增/修改/删除对象）"
+        )
+    await db.commit()
+
+
 async def _load_questions(
     db: AsyncSession, session_id: int
 ) -> List[InterviewQuestion]:
@@ -298,12 +342,25 @@ async def _load_job(db: AsyncSession, job_id: Optional[int]) -> Optional[Job]:
 
 
 async def _load_resume_skills(
-    db: AsyncSession, resume_id: Optional[int]
+    db: AsyncSession, resume_id: Optional[int], user_id: int
 ) -> List[str]:
-    """读取简历技能。``resume`` 表当前无写入逻辑，取不到即返回空列表（不猜）。"""
+    """读取**当前用户自己**的简历技能；取不到即返回空列表（不猜）。
+
+    ★ 归属过滤是必需的，不是冗余：``resume.user_id`` 是真实存在的列
+    （``models/resume.py``，``nullable=False``），而 ``interview_session.resume_id``
+    只是一个外键——创建会话时若能挂上**他人**的简历 id，后续所有读路径
+    （本题 / 出题计划 / 报告汇总 / 上下文包）都会把他人简历正文抽成技能
+    注入题目与报告，构成水平越权。
+
+    因此这里同时承担**第二道闸**：即使库里存在历史脏行（会话挂着他人简历），
+    读路径也只返回 ``[]``，而不是把内容吐出去。``None`` 与「不属于本人」
+    返回同一结果，不构成存在性预言机。
+    """
     if not resume_id:
         return []
-    result = await db.execute(select(Resume).where(Resume.id == resume_id))
+    result = await db.execute(
+        select(Resume).where(Resume.id == resume_id, Resume.user_id == user_id)
+    )
     resume = result.scalar_one_or_none()
     if resume is None or not resume.content:
         return []
@@ -429,7 +486,16 @@ async def create_session(
             )
 
     if payload.resume_id is not None:
-        result = await db.execute(select(Resume).where(Resume.id == payload.resume_id))
+        # ★ 归属过滤：只允许挂**自己**的简历。
+        # 原实现只判「id 存在」，导致 A 可以拿 B 的 resume_id 建会话，
+        # 进而把 B 的简历正文抽成技能注入题目与报告（水平越权）。
+        # 这里刻意不区分「不存在」与「不属于本人」——两者都回同一句
+        # ``简历 X 不存在``，避免变成「他人简历 id 是否存在」的预言机。
+        result = await db.execute(
+            select(Resume).where(
+                Resume.id == payload.resume_id, Resume.user_id == user_id
+            )
+        )
         if result.scalar_one_or_none() is None:
             raise HTTPException(
                 status_code=400, detail=f"简历 {payload.resume_id} 不存在"
@@ -516,7 +582,21 @@ async def _activate_session(
     session.status = SESSION_STATUS_ONGOING
     session.started_at = datetime.utcnow()
     session.current_question_no = 1
-    await db.commit()
+    # ★ 必须**先**把主键取出来：`except` 分支里的 `db.rollback()` 会过期所有
+    #   ORM 对象，之后再读 `session.id` 会触发惰性加载，在异步会话里直接抛
+    #   `MissingGreenlet`（"greenlet_spawn has not been called"）。
+    session_id = session.id
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        refreshed = await db.execute(
+            select(InterviewSession).where(InterviewSession.id == session_id)
+        )
+        existing = refreshed.scalar_one_or_none()
+        if existing is not None and existing.status == SESSION_STATUS_ONGOING:
+            raise HTTPException(status_code=400, detail="面试已在进行中，请直接获取当前题目")
+        raise HTTPException(status_code=409, detail="数据冲突，请重试")
     await db.refresh(session)
     return session
 
@@ -575,7 +655,7 @@ async def begin_session_with_questions(
     :func:`_activate_session` / :func:`_start_payload`），因此 text 会话下
     两者的返回形状与副作用**逐字段相同**。
     """
-    session = await _load_session(db, session_id, user_id)
+    session = await _load_session_for_update(db, session_id, user_id)
     _ensure_startable(session)
     if not items:
         raise HTTPException(status_code=500, detail="题目计划生成失败，请检查会话配置")
@@ -606,11 +686,11 @@ async def start_session(
     **第 1 题**（第 2 题起由 :func:`generate_and_persist_next` 逐题生成）；
     开关被显式关掉（``INTERVIEW_AVATAR_LLM_QUESTIONS=0``）时整场一次性落库。
     """
-    session = await _load_session(db, session_id, user_id)
+    session = await _load_session_for_update(db, session_id, user_id)
     _ensure_startable(session)
 
     job = await _load_job(db, session.job_id)
-    resume_skills = await _load_resume_skills(db, session.resume_id)
+    resume_skills = await _load_resume_skills(db, session.resume_id, session.user_id)
     # 出题计划由 Core 负责（纯规则、确定性）；本层只负责读数据与落库
     plan = interview_core.build_question_plan(session, job, resume_skills)
 
@@ -699,10 +779,27 @@ async def get_current_question(
         (q for q in questions if q.question_no == session.current_question_no), None
     )
     if current is None:
-        raise HTTPException(
-            status_code=500,
-            detail=f"会话数据异常：第 {session.current_question_no} 题不存在，请重新创建面试",
+        # ★ 自愈：见 _recover_missing_question 的说明。
+        #   本函数是**只读入口**、未持行锁，因此可以安全地重跑落库原语。
+        await _end_read_transaction(db)
+        healed = await _recover_missing_question(
+            db, user_id, session.id, session.current_question_no
         )
+        if healed is None:
+            raise HTTPException(
+                status_code=500,
+                detail=f"会话数据异常：第 {session.current_question_no} 题不存在，请重新创建面试",
+            )
+        return await _deliver(db, session, {
+            "session_id": session.id,
+            "status": session.status,
+            "question_no": healed["question_no"],
+            "total_questions": session.total_questions,
+            "question": healed,
+            "answered": False,
+            "all_answered": False,
+            "message": "ok",
+        })
 
     return await _deliver(db, session, {
         "session_id": session.id,
@@ -720,7 +817,7 @@ async def submit_answer(
     db: AsyncSession, user_id: int, session_id: int, payload: AnswerSubmitRequest
 ) -> Dict[str, Any]:
     """提交当前题目的回答 → 规则评分 → 推进到下一题。"""
-    session = await _load_session(db, session_id, user_id)
+    session = await _load_session_for_update(db, session_id, user_id)
 
     if session.status != SESSION_STATUS_ONGOING:
         raise HTTPException(
@@ -743,10 +840,35 @@ async def submit_answer(
         (q for q in questions if q.question_no == session.current_question_no), None
     )
     if current is None:
-        raise HTTPException(
-            status_code=500,
-            detail=f"会话数据异常：第 {session.current_question_no} 题不存在",
+        # ★ 自愈（见 _recover_missing_question）：本函数持 `FOR UPDATE` 行锁，
+        #   而自愈内部会 commit ⇒ **必须先 rollback 释放锁**，否则「检查-写入」
+        #   会在锁被悄悄释放后继续，等于没有保护。
+        #   rollback 会过期所有 ORM 对象，所以之后必须重新加载会话。
+        missing_no = session.current_question_no
+        await db.rollback()
+        healed = await _recover_missing_question(db, user_id, session_id, missing_no)
+        if healed is None:
+            raise HTTPException(
+                status_code=500,
+                detail=f"会话数据异常：第 {missing_no} 题不存在",
+            )
+        session = await _load_session_for_update(db, session_id, user_id)
+        if (
+            session.status != SESSION_STATUS_ONGOING
+            or session.current_question_no != missing_no
+        ):
+            # 自愈期间状态被并发改变（已结束 / 题号被推进）⇒ 让调用方重试整个请求，
+            # 绝不在新状态下沿用旧判定继续写。
+            raise HTTPException(status_code=409, detail="会话状态已变化，请重试")
+        questions = await _load_questions(db, session.id)
+        current = next(
+            (q for q in questions if q.question_no == missing_no), None
         )
+        if current is None:
+            raise HTTPException(
+                status_code=500,
+                detail=f"会话数据异常：第 {missing_no} 题不存在",
+            )
 
     # 一题一答：question_id 在表上有 UNIQUE 约束，这里先给出可读提示
     existing = await db.execute(
@@ -774,7 +896,22 @@ async def submit_answer(
 
     # 推进题号；超过总题量即表示全部作答完毕
     session.current_question_no += 1
-    await db.commit()
+    # ★ rollback 会过期所有 ORM 对象 ⇒ 冲突分支要用到的值必须先取成普通值，
+    #   否则 `current.id` / `current.question_no` 会触发惰性加载抛 MissingGreenlet。
+    current_id = current.id
+    current_no = current.question_no
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        existing = await db.execute(
+            select(InterviewAnswer).where(InterviewAnswer.question_id == current_id)
+        )
+        if existing.scalar_one_or_none() is not None:
+            raise HTTPException(
+                status_code=400, detail=f"第 {current_no} 题已作答，请勿重复提交"
+            )
+        raise HTTPException(status_code=409, detail="数据冲突，请重试")
     await db.refresh(answer)
     await db.refresh(session)
 
@@ -819,7 +956,7 @@ async def end_session(
     - ``created`` → 400（还没开始，无意义）
     - ``ongoing`` → 允许提前结束，按已作答内容出报告
     """
-    session = await _load_session(db, session_id, user_id)
+    session = await _load_session_for_update(db, session_id, user_id)
 
     if session.status == SESSION_STATUS_CREATED:
         raise HTTPException(status_code=400, detail="面试尚未开始，无法结束")
@@ -837,7 +974,7 @@ async def end_session(
             })
 
     job = await _load_job(db, session.job_id)
-    resume_skills = await _load_resume_skills(db, session.resume_id)
+    resume_skills = await _load_resume_skills(db, session.resume_id, session.user_id)
     questions = await _load_questions(db, session.id)
     answers = await _load_answers(db, session.id)
 
@@ -862,7 +999,26 @@ async def end_session(
 
     session.status = SESSION_STATUS_FINISHED
     session.ended_at = datetime.utcnow()
-    await db.commit()
+    # ★ 同 submit_answer：冲突分支要用的值先取成普通值（rollback 会过期 ORM 对象）
+    session_id = session.id
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        existing = await db.execute(
+            select(InterviewReport).where(InterviewReport.session_id == session_id)
+        )
+        existing_report = existing.scalar_one_or_none()
+        if existing_report is not None:
+            # 并发下另一请求已出报告 ⇒ 幂等返回。rollback 已把 session 过期，
+            # 必须**重新加载**后才能序列化 / 交付（否则 MissingGreenlet）。
+            session = await _load_session(db, session_id, user_id)
+            return await _deliver(db, session, {
+                "session": _session_to_dict(session),
+                "report": _report_to_dict(existing_report),
+                "message": "面试已结束（返回既有报告）",
+            })
+        raise HTTPException(status_code=409, detail="数据冲突，请重试")
     await db.refresh(report)
     await db.refresh(session)
 
@@ -1000,7 +1156,7 @@ async def _rule_plan(
     规则出题是确定性的，因此它与「整场一次性落库」得到的题目**逐字段相同**。
     """
     job = await _load_job(db, session.job_id)
-    resume_skills = await _load_resume_skills(db, session.resume_id)
+    resume_skills = await _load_resume_skills(db, session.resume_id, session.user_id)
     return [
         dict(item)
         for item in interview_core.build_question_plan(session, job, resume_skills)
@@ -1019,6 +1175,103 @@ async def _rule_plan_item(
         if item["question_no"] == question_no:
             return item
     return None
+
+
+async def _insert_question_row(
+    db: AsyncSession, session_id: int, item: Mapping[str, Any]
+) -> Tuple[Optional[InterviewQuestion], bool]:
+    """插入一道题；唯一约束冲突时返回**既有行**（``created=False``）。
+
+    ★ 这是「一题号一行」的**唯一写入原语**，正常补题与缺行自愈共用，
+    避免两处各自实现导致口径漂移。
+
+    ★ 幂等收敛的前提是真实库上的 ``uq_interview_question_session_no``：
+    没有它时两个并发 INSERT 都会成功，``IntegrityError`` 分支永远不会触发
+    （该约束曾长期只存在于模型声明里，由
+    ``scripts/migrate_interview_question_unique.py`` 补到真实库）。
+
+    ★ ``rollback()`` 会**过期所有 ORM 对象** ⇒ 冲突分支只能用普通值
+    （``session_id`` / ``question_no``），读 ``session.id`` 会抛 ``MissingGreenlet``。
+    """
+    row = InterviewQuestion(
+        session_id=session_id,
+        question_no=item["question_no"],
+        question=item["question"],
+        question_type=item["question_type"],
+        topic=item["topic"],
+        difficulty=item["difficulty"],
+        expected_points=item["expected_points"],
+    )
+    question_no = item["question_no"]
+    db.add(row)
+    try:
+        await db.commit()
+    except IntegrityError:
+        await db.rollback()
+        for q in await _load_questions(db, session_id):
+            if q.question_no == question_no:
+                return q, False
+        raise HTTPException(status_code=409, detail="数据冲突，请重试")
+    await db.refresh(row)
+    return row, True
+
+
+async def _recover_missing_question(
+    db: AsyncSession, user_id: int, session_id: int, question_no: int
+) -> Optional[Dict[str, Any]]:
+    """**自愈**：当前题号对应的题目行缺失时，用**规则题**把它补回来。
+
+    覆盖的失败窗口
+    --------------
+    「模型调用成功、但随后 DB 提交失败」（连接断开 / 死锁 / 进程被杀）会留下
+    「会话已推进到第 N 题、但库里没有第 N 题」的状态。此前这种状态会让
+    ``get_current_question`` 直接抛 **500**，用户只能重新创建面试——
+    已作答的 N-1 题全部作废。
+
+    恢复策略（**不使用进程内任务状态，也不需要新表**）
+    ------------------------------------------------
+    **缺行本身就是恢复信号**（它存在于数据库里，多实例 / 进程重启后依然成立），
+    恢复动作是**按规则计划重建第 N 题**：``build_question_plan`` 是**确定性纯函数**，
+    同一会话同一题号必然得到同一道题 ⇒ 自愈结果与丢失前**逐字段相同**
+    （前提是丢失的那道本来就是规则题，而「只落第 1 题」模式下第 1 题恰好是规则题）。
+
+    ★ 为什么自愈**不走模型**：恢复路径要的是**必然成功 + 零外部依赖**。
+    走模型会把「DB 提交失败」的恢复再绑到网络上，且生成的是**另一道题**
+    （不是被丢掉的那道），反而让「丢题」变成静默的题目替换。
+    模型补题仍走正常路径（:func:`generate_and_persist_next`）。
+
+    ★ 调用前必须**先结束/回滚当前事务**：本函数内部会 ``commit()``，
+    若外层正持有 ``SELECT ... FOR UPDATE`` 行锁，那次提交会把锁一并释放，
+    使「检查-写入」失去保护。
+    """
+    try:
+        session = await _load_session(db, session_id, user_id)
+    except HTTPException:
+        raise
+    if session.status != SESSION_STATUS_ONGOING:
+        return None
+    if session.current_question_no != question_no:
+        # 期间题号被并发推进 ⇒ 交给调用方重新判定，不在旧题号上硬补
+        return None
+
+    # 先再查一次：可能刚刚被另一个请求补上了
+    for row in await _load_questions(db, session_id):
+        if row.question_no == question_no:
+            return _question_to_dict(row)
+
+    item = await _rule_plan_item(db, session, question_no)
+    if item is None:
+        return None
+    try:
+        row, _created = await _insert_question_row(db, session_id, item)
+    except HTTPException:
+        raise
+    except Exception:  # noqa: BLE001 - 自愈是可选增强，失败不该把读接口打成 500
+        logger.exception(
+            "[interview] 第 %s 题自愈失败（session=%s）", question_no, session_id
+        )
+        return None
+    return _question_to_dict(row) if row is not None else None
 
 
 async def generate_and_persist_next(
@@ -1098,20 +1351,31 @@ async def generate_and_persist_next(
                 "error": None,
             }
 
-    # ② 组装（上下文 + 知识检索）并调用模型：接缝调用集中在组装层，
-    #    Service 侧只保留「落库 + 状态机口径」——本模块有源码级守卫，
-    #    全文不得出现 Agent / Context 的接缝字面量。
+    # ② 规则计划（纯 DB 读）——第 5 步的兜底题就取自它
     plan_items = await _rule_plan(db, session)
-    candidate = await interview_next_flow.generate_candidate(
+
+    # ★★ 事务边界（并发安全的核心改造）
+    #   上面全是只读查询，此刻**主动结束事务**：`expire_on_commit=False`，
+    #   提交后 ORM 属性仍然可用，不会触发惰性加载。
+    #   后面两步（取材料 / 调模型）因此**不会**继承一个已经开始的事务。
+    await _end_read_transaction(db)
+
+    # ③ 取材料（短事务：上下文包 + 知识检索）——返回纯数据快照，不含 ORM 对象
+    prepared = await interview_next_flow.prepare_candidate(
         db,
         session,
         plan_items,
         question_no=question_no,
-        spark=spark,
         retriever=retriever,
         use_rag=use_rag,
         retriever_kwargs=retriever_kwargs,
     )
+
+    # ★★ 再次结束事务：**模型调用期间不得有任何事务开着**（实测 8~19 秒）
+    await _end_read_transaction(db)
+
+    # ④ 调模型（**零数据库事务**；`generate_from_prepared` 连 db 都不接收）
+    candidate = await interview_next_flow.generate_from_prepared(prepared, spark=spark)
 
     errors: List[Any] = []
     if candidate.get("ok"):
@@ -1139,18 +1403,11 @@ async def generate_and_persist_next(
             "error": candidate.get("error") or "下一题生成失败",
         }
 
-    row = InterviewQuestion(
-        session_id=session.id,
-        question_no=item["question_no"],
-        question=item["question"],
-        question_type=item["question_type"],
-        topic=item["topic"],
-        difficulty=item["difficulty"],
-        expected_points=item["expected_points"],
-    )
-    db.add(row)
-    await db.commit()
-    await db.refresh(row)
+    row, created = await _insert_question_row(db, session.id, item)
+    if not created:
+        # 落库时输给了并发请求 ⇒ 对外口径必须是 existing（而不是谎称自己写的）
+        source = SOURCE_EXISTING
+        errors = []
 
     return {
         "ok": True,

@@ -27,30 +27,41 @@ from services import (
 )
 
 
-async def generate_candidate(
+#: :func:`prepare_candidate` 返回快照的**恒定键集**（调用方可按它断言形状）。
+PREPARED_FIELDS: tuple = (
+    "pack",
+    "plan_items",
+    "knowledge_context",
+    "topic",
+    "question_no",
+)
+
+
+async def prepare_candidate(
     db: AsyncSession,
     session: Any,
     plan_items: Sequence[Mapping[str, Any]],
     *,
     question_no: int,
-    spark: Any = None,
     retriever: Any = None,
     use_rag: bool = True,
     retriever_kwargs: Optional[Mapping[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """组装上下文与知识，生成**第 ``question_no`` 题**的候选（**不落库**）。
+    """**取材料**（只读，不调用模型）→ 返回纯数据快照。
 
-    步骤
-    ----
-    1. **上下文整合**：取上下文包（简历 + 岗位 + **历史回答** + 进度），
-       只读派生、不落库。
-    2. **知识检索**（可选增强）：注入 ``retriever`` 优先；``use_rag=True``
-       才组装真实链路；故障静默降级为「无知识」。
-    3. **模型生成**：调用 ``interview_next_agent``（携带历史回答的 Prompt 组），
-       知识为空时走原模板。
+    ★ 为什么要拆成「取材料 / 调模型」两段（并发安全的核心）
+    ------------------------------------------------------
+    模型调用实测 **8~19 秒**。如果它和前面的 DB 读取处在**同一个事务**里，
+    就会持有一条长读事务（MySQL ``REPEATABLE READ`` 下还要保留 undo 快照）
+    并长期占用连接池连接 —— 症状不是"卡死"而是"高并发下超时"，很难归因。
 
-    返回 ``interview_next_agent`` 的候选结果（``ok`` / ``question`` / ``error``
-    等键与它同形状），**本函数不解释也不裁剪**。
+    因此本函数**只做 DB 读取与知识检索**，把结果整理成**普通 dict**（不含 ORM 对象），
+    由调用方在返回后**结束事务**，再交给 :func:`generate_from_prepared` 去调模型。
+    ⇒ 模型调用期间**没有任何数据库事务在开着**。
+
+    返回键集（``PREPARED_FIELDS``，恒定）::
+
+        {"pack", "plan_items", "knowledge_context", "topic", "question_no"}
     """
     topic = next(
         (item["topic"] for item in plan_items if item["question_no"] == question_no), ""
@@ -65,9 +76,63 @@ async def generate_candidate(
         use_rag=use_rag,
         retriever_kwargs=retriever_kwargs,
     )
+    return {
+        "pack": pack,
+        "plan_items": list(plan_items),
+        "knowledge_context": list(chunks or []),
+        "topic": topic,
+        "question_no": question_no,
+    }
+
+
+async def generate_from_prepared(
+    prepared: Mapping[str, Any], *, spark: Any = None
+) -> Dict[str, Any]:
+    """**纯外部调用**：拿 :func:`prepare_candidate` 的快照去调模型（**不碰数据库**）。
+
+    ★ 本函数刻意**不接收 ``db``**：没有数据库句柄，就不可能无意中开事务。
+    返回值与 ``interview_next_agent.generate_question`` 同形状，不解释也不裁剪。
+    """
     return await interview_next_agent.generate_question(
-        pack, plan_items, knowledge_context=chunks, spark=spark
+        prepared["pack"],
+        prepared["plan_items"],
+        knowledge_context=prepared["knowledge_context"],
+        spark=spark,
     )
 
 
-__all__ = ["generate_candidate"]
+async def generate_candidate(
+    db: AsyncSession,
+    session: Any,
+    plan_items: Sequence[Mapping[str, Any]],
+    *,
+    question_no: int,
+    spark: Any = None,
+    retriever: Any = None,
+    use_rag: bool = True,
+    retriever_kwargs: Optional[Mapping[str, Any]] = None,
+) -> Dict[str, Any]:
+    """组装上下文与知识，生成**第 ``question_no`` 题**的候选（**不落库**）。
+
+    ★ **兼容入口**：等价于 ``prepare_candidate`` + ``generate_from_prepared``，
+    保留它是为了让既有调用方/测试无需改动。**需要"事务不跨模型调用"的调用方
+    必须显式分两步调用**（见 :func:`prepare_candidate` 的说明）。
+    """
+    prepared = await prepare_candidate(
+        db,
+        session,
+        plan_items,
+        question_no=question_no,
+        retriever=retriever,
+        use_rag=use_rag,
+        retriever_kwargs=retriever_kwargs,
+    )
+    return await generate_from_prepared(prepared, spark=spark)
+
+
+__all__ = [
+    "PREPARED_FIELDS",
+    "generate_candidate",
+    "generate_from_prepared",
+    "prepare_candidate",
+]

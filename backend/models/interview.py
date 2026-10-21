@@ -33,6 +33,7 @@ from sqlalchemy import (
     Integer,
     String,
     Text,
+    UniqueConstraint,
 )
 
 from database import Base
@@ -108,6 +109,9 @@ class InterviewQuestion(Base):
     """面试题表：一道题一行，``question_no`` 在会话内自增。"""
 
     __tablename__ = "interview_question"
+    __table_args__ = (
+        UniqueConstraint("session_id", "question_no", name="uq_interview_question_session_no"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     session_id = Column(

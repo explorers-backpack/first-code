@@ -139,6 +139,64 @@ def _context_to_dict(
 # ============================================================
 # 1. 创建初始 Context
 # ============================================================
+def _idempotent_insert_stmt(db: AsyncSession, values: Dict[str, Any]):
+    """构造「已存在即不写」的 INSERT（不抛 ``IntegrityError``）。
+
+    为什么不用「SELECT 判存在 → INSERT」（改造前的写法）
+    --------------------------------------------------
+    两步之间**没有任何锁**，并发下两路都会判定「不存在」，随后第二路必撞
+    ``interview_context`` 在 ``session_id`` 上的唯一索引。真实 MySQL 8 实测复现::
+
+        (1062, "Duplicate entry '1' for key
+         'interview_context.ix_interview_context_session_id'")
+
+    为什么不能简单地 ``except IntegrityError: await db.rollback()``
+    --------------------------------------------------------------
+    ``Session.rollback()`` 会**过期本事务内所有 ORM 实例**。调用方
+    （``interview_context_pack.build_context_pack``）随后读 ``answer.question_id``
+    就会触发惰性加载，异步下抛 ``MissingGreenlet``（被包成 ``StatementError``）。
+    这是真实 MySQL 上实测到的第二个失败，不是理论风险。
+
+    所以这里选「原子写入 + 提交后重读」：写入本身在数据库层收敛，全程不 rollback。
+    """
+    dialect = db.get_bind().dialect.name
+    table = InterviewContext.__table__
+
+    if dialect == "mysql":
+        from sqlalchemy.dialects.mysql import insert as _insert
+
+        stmt = _insert(table).values(**values)
+        # 用「自身赋自身」的空更新表达「已存在就什么都不做」。
+        # 不用 ``INSERT IGNORE``：它会把**所有**错误降级成警告（含 NOT NULL /
+        # 截断 / 外键），而这里只想吞掉"已存在"这一种。
+        return stmt.on_duplicate_key_update(session_id=stmt.inserted.session_id)
+
+    if dialect == "sqlite":
+        from sqlalchemy.dialects.sqlite import insert as _insert
+
+        return (
+            _insert(table)
+            .values(**values)
+            .on_conflict_do_nothing(index_elements=["session_id"])
+        )
+
+    if dialect == "postgresql":
+        from sqlalchemy.dialects.postgresql import insert as _insert
+
+        return (
+            _insert(table)
+            .values(**values)
+            .on_conflict_do_nothing(index_elements=["session_id"])
+        )
+
+    # ★ 宁可响亮失败，也不静默退回「先查后插」——那条路在并发下必然产生
+    #   IntegrityError，而一旦 rollback 就会把调用方的 ORM 状态打坏。
+    raise RuntimeError(
+        f"create_context 不支持方言 {dialect!r}：请在 _idempotent_insert_stmt 中"
+        "补一条「已存在即不写」的原子 INSERT 分支"
+    )
+
+
 async def create_context(
     db: AsyncSession,
     session_id: int,
@@ -149,6 +207,13 @@ async def create_context(
 
     ``max_questions`` 缺省取 ``session.total_questions``；如需允许追问，
     显式传入更大的值。
+
+    并发语义
+    --------
+    本函数可被**多个并发请求同时调用**（同一会话的两次"补下一题"都会经过
+    ``interview_context_pack.load_context_pack`` 走到这里）。收敛点是数据库的
+    唯一索引 ``ix_interview_context_session_id``：只有一路真正写入，另一路被
+    「已存在即不写」吞掉，随后两路**读到同一行**。
     """
     session = await _load_session(db, session_id)
 
@@ -165,28 +230,21 @@ async def create_context(
     if cap < 1:
         raise HTTPException(status_code=400, detail="max_questions 必须 >= 1")
 
-    existing = (
-        await db.execute(
-            select(InterviewContext).where(InterviewContext.session_id == session_id)
-        )
-    ).scalar_one_or_none()
-    if existing is not None:
-        # 幂等：不覆盖已有上下文
-        return _context_to_dict(session, existing)
-
-    ctx = InterviewContext(
-        session_id=session_id,
-        current_stage=stage,
-        asked_questions=[],
-        covered_topics=[],
-        weak_topics=[],
-        follow_up_count=0,
-        max_questions=cap,
-    )
-    db.add(ctx)
+    stmt = _idempotent_insert_stmt(db, {
+        "session_id": session_id,
+        "current_stage": stage,
+        "asked_questions": [],
+        "covered_topics": [],
+        "weak_topics": [],
+        "follow_up_count": 0,
+        "max_questions": cap,
+    })
+    await db.execute(stmt)
     await db.commit()
-    await db.refresh(ctx)
-    return _context_to_dict(session, ctx)
+    # ★ 提交之后再读，顺序不能颠倒：commit 结束了当前事务，下面的 SELECT 开启
+    #   **新事务**；MySQL 默认 REPEATABLE READ 下只有新事务才会取新快照，否则
+    #   "被吞掉的那一路"可能读不到对方刚提交的行（表现为假 404）。
+    return _context_to_dict(session, await _load_context(db, session_id))
 
 
 # ============================================================

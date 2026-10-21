@@ -66,8 +66,8 @@ headers = {
 print(f"URL: {url}")
 print(f"Date: {date_str}")
 print(f"Signature str:\n{signature_str}")
-print(f"Signature (first 30 chars): {signature_b64[:30]}...")
-print(f"Authorization (first 50 chars): {authorization[:50]}...")
+print(f"Signature (redacted, {len(signature_b64)} chars)")
+print(f"Authorization (redacted, {len(authorization)} chars)")
 print()
 
 resp = requests.post(url, json=body, headers=headers, timeout=30)

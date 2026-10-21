@@ -35,6 +35,10 @@
 | `INTERVIEW_MAX_WS_CONNECTIONS` | `4` | 每用户同时打开的 WS 连接数上限（超出拒绝，`4409`） |
 | `INTERVIEW_MAX_SESSIONS_PER_USER` | `3` | 每用户同时进行的面试会话数上限（超出拒绝，`4409`） |
 | `INTERVIEW_ANSWER_MIN_INTERVAL` | `0` | 两次作答最小间隔（秒）；**`0` = 不限制**，需显式开启 |
+| `INTERVIEW_WS_TOKEN_AUTH` | 开 | `?token=<长期登录 token>` 的**历史兼容**路径。`0/false/no/off` = 显式关闭；**新部署建议设 `0`**（前端已改走一次性 ticket） |
+| `INTERVIEW_WS_REVOCATION_WATCH` | 开 | 撤销广播的每实例轮询器。`0` = 关闭 ⇒ 撤销退化为 60s 周期复核 |
+| `INTERVIEW_WS_REVOCATION_WATCH_INTERVAL` | `2.0` | 轮询周期（秒），`<0.1` 会被 clamp 到 `0.1`。实测：周期 0.2s ⇒ 撤销 **0.31s**；周期 2.0s（默认）⇒ **2.05s** |
+| `AUTH_LOGIN_STORE` | `memory` | 登录失败限流后端。`memory` = 进程内（单 worker 够用）；**`db` = 共享表 `login_failure`，跨实例统一计数**（多 worker 必设） |
 
 > 非法值（非数字 / 负数 / 上限为 0）**启动即报错**，不会静默回落到默认值。
 > 运行期若配置非法，服务会降级为默认值并打 `[production][ERROR]`，**不中断面试**。
@@ -153,13 +157,30 @@
       现已统一经 `sanitize_endpoint()` / `redact_url_in()` 处理：**只保留 scheme+host+path**。
       *验证*：`python backend/tests/test_interview_production.py` 的 `[2]` 段（用桩 httpx 真实走了一遍）。
 - [ ] **日志脱敏过滤器已挂在 `careerai.interview` 日志器上**：`k=v` 形式的
-      `api_key` / `api_secret` / `token` / `authorization` / `password` / `signature` 等
+      `api_key` / `api_secret` / `token` / `ticket` / `authorization` / `password` / `signature` 等
       一律替换为 `****1234`（保留末 4 位便于核对「是哪一把」）。
-- [ ] **确认生产日志采集不会绕过该过滤器**：应用内 `logging` 输出已被脱敏；
-      但**反向代理 / 网关的访问日志**会记录**完整 URL**（含 `?token=…`）——
-      这是 WS 鉴权走 query 的固有代价。**必须**：
-      - [ ] 网关访问日志对 `/api/interview/*/ws` **不记录 query string**；
-      - [ ] 或改为在子协议头 / 首帧消息里传 token（属协议变更，需另行评审）。
+- [ ] **应用内访问日志也已脱敏**：根日志器与 `uvicorn.access` 上安装了
+      `main._LogRedactingFilter`（**保留 `record.args` 结构**，不破坏 uvicorn
+      `AccessFormatter` 的位置解包）。`?token=…` / `?ticket=…` 会打印成
+      `?ticket=********3456`。
+- [ ] **WS 已改为一次性 ticket**：前端先 `POST /api/interview/{id}/ws-ticket`
+      （Bearer 头），拿到 30 秒有效、**单次使用**的 ticket 再握手；
+      长期 token 不再出现在 WS URL 中。仅当 ticket 接口因**非鉴权原因**失败
+      （网络 / 5xx）时才回退到 `?token=`（兼容回退，建议在网关侧观察是否仍有命中）。
+- [ ] ★ **ticket 已改为 MySQL 共享存储**（`ws_ticket` 表，`services/ws_ticket_store.py`）：
+      **不是**进程内字典 ⇒ 「A 实例签发、B 实例校验」可工作；「单次使用」由
+      `UPDATE … WHERE used_at IS NULL` 的 `rowcount` 保证全局唯一（真实 MySQL 上
+      8 路并发消费只成功 1 次）。库里只存 `sha256(ticket)`，**不存明文**。
+- [ ] ★ **部署时重启后端**：`ws_ticket` 是**新表**，由 `lifespan` 的
+      `Base.metadata.create_all` 自动创建（`create_all` 只建新表、不给既有表补约束，
+      而本表是新表）⇒ **无需人工 DDL、无需数据迁移、无需数据清理**。
+      上线后可用 `python tests/ws_ticket_mysql_concurrency_run.py` 复核（生产库只读检查）。
+- [ ] ★ **存储不可用时安全失败**：签发 → **503**；握手 → **1011**（标准码，前端会重连重试）。
+      **不会**降级回进程内字典，也**不会**被误报成「登录过期」。
+- [ ] 登出会作废该用户所有**未使用**的 ticket（`main.logout` → `revoke_for_user`）；
+      清理失败只记 WARNING，**不阻断登出**（主效应 token 撤销已落库）。
+- [ ] **网关侧仍建议**：对 `/api/interview/*/ws` 的访问日志关闭 query 记录，
+      作为纵深防御（应用内脱敏无法覆盖网关自己的日志）。
 - [ ] 凭据**不进**健康检查明文：`/api/health` → `avatar.masked_api_key` 只给末 4 位。
 - [ ] 凭据轮换预案：改 `.env` 后重启即可；**无需**改代码。
 
@@ -212,20 +233,46 @@
 
 ## 7. 权限控制
 
-- [ ] WS 鉴权口径与 `deps.get_current_user` **完全一致**：token 命中 `user_session` 表即视为登录。
+- [ ] WS 鉴权：**ticket 优先**（`?ticket=`，30 秒、单次使用、绑定 session），
+      `?token=` 仅作兼容回退；两者最终都归一到 `user_session` 的有效性口径。
       **先 `accept()` 再校验** ⇒ 未登录能拿到明确的 `4401`，而不是一个含糊的「握手失败」。
+- [ ] ★ ticket 的**消费是原子的**（数据库条件更新，`rowcount == 1` 才算成功），
+      两个 worker 并发验证同一个 ticket 时**最多一个**成功；绑定不符
+      （拿 A 会话的 ticket 连 B 会话）**不会消耗**该 ticket。
+- [ ] **Origin 校验**：浏览器带 `Origin` 时必须命中
+      `WS_ALLOWED_ORIGINS`（优先）/ `CORS_ALLOW_ORIGINS` / 同源（Origin 的 netloc
+      等于请求 `Host`）；不带 `Origin` 的非浏览器客户端仍要过鉴权。跨站来源 → `4403`。
+- [ ] **连接存续期间的登录态复核**：每 `AUTH_RECHECK_SECONDS`（默认 60 秒）至少复核一次，
+      撤销 / 过期最多延迟 60 秒生效，而不是等到空闲超时（默认 300 秒）。
+      token 路径覆盖「撤销 + 过期」；ticket 路径退化为「用户仍存在」（见剩余风险）。
 - [ ] **归属校验**：`session_id` 不属于当前用户 → 与「不存在」**同样**返回 `4404`，
       **不泄露他人会话是否存在**。
 - [ ] `interview_service` 是**唯一接触 DB 的层**，所有读写都带 `user_id` 归属过滤（既有约定）。
+- [ ] ★ **简历归属**：`resume.user_id` 才是归属，`interview_session.resume_id` 只是外键。
+      创建会话已按 `resume.user_id == user_id` 校验，挂他人简历 → 400（文案与「不存在」一致，
+      不构成存在性预言机）；`_load_resume_skills` 与上下文包读路径再过滤一次。
+      **上线前必须跑** `python scripts/audit_resume_ownership.py`（只读），
+      输出「0 条」才放行；有脏行时先 `--json` 导出评审，再 `--fix --yes` 解除引用
+      （简历行本身不删除）。未清理的历史脏行仍会被 `interview_core` / `interview_planner`
+      两条冻结路径读到。
 - [ ] **限流**：`INTERVIEW_ANSWER_MIN_INTERVAL`（默认 `0` = 关闭）。
       建议生产开启 `0.4`，用于挡「误触连点」与「脚本重放」。触发时返回
       `answer(rejected)` 并计入 `answer_rate_limited_total`。
 - [ ] **网关层限流建议**（本服务不内置全局限流）：对 `/api/interview/*/ws` 的连接建立速率、
       对 `/api/auth/*` 的登录尝试做 IP 级限流。
-- [ ] ★ **既有风险（本次未改，需在评审中确认）**：
-      `main._hash_password` 为**无盐 sha256**、`_generate_token` 为 `md5 + time.time()`。
-      这两处属于**既有实现**，改动会影响已注册用户的登录，故本次**刻意未动**。
-      **建议**：上线前评估是否迁移到 bcrypt / `secrets.token_urlsafe`（需要一次口令迁移方案）。
+- [ ] ★ **管理员权限实时查库**：`deps.get_current_admin` 不再信任
+      `user_session.role` 的登录时快照，而是按 `user_id` 查 `user.role`。
+      降级后旧 token 立即失去管理员权限（最多多一次主键查询，仅 admin 接口承担）。
+- [ ] ★ **密码与 token 已完成迁移**：
+      `security.hash_password` = bcrypt（`bcrypt$` 前缀，rounds 由 `AUTH_BCRYPT_ROUNDS`
+      控制，默认 12）；旧无盐 sha256 在**下次成功登录时透明升级**（`needs_upgrade`）。
+      token = `secrets.token_urlsafe(32)`（256-bit），`user_session` 带 `expires_at`
+      与 `revoked_at`，`POST /api/auth/logout` 立即撤销当前会话。
+- [ ] **登录限流**：`AUTH_LOGIN_MAX_FAILURES`（默认 5）/ `AUTH_LOGIN_WINDOW_SECONDS`
+      （默认 900）；超限返回 429 + `Retry-After`。未知账号也跑 dummy bcrypt，
+      消除账号存在性的时间侧信道。
+- [ ] **422 不回显提交值**：`RequestValidationError` 处理器只保留 `type/loc/msg`，
+      注册/登录参数非法时响应体不含密码原文。
 
 ---
 
@@ -277,13 +324,13 @@ curl -s http://127.0.0.1:5000/api/health | python -m json.tool
 #   → 期望：status=ok；embedding.semantic_enabled=true（生产）；
 #           avatar.provider 符合预期；metrics.error 为 null
 
-# ② 全量回归（66 套，含新增的生产化套件）
+# ② 全量回归（74 套，含新增的生产化 / 认证 / 并发 / 撤销 / 限流套件）
 cd backend
 for t in tests/test_*.py; do
   python "$t" > /dev/null 2>&1 && echo "PASS $(basename $t)" || echo "FAIL $(basename $t)"
 done
 
-# ③ 前端自检（77 项）
+# ③ 前端自检（104 项）
 cd ../frontend && npm test
 
 # ④ 真机端到端（真实 WebSocket ↔ 真实 uvicorn；离线可跑）
@@ -292,8 +339,8 @@ cd ../backend && python tests/interview_ws_integration_run.js 2>/dev/null || \
 ```
 
 - [ ] ① 全部键存在且 `metrics.error` 为 `null`。
-- [ ] ② 66/66 PASS。
-- [ ] ③ 77/77 PASS。
+- [ ] ② 74/74 PASS。
+- [ ] ③ 104/104 PASS。
 - [ ] ④ 端到端 53 项 PASS。
 - [ ] 手工验证：开两个标签页进同一个面试间 → 同时点「提交作答」→ 一个成功、一个收到
       「上一条操作还在处理中」；关掉一个标签页 → 另一个**不受影响**。
@@ -329,9 +376,15 @@ cd ../backend && python tests/interview_ws_integration_run.js 2>/dev/null || \
 | 5 | 讯飞端点 / 字段名是占位 | 接真实讯飞前必须逐个核对 | 预发环境先跑通 |
 | 6 | 无后台定时清理（机会式） | 零流量期间不清理（但也不增长） | 可接受 |
 | 7 | 作答限流默认关闭 | 默认不防连点 | 生产设 `0.4` |
-| 8 | 登录口令无盐 sha256 / token 用 md5+time | 既有实现，属安全加固项 | 单独排期迁移 |
-| 9 | CORS 白名单硬编码 `localhost:5173` | 生产前端域名不同源时会被拒 | 部署前改 `main.py` 白名单 |
-| 10 | WS 鉴权走 URL query | 网关访问日志会记到 token | 网关侧屏蔽 query 记录 |
+| 8 | 登录口令无盐 sha256 / token 用 md5+time | ~~既有实现，属安全加固项~~ | **已迁移**：bcrypt + secrets.token_urlsafe + TTL + logout |
+| 9 | CORS 白名单曾硬编码 `localhost:5173` | 生产前端域名不同源时会被拒 | **已改为** `CORS_ALLOW_ORIGINS`（逗号分隔，默认值即本地） |
+| 10 | WS 长期 token 曾走 URL query | 网关访问日志会记到 token | **已改为一次性 ticket**；应用内访问日志已脱敏，网关侧仍建议屏蔽 query |
+| 11 | ~~ticket 存在**进程内**字典~~ | ~~多副本时 ticket 落到别的副本 ⇒ 握手 4401~~ | **已修复**：迁到 MySQL `ws_ticket` 表，`rowcount` 保证原子消费；真实 MySQL 8 路并发只成功 1 次 |
+| 12 | ~~ticket 路径无法复核**会话撤销**~~ | ~~撤销后已建立的连接最多存活到空闲超时~~ | **已修复**：ticket 绑定 `auth_session_id` + `ws_revocation` 广播 + 每实例轮询器。实测同实例 **0.313s** / 跨实例 **0.375s**（测试周期 0.2s）；生产周期 2.0s ⇒ 目标 ≤3s |
+| 13 | `ws_ticket` / `ws_revocation` 在**生产库尚未创建**（本次改动前） | 多 worker 前必须先有一次启动 | 重启后端即由 `create_all` 建表；`ws_ticket.auth_session_id` 由 `schema_sync` 启动时补列。`tests/ws_revocation_mysql_run.py [1][1b]` 会打印生产库现状 |
+| 14 | ~~`login_throttle` 仍是**进程内**~~ | ~~多 worker 时登录爆破限流被放大 N 倍（安全项）~~ | **已提供共享实现**：设 `AUTH_LOGIN_STORE=db` 即跨实例统一计数（实测跨实例拦截、突发后第二波 0 放行）。默认仍 `memory` |
+| 15 | 历史提交含真实 `SPARK_API_SECRET` | 拿到仓库历史即可复用凭据 | **必须轮换密钥**并清理历史（见安全报告） |
+| 16 | 撤销广播依赖 MySQL 可用 | 库不可用时退化为 60s 复核（不会"永不失效"） | 监控 `/api/health` 与 `ws_revocation_*` 日志 |
 
 ---
 
@@ -347,10 +400,206 @@ cd frontend && npm run dev
 # 单套自检
 cd backend && python tests/test_interview_production.py
 
-# 全量回归（66 套）
+# 全量回归（74 套：68 原有 + auth_security + interview_concurrency + ws_ticket
+#           + authz_ownership + ws_revocation + login_throttle_store）
 cd backend && for t in tests/test_*.py; do python "$t" >/dev/null 2>&1 \
   && echo "PASS $(basename $t)" || echo "FAIL $(basename $t)"; done
 
-# 前端自检（77 项）
+# 前端自检（104 项）
 cd frontend && npm test
 ```
+
+---
+
+## 13. 安全加固与并发正确性改造（本次新增）
+
+### 13.1 认证硬化
+
+| 改造点 | 说明 | 回滚 |
+|---|---|---|
+| 登录自动建号已删除 | 未知邮箱登录统一返回 401「邮箱或密码错误」 | 代码回退即可 |
+| 密码哈希迁 bcrypt | 旧 sha256 账号登录时**透明升级**为新格式 | 回退后旧哈希仍可用，但新哈希不可逆 |
+| token 改 `secrets.token_urlsafe(32)` | 高熵、URL-safe、43 字符 | 回退后旧 token 仍有效（无撤销机制） |
+| `UserSession` 新增 `expires_at` / `revoked_at` | 空串默认 TTL = 7 天；logout 即撤销 | 代码回退即可；两列留在库里无害 |
+| 登录限流 | 进程内滑动窗口：默认 5 次/15 分钟，超限 429 + Retry-After | 代码回退即可 |
+| `POST /api/auth/logout` / `GET /api/auth/me` | 前端登出必须调后端；启动时校验 token | 代码回退即可 |
+
+新增配置项（均已写入 `regression_env.PINNED`，空串 = 默认）：
+- `AUTH_SESSION_TTL_SECONDS`：默认 604800（7 天）
+- `AUTH_LOGIN_MAX_FAILURES`：默认 5
+- `AUTH_LOGIN_WINDOW_SECONDS`：默认 900（15 分钟）
+
+### 13.2 并发正确性
+
+| 改造点 | 说明 | 回滚 |
+|---|---|---|
+| `_load_session_for_update` | 4 个写入口（start / begin / submit / end）加 `FOR UPDATE` | 代码回退即可 |
+| `InterviewQuestion` 唯一约束 | `(session_id, question_no)` 数据库层兜底 | 代码回退；索引需 `--drop` 才消失（留着无害） |
+| `IntegrityError` 收敛 | `submit_answer` / `_activate_session` / `generate_and_persist_next` / `end_session` 捕获冲突 → 400/409 | 代码回退即可 |
+
+### 13.3 单 Worker 断言
+
+- `lifespan` 首行调用 `assert_single_worker()`：检测 `WEB_CONCURRENCY` / `UVICORN_WORKERS` / `GUNICORN_WORKERS`。
+- 任一 >1 则启动即 `RuntimeError`。
+- 需要水平扩展时，先实现 Redis 状态外置，再移除本断言。
+  ★ ticket 共享状态与撤销广播已在第 4/5 轮下沉到 MySQL（§10），但
+  `login_throttle` / `ConcurrencyGate` / `RateLimiter` **仍是进程内**，
+  所以本断言**必须保留**。解除条件见 `CONCURRENCY_CONSISTENCY_REPORT.md` §9.6。
+
+### 13.4 前端清理
+
+- `App.vue` `onMounted` 恢复登录态（调 `/api/auth/me` 校验）。
+- `handleLogout` 先调后端 `logout` 再清本地。
+- `fetchUserLogs` 删除硬编码 Mock 数据兜底。
+- 管理页容器加 `currentUser.role === 'admin'` 守卫。
+- `interviewSocket.js` 4403 加入重连排除。
+
+### 13.5 发布前必做
+
+1. **运行迁移脚本**（若有生产数据）：
+   ```bash
+   python backend/scripts/migrate_interview_question_unique.py --dry-run
+   python backend/scripts/migrate_interview_question_unique.py --yes
+   ```
+2. **MySQL 真并发验证**（发布前手工跑一次）：
+   ```bash
+   # 配置 DATABASE_URL 指向 MySQL 测试库（CI 已自动执行同一批，见 §14）
+   cd backend && python tests/run_mysql_suites.py
+   ```
+3. **历史会话失效提醒**：上线瞬间所有旧 token 按 `created_at + 7 天` 判定，过期的会 401，需引导用户重新登录。
+4. **套件基线**：后端 74 套、前端 104 项、真机端到端 53 项、真实 MySQL 运行器 5 套 / 163 项。
+
+---
+
+## 14. CI：真实 MySQL 纳入自动门禁（第 5 轮新增）
+
+### 14.1 新增文件
+
+| 文件 | 作用 |
+|---|---|
+| `.github/workflows/ci.yml` | 3 个 job：`backend-regression` / `frontend-regression` / `mysql-integration` |
+| `backend/tests/run_mysql_suites.py` | ★ **唯一判绿处**：只有退出码 `0` 是通过 |
+| `backend/tests/mysql_guard.py` | 目标库守卫：`DATABASE_URL` 指向非测试库 ⇒ 直接拒绝（退出码 2） |
+| `backend/tests/engine_pool_mysql_run.py` | 驱动 / 连接池 / 事务边界（25 项） |
+| `backend/tests/ws_revocation_mysql_run.py` | 撤销广播的真实 MySQL 验证（54 项） |
+| `backend/tests/login_throttle_mysql_run.py` | 登录限流的真实 MySQL 验证（30 项） |
+| `backend/scripts/setup_test_mysql.py` | 建**专用测试库 + 最小权限账号**（幂等，自带 4 项权限自验） |
+| `backend/scripts/ci_bootstrap_db.py` | 在真实 MySQL 上跑 `create_all` + `schema_sync`（`--twice` 验幂等） |
+
+### 14.2 为什么需要 `run_mysql_suites.py` 这一层
+
+`tests/*_run.py` 的退出码是 `0` 通过 / `1` 失败 / **`2` 环境不满足**。
+
+`2` 对**人**是友好的（"这台机器没配 MySQL，跳过吧"），对 **CI 是致命的**：
+若 workflow 直接 `python tests/xxx_run.py`，容器没起来会返回 `2`，
+有人加一句 `|| true` 就变绿了 —— **一个用例都没跑，CI 却是绿的**。
+
+所以判据只在 CI 侧收紧（**不改运行器本身的退出码语义**，本地手工跑行为不变）：
+
+| 子进程退出码 | 包装脚本判定 | 最终退出码 |
+|---|---|---|
+| `0` | 通过 | `0` |
+| `1` 且 `failed > 0` | 断言失败 | `1` |
+| `1` 且 `failed == 0` | **没跑到断言就崩了** | `3` |
+| `2` | **环境不满足（= CI 失败）** | `2` |
+
+### 14.3 CI 里的执行顺序
+
+```bash
+# 1) 等待 MySQL 就绪（150s 超时 ⇒ exit 1，不是跳过）
+# 2) 建专用测试库 + 最小权限账号（幂等；自带 4 项权限自验）
+cd backend && python scripts/setup_test_mysql.py --password "$CI_TEST_PW"
+# 3) 切换到专用账号（DATABASE_URL 改为 career_ci@career_ci_test，不再用 root）
+# 4) 初始化 / 迁移（与 main.py lifespan 同一条路径，连跑两遍验幂等）
+cd backend && python scripts/ci_bootstrap_db.py --twice
+# 5) 真实 MySQL 运行器（5 套 / 163 项）
+cd backend && python tests/run_mysql_suites.py
+# 6) 清理遗留 probe 库（if: always()；正则含 ticket/conc/revoke/throttle/pool）
+```
+
+★ 初始化**不写进 YAML 的 run 里**，而是调脚本：否则 CI 验证的是
+`create_all` + `ensure_columns` 的**平行实现**，它绿了不代表应用启动时能绿。
+
+### 14.4 本地等价命令（发版前手工跑）
+
+```bash
+# ① 起一个本机 MySQL（8.0+），并用**管理员**账号建测试库 + 专用账号
+cd backend
+python scripts/setup_test_mysql.py --password '<本地测试口令>' --show-url
+#   → 它会打印一行 export DATABASE_URL='mysql+aiomysql://career_ci:***@localhost:3306/career_ci_test?...'
+#   → 复制执行（★ 含口令，别提交进仓库）
+
+# ② 在测试库里建表（与生产启动同一条路径）
+python scripts/ci_bootstrap_db.py --twice
+
+# ③ 全部真实 MySQL 运行器
+#    pool 25 + ticket 22 + 并发 32 + 撤销 54 + 限流 30 = 163 项
+python tests/run_mysql_suites.py
+
+# 只跑一个 / 看清单
+python tests/run_mysql_suites.py --only pool
+python tests/run_mysql_suites.py --list
+```
+
+★ `setup_test_mysql.py` 的 admin 连接串取 `--admin-url`，否则 `MYSQL_ADMIN_URL`，
+再否则 `DATABASE_URL`，都没有则读 `backend/.env`（与 `database.py` 同一手法）。
+它默认**不打印口令**，`--show-url` 才输出完整串。
+
+★ 专用账号 `career_ci` 只有两条授权：
+`career_ci_test`（测试主库）与 `career_%_probe_%`（各运行器的临时库）。
+它**连不上**开发库 / 生产库（MySQL 直接 1044）。这一点由脚本的 `[1.4]` 每次实测。
+
+### 14.5 凭据卫生
+
+- CI 用**一次性容器口令**，与生产无关；声明后立刻 `::add-mask::`。
+- **没有任何步骤 echo** `$DATABASE_URL` / `$*PASSWORD`（已用脚本校验）。
+- `setup_test_mysql.py` **默认不打印口令**（`_redact()` → `***`），`--show-url` 才输出。
+- 运行器打印连接串前一律 `_redact()`，只留 `host/db`；不打印 ticket / token 明文。
+- `mysql_guard` 的拒绝理由只说库名，**不回显连接串**。
+- **生产凭据永远不要写进 workflow 文件**（它会被提交进 Git）。
+
+### 14.6 排查：集成测试红了怎么看
+
+| 现象 | 退出码 | 原因 | 处置 |
+|---|---|---|---|
+| `[FAIL] 未设置 DATABASE_URL` | `2` | 环境变量没传 | `export DATABASE_URL=...` |
+| `[FAIL] DATABASE_URL 不是 MySQL` | `2` | 指到 SQLite 了 | 换成 `mysql+aiomysql://...` |
+| `[FAIL] 拒绝运行：目标库 `career` 看起来不是测试库` | `2` | ★ **守卫生效**，你指到开发/生产库了 | 改用 `career_ci_test`；**不要**去改守卫 |
+| `[SKIP] 无法创建 probe 库（OperationalError）` + `Can't connect to MySQL server` | `2` | 库没起来 / 端口错 | 先起 MySQL；确认 `host:port` |
+| `[FAIL] 没跑到断言就异常退出` + traceback | `3` | 驱动异常 / 崩溃 / 被信号杀掉 | 看末 15 行 |
+| 某套件 `失败 N 项` | `1` | 真的断言失败 | 看该套件的 `[FAIL]` 行 |
+| 运行器里 `[1.1]/[1.2]` 表不存在 | `1` | 测试库是空的，没初始化 | 先跑 `python scripts/ci_bootstrap_db.py --twice` |
+| `setup_test_mysql.py` 报 1044 / 1045 | `1` | admin 账号无权建用户，或口令错 | 换有 `CREATE USER` / `GRANT` 权限的账号 |
+
+★ **`2` 在 CI 里必须判失败**：它意味着"一个用例都没跑"。绝不要加 `|| true`。
+
+### 14.7 复现并发问题的固定套路
+
+并发问题最怕"跑一次是绿的"。四条固定手法：
+
+1. **同一套件连跑 10 次**：`for i in $(seq 10); do python tests/xxx_run.py || break; done`
+   —— 偶发问题（死锁、间隙锁、`Retry-After` 越界）只在重复时暴露。
+2. **加规模**：把运行器里的连接数从 8 调到 32 再跑一遍，看结论是否还成立。
+3. **留现场**：`python tests/engine_pool_mysql_run.py --keep`
+   —— 保留 `career_pool_probe_*` 临时库，用客户端直接 `SHOW ENGINE INNODB STATUS`
+   看 `LATEST DETECTED DEADLOCK`。
+4. **开 traceback**：`POOL_DEBUG=1 python tests/engine_pool_mysql_run.py`
+   —— 让被 `except` 吞掉的栈打出来（默认吞掉是为了输出可读）。
+
+★ 排查完记得手工删残留库：
+`DROP DATABASE IF EXISTS \`career_pool_probe_<pid>_<ts>\`;`
+（`--keep` 的库不会被自动清理，CI 里由 `if: always()` 那一步兜底。）
+
+### 14.8 诚实说明
+
+- **本地无法执行 GitHub Actions**。已验证：YAML 可解析、内嵌 Python 可
+  `compile()`、所有 `run:` 命令能在本地原样执行并通过。**没有**在 GitHub 上真跑过。
+- ★ **CI 侧「专用账号」改动已落地**：`.github/workflows/ci.yml` 的 `mysql-integration`
+  job 现在会先调 `setup_test_mysql.py` 建 `career_ci_test` + `career_ci@'%'` 最小权限
+  账号，再 `echo DATABASE_URL >> $GITHUB_ENV` 切到专用账号跑 5 套运行器，清理正则已含
+  `pool`。本地侧 5 套 / 163 项全部实测通过；CI 仅验证过 YAML 解析与命令可原样执行。
+- 只覆盖 MySQL 8.0；8.4 / MariaDB 未验证。
+- 运行器用**独立 engine + 独立物理连接**模拟多实例（InnoDB 侧等价于多进程），
+  但**不覆盖**进程内状态的跨实例问题 —— 那正是 `login_throttle` 的待办。
+- `engine_pool_mysql_run.py` 的 `[4]` 需要 `KILL CONNECTION <自己的连接>`，
+  所以要求账号能杀自己的线程（MySQL 默认允许），只读账号跑不了这一节。

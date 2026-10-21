@@ -80,6 +80,7 @@ import {
   InterviewSocket,
   ORCH_STATE_LABELS,
   SocketAuthError,
+  SocketTicketError,
   WS_CLOSE_BUSY,
   WS_CLOSE_FORBIDDEN,
   WS_CLOSE_IDLE,
@@ -545,6 +546,13 @@ function connectSocket(sessionId, options = {}) {
         socketConnected.value = false
         socketNotice.value = describeClose(code, reason)
       },
+      onRetry: (attempt, delayMs) => {
+        // 退避重试期间给出**可预期**的提示：让用户知道在自动重试、还要等多久，
+        // 而不是盯着一个「未连接」猜是不是卡死了。
+        socketNotice.value = `实时通道连接失败，正在自动重试（第 ${attempt} 次，约 ${Math.round(
+          delayMs / 1000
+        )} 秒后）`
+      },
       onError: (err) => {
         socketNotice.value = (err && err.message) || '实时通道异常'
       },
@@ -555,13 +563,22 @@ function connectSocket(sessionId, options = {}) {
   }
 
   activeSocket = instance
-  try {
-    instance.connect()
-  } catch (e) {
+  // connectWithRetry() 内部已做「有上限的指数退避 + 抖动」，这里只需接住**最终**失败。
+  // 拿不到一次性 ticket 时**不会**退回长期 token 建连（见 interviewSocket 的 fail closed），
+  // 因此这里给出的是「连不上 + 可重试」，而不是偷偷降级后的「连上了」。
+  instance.connectWithRetry().catch((e) => {
     activeSocket = null
-    socketNotice.value =
-      e instanceof SocketAuthError ? e.message : (e && e.message) || '实时通道连接失败'
+    socketNotice.value = describeConnectError(e)
+  })
+}
+
+/** 把「连不上」翻译成人话（区分登录问题 / 凭证服务问题 / 其它）。 */
+function describeConnectError(e) {
+  if (e instanceof SocketAuthError) return e.message
+  if (e instanceof SocketTicketError) {
+    return `${e.message}（实时通道未建立，可点击「重新连接」重试）`
   }
+  return (e && e.message) || '实时通道连接失败'
 }
 
 /** 手动重连（通道断开后由用户触发；不自动无限重试，避免刷屏）。 */

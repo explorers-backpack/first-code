@@ -114,8 +114,11 @@ FROZEN_SOURCES: Tuple[Tuple[str, str], ...] = (
      "2bd6f6aab04bdd3c8eaf9e03c64f37d99a8e52dd1047d711779616845ff8e5e8"),
     ("services/interview_planner.py",
      "0da3961aac2dc9af81fa321c7c56149934cc39d8ff016cb285ea5ad07d9b8df6"),
+    # ★ 本次并发加固改过一次：``create_context`` 的 TOCTOU 收敛
+    #   （改成「已存在即不写」的原子 INSERT + 提交后重读，全程不 rollback）。
+    #   仅改写入方式，投影 / 字段 / 返回结构逐字节未动。
     ("services/interview_context.py",
-     "432c02a5bfbac923095b3fc193be9f7b7c5856cfbaf904c30554fac9d89046d1"),
+     "a060ae88d2403fed55ae9cde93dae41c9d1ecfac16a504ace6e6557d1d718e61"),
     ("prompts/interview/question.txt",
      "34c522e0b6fd06d088b606ed17945b10ab74b94452f0de9a163374d455c57b17"),
     ("prompts/interview/question_knowledge.txt",

@@ -12,6 +12,7 @@ pymysql>=1.1.0
 # PyMySQL / aiomysql 在 MySQL 8 使用 caching_sha2_password 认证时需要 cryptography。
 # 当前库账号为 mysql_native_password 暂未触发，但保留以免更换账号后认证失败。
 cryptography>=41.0.0
+bcrypt>=4.0.0               # 密码哈希（KDF），替代无盐 SHA-256
 
 # ---- 配置与外部调用 ----
 python-dotenv>=1.0.0

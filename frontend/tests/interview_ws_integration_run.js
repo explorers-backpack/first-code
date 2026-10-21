@@ -58,6 +58,25 @@ function _check(name, cond, detail = '') {
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
+/**
+ * 让 Node 里的 `fetch('/api/…')` 也能工作（浏览器里由同源解析，Node 里不能）。
+ *
+ * ★ 为什么这个运行器**必须**装它：`InterviewSocket.connect()` 现在**只认 ticket**
+ * （拿不到 ticket 就 fail closed、不建连），而 `apiClient` 用的是相对路径
+ * `/api/interview/{id}/ws-ticket`。若不补这个 base，Node 的 `fetch` 会因
+ * 「Failed to parse URL」直接失败 ⇒ 整个端到端跑不起来。
+ * 装上之后，这条链路才真的走「HTTP 取 ticket → WS 带 ticket 握手」，
+ * 与浏览器完全同构——这本身就是对 fail-closed 改造的端到端取证。
+ */
+function installFetchBase(base) {
+  const nativeFetch = globalThis.fetch
+  globalThis.fetch = (input, init) => {
+    const target =
+      typeof input === 'string' && input.startsWith('/') ? `${base}${input}` : input
+    return nativeFetch(target, init)
+  }
+}
+
 async function main() {
   console.log('='.repeat(68))
   console.log('前端 · 实时通道真机端到端（对真实 uvicorn）')
@@ -70,6 +89,7 @@ async function main() {
 
   installFakeLocation(BASE) // 让 buildSocketUrl 走真实分支（否则退化成 ws://localhost）
   installLocalStorage(TOKEN)
+  installFetchBase(BASE)
 
   const { mod, tmp } = await loadSocketModule()
   const { InterviewSocket, buildSocketUrl, ORCH_STATE_LABELS } = mod
@@ -115,16 +135,43 @@ async function main() {
       autoReconnect: false,
     })
 
-    const url = buildSocketUrl(sessionId)
-    console.log(`      URL = ${url.replace(/token=.*/, 'token=<redacted>')}`)
+    // ★ 先走真实 HTTP 取一次性 ticket，再拼 URL —— 与浏览器完全同一条路径。
+    //   这里**刻意**不让 URL 里出现 `?token=`：前端已 fail closed，
+    //   若还依赖 token 回退，本运行器就会「因为错误的原因通过」。
+    const ticketResp = await fetch(`${BASE}/api/interview/${sessionId}/ws-ticket`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${TOKEN}` },
+    })
+    const ticketData = await ticketResp.json().catch(() => ({}))
+    _check(
+      '★ POST /ws-ticket 返回 200 且带一次性 ticket',
+      ticketResp.ok && typeof ticketData.ticket === 'string' && ticketData.ticket.length > 20,
+      `${ticketResp.status} ${JSON.stringify(ticketData).slice(0, 120)}`
+    )
+
+    const url = buildSocketUrl(sessionId, ticketData.ticket)
+    console.log(`      URL = ${url.replace(/ticket=.*/, 'ticket=<redacted>')}`)
     _check(
       '★ URL 只有**一个** /api 前缀（双前缀 bug 的回归守卫）',
       (url.match(/\/api\//g) || []).length === 1 && url.includes(`/api/interview/${sessionId}/ws`),
       url
     )
     _check('URL 走 ws:（http base）', url.startsWith('ws://'), url)
+    _check('★ URL 用 ticket 而不是长期 token', /[?&]ticket=/.test(url) && !/[?&]token=/.test(url), url)
 
-    sock.connect()
+    // 这里**不**复用上面那条 URL 的 ticket（ticket 一次性，已被 buildSocketUrl 之外
+    // 的检查「看过」但未消费），`connect()` 会自己再取一张 —— 正是要验证的能力。
+    let connectErr = null
+    try {
+      await sock.connectWithRetry()
+    } catch (e) {
+      connectErr = e
+    }
+    _check(
+      '★ 建连成功（走 ticket 路径，无任何 token 回退）',
+      connectErr === null,
+      connectErr ? `${connectErr.name}: ${connectErr.message}` : ''
+    )
 
     /** 等到「最新一条事件是指定类型」为止，返回这一步新收到的事件。 */
     async function waitUntil(type, from, timeoutMs = 45000) {

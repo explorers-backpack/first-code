@@ -552,9 +552,16 @@ async def load_context_pack(
 
     resume = None
     if _get(session, "resume_id"):
+        # ★ 归属过滤（纵深防御）：只取**会话属主自己**的简历。
+        # 新建会话已由 ``interview_service.create_session`` 拦截「挂他人简历」，
+        # 这里再加一道是为了兜住**历史脏行**——否则旧会话会把他人简历正文
+        # 注入上下文包，进而进入 Prompt。
         resume = (
             await db.execute(
-                select(Resume).where(Resume.id == _get(session, "resume_id"))
+                select(Resume).where(
+                    Resume.id == _get(session, "resume_id"),
+                    Resume.user_id == _get(session, "user_id"),
+                )
             )
         ).scalar_one_or_none()
 

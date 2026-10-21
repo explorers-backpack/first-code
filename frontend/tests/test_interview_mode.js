@@ -97,6 +97,82 @@ class FakeWebSocket {
   }
 }
 
+/**
+ * `fetch` 替身：只服务 `POST /api/interview/{id}/ws-ticket`。
+ *
+ * ★ 为什么必须有它：`connect()` 现在**只认 ticket**（拿不到就不建连），
+ * 而 Node 里的真实 `fetch('/api/…')` 是相对 URL ⇒ 必然失败 ⇒
+ * 若不替换 `fetch`，所有连接用例都会走到「凭证失败」分支，
+ * 测出来的就不是「连接成功」而是「fail closed 生效」。
+ *
+ * 模式：`ok` / `status`（按 `FakeFetch.status` 返回 5xx）/ `invalid`（200 但无 ticket）/
+ * `network`（连接被拒）/ `hang`（永不返回，用于验证超时）。
+ */
+class FakeFetch {
+  static mode = 'ok'
+  static status = 200
+  static ticket = 'tk-fe-test'
+  static calls = []
+  /** 逐次覆盖模式（用于「先失败后成功」的重试用例）；用完则回到 `mode`。 */
+  static sequence = null
+
+  static reset(mode = 'ok', opts = {}) {
+    FakeFetch.mode = mode
+    FakeFetch.status = opts.status || 200
+    FakeFetch.ticket = opts.ticket === undefined ? 'tk-fe-test' : opts.ticket
+    FakeFetch.calls = []
+    FakeFetch.sequence = opts.sequence ? [...opts.sequence] : null
+  }
+
+  static install() {
+    globalThis.fetch = (input, init) => FakeFetch.handle(input, init)
+  }
+
+  static handle(input, init = {}) {
+    const url = typeof input === 'string' ? input : String(input && input.url)
+    FakeFetch.calls.push({ url, method: init.method || 'GET' })
+
+    let mode = FakeFetch.mode
+    let status = FakeFetch.mode === 'status' ? FakeFetch.status : 200
+    if (FakeFetch.sequence && FakeFetch.sequence.length) {
+      const step = FakeFetch.sequence.shift()
+      mode = step.mode || 'ok'
+      status = step.status || 200
+    }
+
+    if (mode === 'network') {
+      return Promise.reject(new TypeError('fetch failed'))
+    }
+    if (mode === 'hang') {
+      return new Promise((resolve, reject) => {
+        const signal = init.signal
+        const abort = () => {
+          const err = new Error('aborted')
+          err.name = 'AbortError'
+          reject(err)
+        }
+        if (!signal) return // 没有 signal ⇒ 永远挂住
+        if (signal.aborted) return abort()
+        signal.addEventListener('abort', abort)
+      })
+    }
+
+    const effective = mode === 'status' ? status : 200
+    const body =
+      mode === 'invalid' ? {} : { ticket: FakeFetch.ticket, expires_in: 30 }
+    return Promise.resolve({
+      ok: effective >= 200 && effective < 300,
+      status: effective,
+      text: () => Promise.resolve(JSON.stringify(body)),
+    })
+  }
+}
+
+/** 断言一批 URL 里**没有任何**长期 token 泄漏。 */
+function noTokenInUrls(urls) {
+  return urls.every((u) => !/[?&]token=/.test(String(u)))
+}
+
 // ============================================================
 // 三、主流程
 // ============================================================
@@ -107,6 +183,8 @@ async function run() {
 
   installLocalStorage('fe-test-token')
   globalThis.WebSocket = FakeWebSocket
+  FakeFetch.install()
+  FakeFetch.reset('ok')
 
   const { mod, tmp } = await loadSocketModule()
   const {
@@ -124,9 +202,15 @@ async function run() {
     ORCH_STATE_LABELS,
     AVATAR_STATUS_LABELS,
     MAX_RECONNECT_ATTEMPTS,
+    RECONNECT_BASE_DELAY_MS,
+    RECONNECT_MAX_DELAY_MS,
+    RECONNECT_JITTER_RATIO,
+    TICKET_REQUEST_TIMEOUT_MS,
     buildSocketPath,
     buildSocketUrl,
+    computeReconnectDelay,
     SocketAuthError,
+    SocketTicketError,
     InterviewSocket,
   } = mod
 
@@ -186,21 +270,46 @@ async function run() {
   )
   const url = buildSocketUrl(12, 'tok-abc')
   _check(
-    'URL = ws(s)://host/api/interview/{id}/ws?token=…',
-    url === 'ws://localhost/api/interview/12/ws?token=tok-abc',
+    'URL = ws(s)://host/api/interview/{id}/ws?ticket=…（凭证只走 ticket）',
+    url === 'ws://localhost/api/interview/12/ws?ticket=tok-abc',
     url
   )
   _check(
-    'token 做了 URL 编码（否则含 + / = 的 token 会被截断）',
-    buildSocketUrl(7, 'a+b/c=d e').endsWith('?token=' + encodeURIComponent('a+b/c=d e')),
+    'ticket 做了 URL 编码（否则含 + / = 会被截断）',
+    buildSocketUrl(7, 'a+b/c=d e').endsWith('?ticket=' + encodeURIComponent('a+b/c=d e')),
     buildSocketUrl(7, 'a+b/c=d e')
   )
-  _check(
-    'token 缺省从 apiClient.getToken() 取（不硬编码）',
-    buildSocketUrl(3).endsWith('token=fe-test-token'),
+
+  // ★ 风险一的核心断言：没有 ticket 就**不产出 URL**（fail closed）
+  let noTicketErr = null
+  try {
     buildSocketUrl(3)
+  } catch (e) {
+    noTicketErr = e
+  }
+  _check(
+    '★ 无 ticket 时**抛 SocketTicketError**，不再退回长期 token',
+    noTicketErr instanceof SocketTicketError,
+    noTicketErr ? noTicketErr.name : 'no-throw'
   )
-  _check('显式传空 token 时不抛异常（由后端给 4401）', buildSocketUrl(3, '').endsWith('token='))
+  let emptyTicketErr = null
+  try {
+    buildSocketUrl(3, '')
+  } catch (e) {
+    emptyTicketErr = e
+  }
+  _check(
+    '★ 显式传空 ticket 同样抛错（空串不等于「用 token 顶一下」）',
+    emptyTicketErr instanceof SocketTicketError,
+    emptyTicketErr ? emptyTicketErr.name : 'no-throw'
+  )
+  _check(
+    '★ 源码里**没有**任何 `?token=` 拼装分支（已登录也不拼）',
+    !/[?&]token=\$\{/.test(
+      fs.readFileSync(path.join(FRONTEND, 'src', 'api', 'interviewSocket.js'), 'utf8')
+    ),
+    'interviewSocket.js 仍存在 ?token= 拼装'
+  )
 
   // ------------------------------------------------------------
   // [3] InterviewSocket 行为
@@ -213,7 +322,7 @@ async function run() {
   let authErr = null
   const noToken = new InterviewSocket(1, {})
   try {
-    noToken.connect()
+    await noToken.connect()
   } catch (e) {
     authErr = e
   }
@@ -240,9 +349,16 @@ async function run() {
     autoReconnect: false,
   })
   sock.connect()
+  // connect() 现在是 async，需要等待 Promise 完成
+  await new Promise(r => setTimeout(r, 10))
   const ws = FakeWebSocket.instances[0]
   _check('connect() 创建了一个 WebSocket', FakeWebSocket.instances.length === 1 && !!ws)
-  _check('URL 带上了 session id 与 token', /\/api\/interview\/42\/ws\?token=fe-test-token$/.test(ws.url), ws.url)
+  _check(
+    '★ URL 用的是**一次性 ticket**（不是长期 token）',
+    /\/api\/interview\/42\/ws\?ticket=tk-fe-test$/.test(ws.url),
+    ws.url
+  )
+  _check('★ URL 里没有 `token=`（长期凭证不进 query）', !/[?&]token=/.test(ws.url), ws.url)
   _check('未 open 前 connected=false', sock.connected === false)
 
   ws._open()
@@ -305,32 +421,241 @@ async function run() {
   _check('未连接时 send() 返回 false 且**不抛异常**', sock.send({ type: 'ping' }) === false)
 
   // ------------------------------------------------------------
+  // [3b] ★ 凭证获取失败 ⇒ fail closed（风险一的核心）
+  // ------------------------------------------------------------
+  console.log('\n[3b] 凭证获取失败：fail closed（绝不回退 ?token=）')
+
+  /** 在指定 fetch 模式下尝试建连，返回 {err, wsCount}。 */
+  const tryConnect = async (mode, opts = {}, sockOpts = {}) => {
+    FakeFetch.reset(mode, opts)
+    FakeWebSocket.reset()
+    const s = new InterviewSocket(77, { autoReconnect: false, ...sockOpts })
+    let err = null
+    try {
+      await s.connect()
+    } catch (e) {
+      err = e
+    }
+    return { err, wsCount: FakeWebSocket.instances.length, sock: s }
+  }
+
+  const r5xx = await tryConnect('status', { status: 503 })
+  _check(
+    '★ 503 ⇒ 抛 SocketTicketError（不是「已连接」）',
+    r5xx.err instanceof SocketTicketError,
+    r5xx.err ? r5xx.err.name : 'no-throw'
+  )
+  _check('★ 503 ⇒ **一个 WebSocket 都没建**（fail closed 的硬证据）', r5xx.wsCount === 0, String(r5xx.wsCount))
+  _check('错误消息含状态码（可据此排查，但不含任何凭据）', /503/.test(r5xx.err.message), r5xx.err.message)
+  _check('标记为可重试', r5xx.err.retryable === true)
+
+  const rNet = await tryConnect('network')
+  _check(
+    '★ 网络不可达（status 0）⇒ SocketTicketError 且不建连',
+    rNet.err instanceof SocketTicketError && rNet.wsCount === 0,
+    `${rNet.err && rNet.err.name} ws=${rNet.wsCount}`
+  )
+
+  const rHang = await tryConnect('hang', {}, { ticketTimeoutMs: 20 })
+  _check(
+    '★ 凭证端点挂住 ⇒ 超时后抛 SocketTicketError 且不建连（不会永远 pending）',
+    rHang.err instanceof SocketTicketError && rHang.wsCount === 0 && /超时/.test(rHang.err.message),
+    `${rHang.err && rHang.err.name}/${rHang.err && rHang.err.message} ws=${rHang.wsCount}`
+  )
+
+  const rBad = await tryConnect('invalid')
+  _check(
+    '★ 200 但响应体无 ticket ⇒ SocketTicketError 且不建连',
+    rBad.err instanceof SocketTicketError && rBad.wsCount === 0 && /无效/.test(rBad.err.message),
+    `${rBad.err && rBad.err.name} ws=${rBad.wsCount}`
+  )
+
+  const r401 = await tryConnect('status', { status: 401 })
+  _check(
+    '★ 401 ⇒ SocketAuthError（登录问题，区别于凭证服务故障）',
+    r401.err instanceof SocketAuthError && r401.wsCount === 0,
+    r401.err ? r401.err.name : 'no-throw'
+  )
+  const r403 = await tryConnect('status', { status: 403 })
+  _check(
+    '★ 403 ⇒ SocketAuthError 且提示「无权」',
+    r403.err instanceof SocketAuthError && /无权/.test(r403.err.message) && r403.wsCount === 0,
+    r403.err ? r403.err.message : 'no-throw'
+  )
+
+  const failUrls = FakeFetch.calls.map((c) => c.url)
+  _check(
+    '★ 失败路径只请求过 ws-ticket 端点，且请求 URL 不含任何凭证',
+    failUrls.length >= 1 &&
+      failUrls.every((u) => /\/ws-ticket$/.test(u)) &&
+      noTokenInUrls(failUrls),
+    JSON.stringify(failUrls)
+  )
+  _check(
+    '★ 错误对象里**不携带** ticket / token（提示会进 UI 与错误上报）',
+    [r5xx, rNet, rHang, rBad, r401, r403].every(
+      (r) => !/ticket=|token=/.test(String(r.err && r.err.message))
+    )
+  )
+
+  // ------------------------------------------------------------
+  // [3c] connectWithRetry：有上限的指数退避 + 抖动
+  // ------------------------------------------------------------
+  console.log('\n[3c] connectWithRetry：退避重试')
+
+  _check(
+    '退避参数合理（基数 >0、上限 ≥ 基数、抖动 ∈ (0,1)）',
+    RECONNECT_BASE_DELAY_MS > 0 &&
+      RECONNECT_MAX_DELAY_MS >= RECONNECT_BASE_DELAY_MS &&
+      RECONNECT_JITTER_RATIO > 0 &&
+      RECONNECT_JITTER_RATIO < 1,
+    `${RECONNECT_BASE_DELAY_MS}/${RECONNECT_MAX_DELAY_MS}/${RECONNECT_JITTER_RATIO}`
+  )
+  _check(
+    '★ 抖动区间恒定：实际等待 ∈ [名义/2, 名义]（rand=0 / rand=1 卡两端）',
+    computeReconnectDelay(0, () => 0) === RECONNECT_BASE_DELAY_MS / 2 &&
+      computeReconnectDelay(0, () => 1) === RECONNECT_BASE_DELAY_MS,
+    `${computeReconnectDelay(0, () => 0)} / ${computeReconnectDelay(0, () => 1)}`
+  )
+  _check(
+    '★ 指数增长且封顶（不会无限增长）',
+    computeReconnectDelay(0, () => 0) < computeReconnectDelay(1, () => 0) &&
+      computeReconnectDelay(5, () => 1) === RECONNECT_MAX_DELAY_MS &&
+      computeReconnectDelay(10, () => 1) === RECONNECT_MAX_DELAY_MS,
+    `${computeReconnectDelay(0, () => 0)},${computeReconnectDelay(1, () => 0)},${computeReconnectDelay(5, () => 1)},${computeReconnectDelay(10, () => 1)}`
+  )
+  _check(
+    '★ 抖动是随机的（同参数多次取值不全相等，否则等于没抖动）',
+    new Set(Array.from({ length: 20 }, () => computeReconnectDelay(2))).size > 1
+  )
+  _check(
+    '负 / 非数字 attempt 不会算出 NaN（防御性）',
+    Number.isFinite(computeReconnectDelay(-3, () => 0.5)) &&
+      Number.isFinite(computeReconnectDelay(NaN, () => 0.5))
+  )
+
+  // 先 503、再成功 ⇒ 应当自动重试并最终连上
+  FakeFetch.reset('ok', { sequence: [{ mode: 'status', status: 503 }] })
+  FakeWebSocket.reset()
+  const retried = []
+  const rs = new InterviewSocket(88, {
+    autoReconnect: true,
+    maxAttempts: 3,
+    onRetry: (attempt, delayMs) => retried.push([attempt, delayMs]),
+  })
+  let rsErr = null
+  try {
+    await rs.connectWithRetry()
+  } catch (e) {
+    rsErr = e
+  }
+  _check(
+    '★ 首次 503、第二次成功 ⇒ 最终连上（重试真的生效）',
+    rsErr === null && FakeWebSocket.instances.length === 1,
+    rsErr ? rsErr.message : `ws=${FakeWebSocket.instances.length}`
+  )
+  _check('onRetry 被回调一次（attempt 从 1 开始）', retried.length === 1 && retried[0][0] === 1, JSON.stringify(retried))
+  _check('onRetry 给出的等待时长在抖动区间内', retried[0] && retried[0][1] >= RECONNECT_BASE_DELAY_MS / 2 && retried[0][1] <= RECONNECT_BASE_DELAY_MS, String(retried[0] && retried[0][1]))
+  _check(
+    '★ 重试成功后用的仍是 ticket（不是 token）',
+    /[?&]ticket=tk-fe-test$/.test(FakeWebSocket.instances[0].url),
+    FakeWebSocket.instances[0].url
+  )
+  rs.close()
+
+  // 一直 503 ⇒ 用尽后抛出，且绝不建连
+  FakeFetch.reset('status', { status: 503 })
+  FakeWebSocket.reset()
+  const exhaustedRetries = []
+  const re = new InterviewSocket(89, {
+    autoReconnect: true,
+    maxAttempts: 2,
+    onRetry: (a) => exhaustedRetries.push(a),
+  })
+  let reErr = null
+  try {
+    await re.connectWithRetry()
+  } catch (e) {
+    reErr = e
+  }
+  _check(
+    '★ 一直 503 ⇒ 用尽 maxAttempts 后抛 SocketTicketError',
+    reErr instanceof SocketTicketError,
+    reErr ? reErr.name : 'no-throw'
+  )
+  _check(
+    '★ 重试次数有上限（= maxAttempts，不是无限）',
+    exhaustedRetries.length === 2 && FakeFetch.calls.length === 3,
+    `retries=${exhaustedRetries.length} calls=${FakeFetch.calls.length}`
+  )
+  _check('★ 全程没有建过 WebSocket', FakeWebSocket.instances.length === 0, String(FakeWebSocket.instances.length))
+  re.close()
+
+  // 401 ⇒ 不重试
+  FakeFetch.reset('status', { status: 401 })
+  FakeWebSocket.reset()
+  const authRetries = []
+  const ra = new InterviewSocket(90, {
+    autoReconnect: true,
+    maxAttempts: 5,
+    onRetry: (a) => authRetries.push(a),
+  })
+  let raErr = null
+  try {
+    await ra.connectWithRetry()
+  } catch (e) {
+    raErr = e
+  }
+  _check(
+    '★ 401 ⇒ 立刻放弃、**不重试**（重试只会重复被拒）',
+    raErr instanceof SocketAuthError && authRetries.length === 0 && FakeFetch.calls.length === 1,
+    `${raErr && raErr.name} retries=${authRetries.length} calls=${FakeFetch.calls.length}`
+  )
+  ra.close()
+
+  // close() 能打断退避等待（不留孤儿定时器）
+  FakeFetch.reset('status', { status: 503 })
+  FakeWebSocket.reset()
+  const rc = new InterviewSocket(91, { autoReconnect: true, maxAttempts: 5 })
+  const pending = rc.connectWithRetry().catch((e) => e)
+  rc.close()
+  const closedErr = await pending
+  _check(
+    '★ close() 打断退避等待：Promise 不会永挂，且不再建连',
+    closedErr instanceof Error && FakeWebSocket.instances.length === 0 && rc.retryTimer === null,
+    `${closedErr && closedErr.name} ws=${FakeWebSocket.instances.length}`
+  )
+
+  FakeFetch.reset('ok')
+
+
+  // ------------------------------------------------------------
   // [4] 重连策略
   // ------------------------------------------------------------
   console.log('\n[4] 断线重连策略')
-  const mkSock = () => {
+  const mkSock = async () => {
     FakeWebSocket.reset()
     const s = new InterviewSocket(9, { onError: () => {}, onClose: () => {} })
-    s.connect()
+    await s.connect()
     return { s, w: FakeWebSocket.instances[0] }
   }
 
-  const a = mkSock()
+  const a = await mkSock()
   a.w._serverClose(1006, 'abnormal')
   _check('★ 异常断开（1006）会安排重连', a.s.retryTimer !== null && a.s.attempts === 1)
   a.s.close()
 
-  const b = mkSock()
+  const b = await mkSock()
   b.w._serverClose(WS_CLOSE_UNAUTHORIZED, '未登录')
   _check('★ 4401（未登录）**不重连** —— 重试多少次都不会成功', b.s.retryTimer === null)
   b.s.close()
 
-  const c = mkSock()
+  const c = await mkSock()
   c.w._serverClose(WS_CLOSE_NOT_FOUND, '会话不存在')
   _check('★ 4404（会话不存在）**不重连**', c.s.retryTimer === null)
   c.s.close()
 
-  const d = mkSock()
+  const d = await mkSock()
   d.w._serverClose(1006, 'x')
   d.s.close()
   _check('用户主动关闭会清掉待执行的重连定时器', d.s.retryTimer === null)
@@ -343,6 +668,7 @@ async function run() {
     maxAttempts: 0,
   })
   e.connect()
+  await new Promise(r => setTimeout(r, 10))
   FakeWebSocket.instances[0]._serverClose(1006, 'x')
   _check(
     '重连次数耗尽 → 通过 onError 上报（不无限重试）',

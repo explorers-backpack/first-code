@@ -115,6 +115,33 @@ PINNED = {
     #    开关的**两个状态**都由 ``tests/test_avatar_llm_flow.py`` 自己显式覆盖，
     #    所以这里钉住不会造成覆盖缺口。
     "INTERVIEW_AVATAR_LLM_QUESTIONS": "0",
+    # 认证硬化：空串 = 未配置 = 默认值（TTL 7 天 / 限流 5 次/15 分钟）
+    "AUTH_SESSION_TTL_SECONDS": "",
+    "AUTH_LOGIN_MAX_FAILURES": "",
+    "AUTH_LOGIN_WINDOW_SECONDS": "",
+    # 登录失败限流的**存储后端**：空串 = 未配置 = ``memory``（进程内，行为不变）。
+    # 钉住是为了防「有人为了本地多 worker 调试设了 AUTH_LOGIN_STORE=db 后忘了改回」——
+    # 那样 ``test_auth_security [12]`` 用 ``utils.login_throttle.reset`` 清计数会
+    # **清不到**共享表（它清的是内存字典），表现为"第 6 次没有 429"的假红。
+    # 两个后端都由 ``tests/test_login_throttle_store.py`` 显式覆盖，钉住无覆盖缺口。
+    "AUTH_LOGIN_STORE": "",
+    # 实时通道的**历史兼容**凭证路径（``?token=<长期登录 token>``）。
+    # 空串 = 未配置 = **默认开启**（= 改造前行为，既有套件一条断言都不用改）；
+    # 钉住是为了防「有人用 ``INTERVIEW_WS_TOKEN_AUTH=0`` 跑本地服务后忘了改回」——
+    # 那样 ``test_interview_ws`` / ``test_interview_ws_stream`` 里所有用
+    # ``?token=`` 建连的用例会集体 4401，看起来像代码坏了，其实是环境脏了。
+    # 开关的**两个状态**都由 ``tests/test_ws_ticket.py`` 自己显式覆盖。
+    "INTERVIEW_WS_TOKEN_AUTH": "",
+    # 撤销广播的**后台轮询器**（每实例一个 asyncio 任务，默认开启）。
+    # ★ 这里**必须钉成 "0"（显式关闭）**，不能留空串：
+    #   空串 = 未配置 = **开启** ⇒ 每个用 TestClient 的套件都会多出一个
+    #   每 2 秒查一次库的后台任务，与套件自己的 asyncio.run()/临时 SQLite
+    #   抢连接、并在关闭时留下未取消的任务 ⇒ 偶发假红且极难定位。
+    #   它**不是**安全项的默认值，只是「主动断开有多快」；撤销本身照样落库，
+    #   由 ``AUTH_RECHECK_SECONDS`` 的周期性复核兜底。
+    #   两个状态（开 / 关）由 ``tests/test_ws_revocation.py`` 显式覆盖，
+    #   并在那里**实测**撤销生效延迟，所以钉住不会造成覆盖缺口。
+    "INTERVIEW_WS_REVOCATION_WATCH": "0",
 }
 
 

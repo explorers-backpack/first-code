@@ -1,0 +1,278 @@
+# -*- coding: utf-8 -*-
+# =============================================================================
+# CareerAI · CI
+# =============================================================================
+# 本仓库此前**没有任何 CI 配置**（无 .github/、无 .gitlab-ci.yml）。
+# 这里补上的重点是「真实 MySQL 不再只是本地手工验证」：
+#
+#   backend-regression    74 套 SQLite 自检 + worker_guard 安全网断言
+#   frontend-regression   前端自检（WS ticket fail-closed / 重连退避）
+#   mysql-integration     ★ MySQL 8 service container + 5 个真实并发运行器
+#
+# 三条硬规矩（针对"用测试制造绿色"）：
+#
+#   1. ``tests/*_run.py`` 的退出码 ``2`` 是「环境不满足」。CI 里**不得**当成
+#      跳过——一律由 ``tests/run_mysql_suites.py`` 判成失败（只有 0 是通过）。
+#   2. 数据库就绪失败、迁移失败、结构不符，全部 ``exit 1``（不会静默继续）。
+#   3. 日志里**不出现**密码 / token / 完整连接串：CI 凭据是一次性的容器口令，
+#      声明后立刻 ``::add-mask::``；运行器自身打印连接串前已脱敏。
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# 同一分支的新提交取消旧运行（省额度，且旧结果本来就要作废）
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ===========================================================================
+  # 1) 后端回归（SQLite 内存库，不依赖任何外部服务）
+  # ===========================================================================
+  backend-regression:
+    name: 后端回归（SQLite）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: 运行全部自检套件
+        working-directory: backend
+        shell: bash
+        run: |
+          set -uo pipefail
+          # ★ 回归套件必须跑在 SQLite 上。若外部注入了 DATABASE_URL，
+          #   各套件的 setdefault 会失效并**打到 MySQL**（现象是全线红且原因
+          #   与代码无关）。这里直接忽略它。
+          if [ -n "${DATABASE_URL:-}" ]; then
+            echo "::warning::回归套件应跑在 SQLite 上，已忽略外部 DATABASE_URL"
+            unset DATABASE_URL
+          fi
+
+          fail=0
+          total=0
+          for t in tests/test_*.py; do
+            total=$((total + 1))
+            printf '\n===== [%s] %s =====\n' "$total" "$t"
+            if ! python "$t"; then
+              echo "::error file=backend/$t::套件失败"
+              fail=$((fail + 1))
+            fi
+          done
+
+          echo ""
+          echo "----------------------------------------"
+          if [ "$fail" -ne 0 ]; then
+            echo "[FAIL] $total 个套件中 $fail 个失败"
+            exit 1
+          fi
+          echo "[OK] $total 个套件全部通过"
+
+      - name: worker_guard 仍然阻断多 worker（解除限制前的安全网）
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          import os, sys
+          os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
+          os.environ["WEB_CONCURRENCY"] = "2"
+          sys.path.insert(0, ".")
+          from utils import worker_guard
+          try:
+              worker_guard.assert_single_worker()
+          except RuntimeError as exc:
+              print(f"[OK] worker_guard 生效：{exc}")
+              sys.exit(0)
+          print("[FAIL] worker_guard 未阻断多 worker 配置——"
+                "共享状态与撤销广播尚未验证到可解除限制的程度")
+          sys.exit(1)
+          PY
+
+  # ===========================================================================
+  # 2) 前端自检（纯 Node，无 npm install：package.json 的 test 脚本只跑 node）
+  # ===========================================================================
+  frontend-regression:
+    name: 前端自检
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: 运行前端自检
+        working-directory: frontend
+        run: npm test
+
+  # ===========================================================================
+  # 3) ★ 真实 MySQL 集成（service container）
+  # ===========================================================================
+  mysql-integration:
+    name: 真实 MySQL 集成
+    runs-on: ubuntu-latest
+
+    # ★ 一次性 CI 凭据：只存在于本 job 的临时容器里，与生产无关。
+    #   生产凭据**永远不要**写进 workflow 文件（它会被提交进 Git）。
+    #   services 的 env **拿不到** ``env`` 上下文，所以下面容器那段必须重复
+    #   一次同样的字面量——两处改一处就会连不上，改动时注意同步。
+    env:
+      CI_MYSQL_ROOT_PASSWORD: ci_root_ephemeral
+      CI_MYSQL_DATABASE: career_ci
+      CI_TEST_PW: ci_test_ephemeral_pw
+      DATABASE_URL: mysql+aiomysql://root:ci_root_ephemeral@127.0.0.1:3306/career_ci?charset=utf8mb4
+      # 运行器/服务不得外呼（与并发验证无关，避免消耗真实配额）
+      AVATAR_PROVIDER: ""
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ci_root_ephemeral
+          MYSQL_DATABASE: career_ci
+        ports:
+          - 3306:3306
+        # 健康检查用容器内的环境变量，避免把口令再写一遍；
+        # ``$$`` 是 GitHub 的转义，落进容器时是 ``$MYSQL_ROOT_PASSWORD``。
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=30
+          --character-set-server=utf8mb4
+          --collation-server=utf8mb4_unicode_ci
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # ★ 必须在任何可能打印这些值的步骤**之前**注册掩码。
+      - name: 注册日志掩码（口令与完整连接串）
+        run: |
+          echo "::add-mask::${{ env.CI_MYSQL_ROOT_PASSWORD }}"
+          echo "::add-mask::${{ env.CI_TEST_PW }}"
+          echo "::add-mask::${{ env.DATABASE_URL }}"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: 安装依赖
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r backend/requirements.txt
+
+      - name: 等待 MySQL 就绪（超时 = 失败，不是跳过）
+        run: |
+          python - <<'PY'
+          import os, sys, time
+          from urllib.parse import urlsplit
+
+          import pymysql
+
+          url = os.environ["DATABASE_URL"]
+          u = urlsplit(url)
+          host, port = u.hostname, u.port or 3306
+          db = (u.path or "/").lstrip("/") or None
+          deadline = time.time() + 150
+          last = "unknown"
+          while time.time() < deadline:
+              try:
+                  conn = pymysql.connect(host=host, port=port, user=u.username,
+                                         password=u.password, database=db,
+                                         connect_timeout=3)
+                  with conn.cursor() as cur:
+                      cur.execute("SELECT VERSION()")
+                      ver = cur.fetchone()[0]
+                  conn.close()
+                  print(f"[OK] MySQL 就绪：{host}:{port}/{db}，版本 {ver}")
+                  sys.exit(0)
+              except Exception as exc:  # noqa: BLE001
+                  last = f"{type(exc).__name__}"
+                  time.sleep(3)
+          print(f"[FAIL] 150s 内未能连上 MySQL（最后一次：{last}）")
+          print("       ★ 这不是跳过：没有数据库就没有任何用例真正跑过。")
+          sys.exit(1)
+          PY
+
+      - name: 建专用测试库与最小权限账号（幂等；自带 4 项权限自验）
+        working-directory: backend
+        run: python scripts/setup_test_mysql.py --password "$CI_TEST_PW"
+
+      - name: 切换到专用测试账号（后续步骤全部用 career_ci，不再用 root）
+        run: |
+          url="mysql+aiomysql://career_ci:${CI_TEST_PW}@127.0.0.1:3306/career_ci_test?charset=utf8mb4"
+          echo "DATABASE_URL=$url" >> "$GITHUB_ENV"
+          echo "::add-mask::$url"
+
+      - name: 初始化 / 迁移测试库（与 main.py lifespan 同一条路径，连跑两遍验幂等）
+        working-directory: backend
+        run: python scripts/ci_bootstrap_db.py --twice
+
+      - name: ★ 真实 MySQL 运行器（驱动/池/事务边界 + ticket 原子消费 / 并发 / 会话撤销 / 限流）
+        working-directory: backend
+        run: python tests/run_mysql_suites.py
+
+      - name: 清理遗留 probe 库（失败时也执行）
+        if: always()
+        working-directory: backend
+        run: |
+          python - <<'PY'
+          import os, re, sys
+          from urllib.parse import urlsplit
+
+          url = os.environ.get("DATABASE_URL", "")
+          if not url.startswith("mysql"):
+              print("[SKIP] 无 MySQL 连接串，跳过清理")
+              sys.exit(0)
+          try:
+              import pymysql
+          except Exception as exc:  # noqa: BLE001
+              print(f"[SKIP] 缺 pymysql（{type(exc).__name__}），跳过清理")
+              sys.exit(0)
+
+          # 各运行器自建的 probe 库：career_{ticket,conc,revoke,throttle,pool}_probe_<pid>_<ts>
+          pat = re.compile(r"^career_(ticket|conc|revoke|throttle|pool)_probe_\d+_\d+$")
+          u = urlsplit(url)
+          try:
+              conn = pymysql.connect(host=u.hostname, port=u.port or 3306,
+                                     user=u.username, password=u.password,
+                                     connect_timeout=5)
+          except Exception as exc:  # noqa: BLE001
+              print(f"[SKIP] 连不上数据库（{type(exc).__name__}），跳过清理")
+              sys.exit(0)
+
+          dropped = []
+          try:
+              with conn.cursor() as cur:
+                  cur.execute("SHOW DATABASES")
+                  names = [row[0] for row in cur.fetchall()]
+                  for name in names:
+                      if pat.match(name):
+                          cur.execute(f"DROP DATABASE IF EXISTS `{name}`")
+                          dropped.append(name)
+          finally:
+              conn.close()
+          print(f"[CLEAN] 删除遗留 probe 库 {len(dropped)} 个：{dropped}")
+          # 清理失败不影响结论（运行器自己也会 DROP）
+          sys.exit(0)
+          PY

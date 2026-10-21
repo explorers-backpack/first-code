@@ -44,7 +44,9 @@ import main  # noqa: E402
 
 DEFAULT_EMAIL = "admin@career.ai"
 DEFAULT_USERNAME = "admin"
-DEFAULT_PASSWORD = "admin123"
+#: **不提供内置默认密码**：仓库里的任何固定口令都等于公开口令。
+#: 必须由 ``--password`` 或环境变量 ``ADMIN_PASSWORD`` 显式提供。
+DEFAULT_PASSWORD = ""
 ADMIN_ROLE = "admin"
 
 
@@ -53,16 +55,23 @@ async def run(args) -> int:
     username = args.username.strip()
     password = args.password
 
+    if not password:
+        print(
+            "错误：未提供管理员密码。\n"
+            "  请用 --password 或环境变量 ADMIN_PASSWORD 指定；\n"
+            "  本脚本**不再提供内置默认密码**（固定口令等于公开口令）。"
+        )
+        return 1
+
     print("=" * 72)
     print("创建 / 校验管理员账号" + ("（DRY RUN，不写库）" if args.dry_run else ""))
     print("=" * 72)
     print(f"目标 email    : {email}")
     print(f"目标 username : {username}")
     print(f"目标 role     : {ADMIN_ROLE}  （由脚本固定，不接受外部输入）")
-    print(f"密码哈希机制  : sha256（main._hash_password，与注册/登录一致）")
-    if password == DEFAULT_PASSWORD:
-        print("密码          : 使用默认开发密码 admin123"
-              "（生产环境请用 ADMIN_PASSWORD 环境变量覆盖）")
+    print(f"密码哈希机制  : bcrypt（security.hash_password，与注册/登录一致）")
+    if password:
+        print("密码          : 已通过 --password / ADMIN_PASSWORD 提供（不打印明文）")
 
     async with main.async_session() as session:
         by_email = (
@@ -154,7 +163,7 @@ def main_cli() -> int:
     parser.add_argument(
         "--password",
         default=os.getenv("ADMIN_PASSWORD", DEFAULT_PASSWORD),
-        help="管理员密码（默认取环境变量 ADMIN_PASSWORD，否则 admin123）",
+        help="管理员密码（必须提供：--password 或环境变量 ADMIN_PASSWORD；无内置默认值）",
     )
     parser.add_argument("--dry-run", action="store_true", help="仅检查现状，不写库")
     parser.add_argument(

@@ -8,10 +8,12 @@ import re
 import json
 import sys
 import asyncio
+import logging
 import hashlib
 import hmac
 import base64
 import time
+import secrets
 from datetime import datetime
 from urllib.parse import urlencode
 from dotenv import load_dotenv
@@ -21,12 +23,13 @@ from contextlib import asynccontextmanager
 from typing import Any, Dict, Optional, List
 
 from fastapi import FastAPI, HTTPException, UploadFile, File, Depends, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 # 保证以任意工作目录启动都能导入本项目的顶层模块
 # （database / deps / models / services / api）
@@ -46,10 +49,24 @@ from database import (  # noqa: E402,F401
 )
 
 # ---- 鉴权依赖：原定义在本文件，同样为分层复用而抽取到 deps.py ----
-from deps import get_current_admin, get_current_user  # noqa: E402
+from deps import get_current_admin, get_current_session, get_current_user  # noqa: E402
+
+# ---- 安全工具：密码哈希、token、会话有效性 ----
+from security import hash_password, verify_password, generate_token, create_user_session  # noqa: E402
+
+# ---- 登录失败限流：默认进程内，``AUTH_LOGIN_STORE=db`` 切到共享表（多 worker 安全）----
+# 本模块是**门面**：内存模式转调 ``utils.login_throttle``（行为逐字不变），
+# db 模式走 ``login_failure`` 表。见 services/login_throttle_store 的模块文档。
+from services.login_throttle_store import (  # noqa: E402
+    LoginThrottleUnavailable,
+    check as throttle_check,
+    record as throttle_record,
+    reset as throttle_reset,
+)
 
 # ---- 轻量 schema 同步：create_all 不给既有表加列，新增列需启动时幂等补齐 ----
 from utils.schema_sync import ensure_columns  # noqa: E402
+from utils.worker_guard import assert_single_worker  # noqa: E402
 
 # ---- ORM 模型：已迁移至 models/ 包，此处导入以保持既有引用（User/Job/...）不变 ----
 # Resume / ChatHistory 在本文件中无直接引用，保留是为了维持
@@ -66,6 +83,18 @@ from models import (  # noqa: E402,F401
 
 # ---- 业务服务 ----
 from services.resume_scoring import build_prompt_summary, evaluate_resume  # noqa: E402
+
+# ---- WS 一次性连接凭证的共享存储（登出时作废未使用的 ticket）----
+# 放在这里而不是 api 层：登出端点在本文件，而 ticket 存储是多处共用的基础设施。
+from services import ws_ticket_store  # noqa: E402
+
+# ---- 撤销广播（跨实例让实时通道主动断开）----
+# 踢下线 / 登出时写一行；每个实例的轮询器读到后断开**自己身上**的连接。
+from services import ws_revocation  # noqa: E402
+from services import ws_revocation_watcher  # noqa: E402
+
+#: 与 ``services/ws_ticket_store.py`` 同一个 logger 名 ⇒ 日志配置一处生效。
+_ticket_log = logging.getLogger("careerai.ws_ticket")
 
 # ---- 岗位匹配：keyword_match 曾在本文件重复定义两份（逐字节相同），
 # 现统一收敛为 services/job_matching.py 中的唯一实现，此处仅导入使用。
@@ -233,11 +262,17 @@ def clean_jobs_to_text(jobs):
 # 密码与 Token 工具
 # ============================================================
 def _hash_password(password: str) -> str:
+    """无盐 SHA-256（**仅旧格式兼容 / 测试造数**）。新写入请用 ``security.hash_password``。"""
     return hashlib.sha256(password.encode()).hexdigest()
 
 
+# 薄导出，供测试与脚本校验密码而不直接 import security
+_verify_password = verify_password
+
+
 def _generate_token(user_id: int, email: str, role: str) -> str:
-    return hashlib.md5(f"{user_id}_{email}_{time.time()}".encode()).hexdigest()
+    """生成高熵 token（参数保留仅为了接口兼容）。"""
+    return generate_token()
 
 
 # ============================================================
@@ -555,6 +590,30 @@ def avatar_status() -> Dict[str, Any]:
         }
 
 
+def _report_auth_throttle_status() -> None:
+    """把登录限流的**存储后端**打进启动日志。
+
+    为什么要显式打：这是「能不能上多 worker」的判据之一。如果部署方以为
+    已经切到共享表、实际仍在进程内计数，多 worker 后爆破上限会被静默放大 N 倍
+    —— 而这种问题**不会**在功能上表现出来，只能靠启动日志暴露。
+    """
+    from services.login_throttle_store import limits, store_mode
+
+    mode = store_mode()
+    max_failures, window_seconds = limits()
+    if mode == "db":
+        print(
+            f"[auth] 登录失败限流 = **共享表**（login_failure）："
+            f"{max_failures} 次 / {window_seconds}s，跨实例统一计数。"
+        )
+    else:
+        print(
+            f"[auth] 登录失败限流 = **进程内**：{max_failures} 次 / {window_seconds}s。"
+            "★ 多 worker 时每个进程独立计数 ⇒ 实际上限 × 进程数；"
+            "需要多 worker 请设 AUTH_LOGIN_STORE=db 后重启。"
+        )
+
+
 def _report_avatar_status() -> None:
     """把数字人通道状态打进启动日志。
 
@@ -662,6 +721,7 @@ def _report_production_status() -> None:
 # ============================================================
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    assert_single_worker()
     _report_embedding_status()
     async with engine.begin() as conn:
         # ① 建表：只创建**不存在的新表**
@@ -680,7 +740,26 @@ async def lifespan(app: FastAPI):
     _report_threshold_status()
     _report_avatar_status()
     _report_production_status()
-    yield
+    _report_auth_throttle_status()
+
+    # ---- 撤销广播轮询器（**每个实例一个**后台任务）----
+    # 先注册「拿到撤销记录后怎么断开连接」的回调：由实时通道层提供，
+    # 这样本文件不必知道连接表长什么样，ws_revocation 也不必反向 import 实时通道。
+    from api import interview_ws as _ws_module
+
+    ws_revocation.register_handler(_ws_module.close_revoked_connections)
+    if ws_revocation_watcher.watch_enabled():
+        await ws_revocation_watcher.start()
+    else:
+        print(
+            "[production] 撤销广播轮询器**已关闭**（INTERVIEW_WS_REVOCATION_WATCH=0）："
+            "踢下线 / 登出对已建立连接的生效延迟退化为周期性复核"
+            f"（{_ws_module.AUTH_RECHECK_SECONDS:.0f}s 量级）。生产环境不建议关闭。"
+        )
+    try:
+        yield
+    finally:
+        await ws_revocation_watcher.stop()
 
 
 # ============================================================
@@ -695,13 +774,32 @@ app = FastAPI(
 # ============================================================
 # CORS 中间件 —— 必须在 app 创建后第一位注册（否则 500 报错时 CORS 头丢失）
 # ============================================================
+# 允许来源由环境变量配置，**默认值即现状**（本地 Vite 两个入口）。
+# 生产同源部署时无需配置；前后端分域部署时用逗号分隔显式列出，
+# 例如 CORS_ALLOW_ORIGINS="https://app.example.com,https://www.example.com"。
+def _parse_cors_origins() -> list:
+    raw = os.getenv("CORS_ALLOW_ORIGINS", "").strip()
+    if not raw:
+        return [
+            "http://localhost:5173",   # Vite 默认端口
+            "http://127.0.0.1:5173",   # 本地 IP 访问
+        ]
+    return [item.strip() for item in raw.split(",") if item.strip()]
+
+
+CORS_ALLOW_ORIGINS = _parse_cors_origins()
+# 通配符 + 凭证在浏览器侧本就互斥（规范禁止），显式配置 "*" 时关闭凭证，
+# 避免「配置看起来生效、实际被浏览器拒绝」的隐性故障。
+CORS_ALLOW_CREDENTIALS = "*" not in CORS_ALLOW_ORIGINS
+if not CORS_ALLOW_CREDENTIALS:
+    logging.getLogger(__name__).warning(
+        "CORS_ALLOW_ORIGINS 含 '*'，已自动关闭 allow_credentials（浏览器规范要求）"
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",   # Vite 默认端口
-        "http://127.0.0.1:5173",   # 本地 IP 访问
-    ],
-    allow_credentials=True,
+    allow_origins=CORS_ALLOW_ORIGINS,
+    allow_credentials=CORS_ALLOW_CREDENTIALS,
     allow_methods=["*"],           # GET / POST / PUT / DELETE / OPTIONS
     allow_headers=["*"],           # Content-Type / Authorization 等
 )
@@ -711,20 +809,72 @@ app.add_middleware(
 async def cors_exception_handler(request: Request, exc: Exception):
     """全局异常捕获，防止 500 丢 CORS 头"""
     origin = request.headers.get("origin", "")
-    allowed = ["http://localhost:5173", "http://127.0.0.1:5173"]
     headers = {}
-    if origin in allowed:
+    if origin in CORS_ALLOW_ORIGINS:
         headers.update({
             "Access-Control-Allow-Origin": origin,
-            "Access-Control-Allow-Credentials": "true",
+            "Access-Control-Allow-Credentials": "true" if CORS_ALLOW_CREDENTIALS else "false",
             "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
             "Access-Control-Allow-Headers": "Content-Type, Authorization",
         })
     return JSONResponse(
         status_code=500,
-        content={"detail": f"服务器内部错误: {str(exc)}"},
+        content={"detail": "服务器内部错误"},
         headers=headers,
     )
+
+
+# 校验失败：**不回显提交值**（默认 422 会把 ``input`` 原样带回，注册/登录时
+# 等于把用户刚输入的密码写进响应体与错误监控）。保留 type/loc/msg 三项，
+# 前端 ``_extractDetail`` 的既有解析口径不变。
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    safe_errors = [
+        {"type": err.get("type"), "loc": list(err.get("loc", ())), "msg": err.get("msg")}
+        for err in exc.errors()
+    ]
+    return JSONResponse(status_code=422, content={"detail": safe_errors})
+
+
+# ============================================================
+# 日志脱敏兜底：**凭证绝不进访问日志**
+# ============================================================
+# WS 握手凭证走 URL query（浏览器 WebSocket 不能自定义请求头），而 uvicorn 的
+# 访问日志会原样打印 ``full_path``（含 query）。这里挂一个**保留 args 结构**的
+# 过滤器：uvicorn 的 AccessFormatter 会按位置解包 ``record.args``，
+# 因此不能像 ``RedactingFilter`` 那样把 args 清空，只能逐项脱敏。
+class _LogRedactingFilter(logging.Filter):
+    """对日志消息与参数做行内凭据脱敏，**保持 args 元组长度不变**。"""
+
+    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
+        try:
+            from services.interview_production import redact_text
+
+            if isinstance(record.msg, str):
+                record.msg = redact_text(record.msg)
+            if isinstance(record.args, tuple):
+                record.args = tuple(
+                    redact_text(a) if isinstance(a, str) else a for a in record.args
+                )
+            elif isinstance(record.args, dict):
+                record.args = {
+                    k: (redact_text(v) if isinstance(v, str) else v)
+                    for k, v in record.args.items()
+                }
+        except Exception:  # noqa: BLE001 - 脱敏失败绝不能吞掉日志
+            pass
+        return True
+
+
+def _install_log_redaction() -> None:
+    """幂等安装到根日志器与 uvicorn 日志器（访问日志是主要泄漏面）。"""
+    for name in ("", "uvicorn", "uvicorn.access", "uvicorn.error"):
+        target = logging.getLogger(name)
+        if not any(isinstance(f, _LogRedactingFilter) for f in target.filters):
+            target.addFilter(_LogRedactingFilter())
+
+
+_install_log_redaction()
 
 
 # ============================================================
@@ -799,7 +949,7 @@ async def register(data: UserRegister, db: AsyncSession = Depends(get_db)):
     new_user = User(
         username=data.username,
         email=data.email,
-        password_hash=_hash_password(data.password),
+        password_hash=hash_password(data.password),
         role="user",
     )
     db.add(new_user)
@@ -807,15 +957,9 @@ async def register(data: UserRegister, db: AsyncSession = Depends(get_db)):
     await db.refresh(new_user)
 
     # 创建会话
-    token = _generate_token(new_user.id, new_user.email, new_user.role)
-    session = UserSession(
-        user_id=new_user.id,
-        token=token,
-        email=new_user.email,
-        role=new_user.role,
-    )
-    db.add(session)
+    session = await create_user_session(db, new_user)
     await db.commit()
+    token = session.token
 
     return {
         "success": True,
@@ -831,10 +975,35 @@ async def register(data: UserRegister, db: AsyncSession = Depends(get_db)):
 
 
 @app.post("/api/auth/login", tags=["认证"])
-async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
+async def login(data: UserLogin, request: Request, db: AsyncSession = Depends(get_db)):
     """
     用户登录接口。支持 email 或 username 登录。
+    未知账号统一返回 401，不自动创建。
+
+    限流存储由 ``AUTH_LOGIN_STORE`` 决定（``memory`` 默认 / ``db`` 共享表）。
+    存储不可用时 **fail closed**（503）：放行等于在库抖动期间关掉爆破保护。
     """
+    client_ip = request.client.host if request.client else "-"
+    throttle_key = f"{data.email.lower().strip()}|{client_ip}"
+
+    async def _throttle(coro):
+        """限流存储不可用 ⇒ 503（不静默放行，也不把它混进 401）。"""
+        try:
+            return await coro
+        except LoginThrottleUnavailable:
+            raise HTTPException(
+                status_code=503,
+                detail="登录服务暂时不可用，请稍后再试",
+            ) from None
+
+    retry_after = await _throttle(throttle_check(db, throttle_key))
+    if retry_after:
+        raise HTTPException(
+            status_code=429,
+            detail="登录尝试过多，请稍后再试",
+            headers={"Retry-After": str(retry_after)},
+        )
+
     result = await db.execute(select(User).where(User.email == data.email))
     user = result.scalar_one_or_none()
 
@@ -842,21 +1011,19 @@ async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
         result = await db.execute(select(User).where(User.username == data.email))
         user = result.scalar_one_or_none()
 
-    # 未注册则创建（兼容模式）
     if not user:
-        new_user = User(
-            username=data.email.split("@")[0],
-            email=data.email,
-            password_hash=_hash_password(data.password),
-            role="user",
-        )
-        db.add(new_user)
-        await db.commit()
-        await db.refresh(new_user)
-        user = new_user
+        # 未知账号也跑 dummy bcrypt，消除时间侧信道
+        verify_password(data.password, "")
+        await _throttle(throttle_record(db, throttle_key))
+        raise HTTPException(status_code=401, detail="邮箱或密码错误")
 
-    if user.password_hash != _hash_password(data.password):
-        raise HTTPException(status_code=401, detail="密码错误")
+    ok, needs_upgrade = verify_password(data.password, user.password_hash)
+    if not ok:
+        await _throttle(throttle_record(db, throttle_key))
+        raise HTTPException(status_code=401, detail="邮箱或密码错误")
+
+    if needs_upgrade:
+        user.password_hash = hash_password(data.password)
 
     # 记录登录日志
     log = UserLoginLog(
@@ -867,16 +1034,13 @@ async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
     )
     db.add(log)
 
-    # 创建会话 token
-    token = _generate_token(user.id, user.email, user.role)
-    session = UserSession(
-        user_id=user.id,
-        token=token,
-        email=user.email,
-        role=user.role,
-    )
+    # 创建会话
+    session = await create_user_session(db, user)
     db.add(session)
     await db.commit()
+    token = session.token
+
+    await throttle_reset(db, throttle_key)
 
     return {
         "success": True,
@@ -889,6 +1053,65 @@ async def login(data: UserLogin, db: AsyncSession = Depends(get_db)):
             "role": user.role,
         },
     }
+
+
+@app.post("/api/auth/logout", tags=["认证"])
+async def logout(
+    session=Depends(get_current_session),
+    db: AsyncSession = Depends(get_db),
+):
+    """撤销当前会话（使 token 立即失效），并作废该用户所有未使用的 WS ticket。
+
+    ★ 还要广播一条撤销：**已建立**的 WS 连接不受 ticket 作废影响
+    （ticket 早已被消费），必须由各实例的轮询器读到广播后主动断开。
+    广播按 ``auth_session_id`` 精确匹配 ⇒ 只踢**这一条**登录会话，
+    同一用户在其他设备上的面试不受影响。
+    """
+    session.revoked_at = datetime.utcnow()
+    db.add(session)
+    await db.commit()
+
+    # 撤销广播（失败不阻断登出：主效应已落库，且有周期性复核兜底）
+    try:
+        await ws_revocation.record(
+            db,
+            user_id=session.user_id,
+            auth_session_id=session.id,
+            reason=ws_revocation.REASON_LOGOUT,
+        )
+    except ws_revocation.RevocationStoreUnavailable as exc:
+        _ticket_log.warning(
+            "ws_revocation_record_on_logout_failed user_id=%s error=%s",
+            session.user_id,
+            type(exc).__name__,
+        )
+
+    # ★ 为什么要连带作废 ticket：ticket 路径下**没有**长期 token 可复核
+    #   （见 api/interview_ws.py 的 _auth_still_valid），已签发的 ticket 在 30 秒内
+    #   仍然能换到一条 WS 连接。登出即作废它们，把"登出 ⇒ 立即失效"补齐。
+    # ★ 失败**不阻断登出**：主效应（token 撤销）已经落库，且 ticket 30 秒后自然过期；
+    #   这里吞掉异常是**有意的**，但必须留下 WARNING（不静默）。
+    try:
+        revoked = await ws_ticket_store.revoke_for_user(db, user_id=session.user_id)
+        if revoked:
+            _ticket_log.info(
+                "ws_ticket_revoked_on_logout user_id=%s count=%s",
+                session.user_id,
+                revoked,
+            )
+    except ws_ticket_store.TicketStoreUnavailable as exc:
+        _ticket_log.warning(
+            "ws_ticket_revoke_on_logout_failed user_id=%s error=%s",
+            session.user_id,
+            exc,
+        )
+    return {"success": True, "message": "已安全退出"}
+
+
+@app.get("/api/auth/me", tags=["认证"])
+async def me(current_user: dict = Depends(get_current_user)):
+    """返回当前登录用户信息（供前端恢复登录态时校验）。"""
+    return {"success": True, "user": current_user}
 
 
 # ============================================================
@@ -1259,6 +1482,80 @@ async def add_job(
             "skills": new_job.skills,
             "description": new_job.duty,
         },
+    }
+
+
+@app.post("/api/admin/users/{user_id}/kick", tags=["管理员"])
+async def kick_user_sessions(
+    user_id: int,
+    current_admin: dict = Depends(get_current_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """**管理员踢下线**：撤销该用户全部登录会话，并让已建立的实时通道断开。
+
+    三步（顺序有意）：
+    1. ``user_session.revoked_at = now``（**主效应**：HTTP 侧下一次请求即 401）；
+    2. 作废该用户所有**未使用**的 WS ticket（防止踢完再用旧票建连）；
+    3. 写一条**跨实例**撤销广播（``user_id`` 级）⇒ 各实例的轮询器读到后
+       主动断开自己身上的连接（目标延迟见 ``services/ws_revocation_watcher``）。
+
+    ★ 为什么第 3 步不能省：``revoked_at`` 只是"以后不认"，而 WS 连接是**已经建立**
+    的长连接，它不会自己回头查库。改造前实测：ticket 路径的连接在撤销后
+    **>20s 内完全不失效**（上界是空闲超时 300s，而前端有心跳 ⇒ 实际永不失效）。
+    ★ 第 1 步失败会直接 500（主效应必须成功）；第 2/3 步失败只记 WARNING
+    ——主效应已落库，兜底是周期性复核。
+    """
+    target = (
+        await db.execute(select(User).where(User.id == int(user_id)))
+    ).scalar_one_or_none()
+    if target is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+
+    now = datetime.utcnow()
+    result = await db.execute(
+        update(UserSession)
+        .where(UserSession.user_id == int(user_id), UserSession.revoked_at.is_(None))
+        .values(revoked_at=now)
+        .execution_options(synchronize_session=False)
+    )
+    await db.commit()
+    revoked_sessions = int(result.rowcount or 0)
+
+    revoked_tickets = 0
+    try:
+        revoked_tickets = await ws_ticket_store.revoke_for_user(db, user_id=int(user_id))
+    except ws_ticket_store.TicketStoreUnavailable as exc:
+        _ticket_log.warning(
+            "ws_ticket_revoke_on_kick_failed user_id=%s error=%s",
+            user_id,
+            type(exc).__name__,
+        )
+
+    broadcast = True
+    try:
+        await ws_revocation.record(
+            db,
+            user_id=int(user_id),
+            auth_session_id=None,  # 空 = 该用户所有会话
+            reason=ws_revocation.REASON_ADMIN_KICK,
+        )
+    except ws_revocation.RevocationStoreUnavailable as exc:
+        broadcast = False
+        _ticket_log.warning(
+            "ws_revocation_record_on_kick_failed user_id=%s error=%s",
+            user_id,
+            type(exc).__name__,
+        )
+
+    return {
+        "success": True,
+        "message": "已踢下线",
+        "user_id": int(user_id),
+        "revoked_sessions": revoked_sessions,
+        "revoked_tickets": revoked_tickets,
+        # 广播失败时明确告知：调用方要知道"主动断开"这次可能不生效，
+        # 而不是以为已经踢干净了。
+        "broadcast": broadcast,
     }
 
 

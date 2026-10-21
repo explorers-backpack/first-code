@@ -6,9 +6,13 @@ import * as echarts from 'echarts'
 import AuthModal from './components/AuthModal.vue'
 import KnowledgeBase from './components/KnowledgeBase.vue'
 import InterviewRoom from './components/InterviewRoom.vue'
-import { apiClient, clearToken, setStoredUser } from './api/apiClient'
+import { apiClient, clearToken, setStoredUser, getToken, getStoredUser } from './api/apiClient'
 
-const md = new MarkdownIt()
+// ★ 安全口径：html 必须保持 false（markdown-it 默认值，这里**显式写出**防止
+//   后续有人为了「支持富文本」把它打开）。渲染结果直接进 v-html，
+//   一旦允许原始 HTML 就等于把 LLM 输出当成可执行标记。
+//   javascript: 链接由 markdown-it 内置 validateLink 拦截。
+const md = new MarkdownIt({ html: false, linkify: false })
 
 const inputText = ref('')
 const isLoading = ref(false)
@@ -344,6 +348,29 @@ const getPriorityColor = (priority) => {
   }
 }
 
+// 启动时恢复登录态（从 localStorage 读取并校验后端有效性）
+onMounted(async () => {
+  const token = getToken()
+  const stored = getStoredUser()
+  if (token && stored) {
+    try {
+      const data = await apiClient.get('/auth/me')
+      if (data && data.user) {
+        currentUser.value = data.user
+        isLoggedIn.value = true
+        return
+      }
+    } catch (e) {
+      // 401 或网络错误：静默清理
+    }
+  }
+  // 校验失败或无 token：清理本地状态
+  clearToken()
+  setStoredUser(null)
+  currentUser.value = { email: '', role: 'user' }
+  isLoggedIn.value = false
+})
+
 // Auth handlers
 const handleLoginSuccess = (user) => {
   currentUser.value = user
@@ -351,7 +378,13 @@ const handleLoginSuccess = (user) => {
   showAuthModal.value = false
 }
 
-const handleLogout = () => {
+const handleLogout = async () => {
+  // 先通知后端撤销会话（失败也继续清理本地态）
+  try {
+    await apiClient.post('/auth/logout')
+  } catch (e) {
+    // 忽略
+  }
   // 退出时清除本地 token，避免后续请求继续携带已失效凭证
   clearToken()
   setStoredUser(null)
@@ -378,16 +411,13 @@ const fetchUserLogs = async () => {
     const data = await apiClient.get('/admin/user-logs')
     userLogs.value = data.logs || []
   } catch (e) {
-    // 401/403 明确提示（不静默吞掉），并保留演示数据兜底以便页面仍可用
+    // 401/403 明确提示（不静默吞掉）
     if (e && (e.status === 401 || e.status === 403)) {
       ElMessage.error(e.status === 401 ? '登录状态已失效，请重新登录后查看' : '当前账号无管理员权限')
+    } else {
+      ElMessage.error('获取日志失败')
     }
-    // Mock data for demo
-    userLogs.value = [
-      { email: 'user1@example.com', lastLogin: '2026-06-11 10:30', role: 'user', searchCount: 12 },
-      { email: 'user2@example.com', lastLogin: '2026-06-11 09:15', role: 'user', searchCount: 8 },
-      { email: 'admin@example.com', lastLogin: '2026-06-11 11:00', role: 'admin', searchCount: 0 },
-    ]
+    userLogs.value = []
   }
 }
 
@@ -791,7 +821,7 @@ const handleResize = () => {
     </div>
 
     <!-- Admin Page -->
-    <div v-if="currentPage === 'data-manage'" class="admin-page">
+    <div v-if="currentPage === 'data-manage' && currentUser.role === 'admin'" class="admin-page">
       <div class="admin-container glass-card">
         <!-- Tabs Header -->
         <div class="admin-tabs">

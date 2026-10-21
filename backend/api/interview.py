@@ -28,7 +28,10 @@ from __future__ import annotations
 from typing import Any, Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Path
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+
+import logging
 
 from database import get_db
 from deps import get_current_user
@@ -54,14 +57,20 @@ router = APIRouter(prefix="/api/interview", tags=["AI 面试"])
 SessionId = Path(..., ge=1, description="面试会话 id")
 
 
+logger = logging.getLogger(__name__)
+
+
 async def _run(action: str, coro):
     """统一异常收敛：业务异常透传，未预期异常转 500。"""
     try:
         return await coro
     except HTTPException:
         raise
+    except IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="数据冲突，请重试") from exc
     except Exception as exc:  # noqa: BLE001 - 兜底，避免未捕获异常直接 500 无提示
-        raise HTTPException(status_code=500, detail=f"{action}失败：{exc}") from exc
+        logger.exception("%s 失败", action)
+        raise HTTPException(status_code=500, detail=f"{action}失败") from exc
 
 
 @router.post(
