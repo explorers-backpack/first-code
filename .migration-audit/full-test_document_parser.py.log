@@ -1,0 +1,133 @@
+====================================================================
+文档解析层自检（services/document_parser）
+====================================================================
+
+[1] 扩展名识别与支持清单
+  [PASS] .pdf 支持
+  [PASS] .PDF 大写也支持
+  [PASS] 带路径也识别
+  [PASS] 正斜杠路径也识别
+  [PASS] .doc 不支持
+  [PASS] 无扩展名不支持
+  [PASS] 点开头文件名不被当成扩展名
+  [PASS] 支持清单含 .pdf
+  [PASS] 支持清单含 .docx
+  [PASS] 支持清单含 .pptx
+  [PASS] 支持清单含 .html
+  [PASS] 支持清单含 .txt
+  [PASS] 支持清单含 .md
+  [PASS] 支持清单含 .csv
+  [PASS] 支持清单内每个扩展名都有 source_format 映射
+
+[2] 纯文本编码探测
+  [PASS] UTF-8 解码正确
+  [PASS] UTF-8 记 encoding=utf-8
+  [PASS] UTF-8 无告警
+  [PASS] source_format=text
+  [PASS] UTF-8 BOM 正确剥离
+  [PASS] BOM 记为 utf-8-sig
+  [PASS] BOM 不出现在正文里
+  [PASS] GB18030 解码正确
+  [PASS] GB18030 记为 gb18030
+  [PASS] 非 UTF-8 必须留告警（不静默）
+  [PASS] Big5 对抗样本解码正确（不被 gb18030 抢走）
+  [PASS] Big5 记为 big5
+  [PASS] GB18030 对抗样本解码正确
+
+[3] HTML 去标签
+  [PASS] source_format=html
+  [PASS] 保留标题文字
+  [PASS] 保留段落文字
+  [PASS] 丢掉 script 内容
+  [PASS] 丢掉 style 内容
+  [PASS] 丢掉 <title> 内容
+  [PASS] 不留尖括号
+  [PASS] 表格单元格之间有制表符
+
+[4] DOCX（OOXML，标准库解析）
+  [PASS] source_format=docx
+  [PASS] 第一段完整
+  [PASS] 同段多个 run 被拼接（不丢字、不插分隔）
+  [PASS] 段落之间是换行
+  [PASS] w:tab 变制表符
+  [PASS] 解析出的字符数与 text 一致
+  [PASS] docx 无告警
+
+[5] PPTX（逐页 + 数字序）
+  [PASS] source_format=pptx
+  [PASS] 第 1 页标题在正文里
+  [PASS] 第 1 页要点在正文里
+  [PASS] 第 2 页标题在正文里
+  [PASS] 第 2 页要点在正文里
+  [PASS] 第 10 页标题在正文里
+  [PASS] 第 10 页要点在正文里
+  [PASS] 带页码分隔标记
+  [PASS] slide10 排在 slide2 之后（按数字而非字典序）
+  [PASS] 纯图片页记 slide_2_no_text 告警
+  [PASS] 纯图片页不产生空页码块
+  [PASS] 有文本的页照常解析
+
+[6] PDF（pypdf，声明依赖）
+  [PASS] pypdf 可用（已在 requirements.txt 声明）
+  [PASS] source_format=pdf
+  [PASS] PDF 文本被提取
+  [PASS] PDF 多行都提到
+  [PASS] 正常 PDF 无告警
+  [PASS] meta.pages_without_text 为 0
+  [PASS] 无文本层 PDF 报错
+  [PASS] 报错信息点明「扫描件 / OCR」
+
+[7] 文本归一化
+  [PASS] CRLF / CR 统一为 LF
+  [PASS] 连续空行压成一行空行
+  [PASS] 不换行空格转普通空格
+  [PASS] 行尾空白被去掉
+
+[8] 错误路径
+  [PASS] .doc 抛 UnsupportedFormatError
+  [PASS] .doc 提示里给出「另存为 .docx」的可操作建议
+  [PASS] 不支持格式的错误里列出当前支持项
+  [PASS] a.xlsx 被明确拒绝且带提示
+  [PASS] b.png 被明确拒绝且带提示
+  [PASS] c.zip 被明确拒绝且带提示
+  [PASS] 0 字节文件报错
+  [PASS] 0 字节报错不是 UnsupportedFormatError（区分「空」与「不支持」）
+  [PASS] 损坏 docx 报错且不是裸 zipfile 异常
+  [PASS] 损坏 docx 提示是 OOXML/损坏
+  [PASS] 损坏 pptx 报错
+  [PASS] 损坏 pdf 报错且被收敛成 DocumentParseError
+  [PASS] 只有空白的文本报错
+  [PASS] MAX_UPLOAD_BYTES 为 20 MB
+  [PASS] 超限抛 FileTooLargeError
+  [PASS] 超限是 DocumentParseError 的子类（便于 API 层统一处理）
+  [PASS] 超限提示给出上限 MB 数
+
+[9] 标题回落
+  [PASS] 去扩展名
+  [PASS] 带路径也去扩展名
+  [PASS] 无扩展名时原样
+  [PASS] 空文件名有兜底
+  [PASS] 只有扩展名时有兜底
+  [PASS] 超长标题截断到 300
+  [PASS] 解析结果自带 suggested_title
+
+[10] 分层守卫（AST）
+  [PASS] 顶层不 import database
+  [PASS] 顶层不 import fastapi
+  [PASS] 顶层不 import sqlalchemy
+  [PASS] 顶层不 import models
+  [PASS] 顶层不 import schemas
+  [PASS] 顶层不 import main
+  [PASS] 顶层不 import deps
+  [PASS] 顶层不 import 项目内其它 service
+  [PASS] pypdf 不在顶层 import（延迟导入）
+
+[11] 纯函数（无隐藏状态）
+  [PASS] 同输入两次结果一致
+  [PASS] 解析别的文件不污染上一次结果
+
+====================================================================
+结果: 通过 102 项，失败 0 项
+====================================================================
+invalid pdf header: b'not a'
+EOF marker not found

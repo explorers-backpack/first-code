@@ -1,0 +1,118 @@
+==========================================================================
+AI 模拟面试 · knowledge_context 组装器（formatter）自检
+==========================================================================
+
+--------------------------------------------------------------------------
+[1] 输入契约（与 normalize_knowledge_context 一致）
+--------------------------------------------------------------------------
+  [PASS] None → []  -> []
+  [PASS] [] → []
+  [PASS] 空字符串 → []
+  [PASS] 空白字符串 → []
+  [PASS] str → 单条
+  [PASS] dict（KnowledgeChunk.to_dict() 形态）→ 取 content，附来源  -> ['C1（来源：handbook://mysql/index）']
+  [PASS]   └ 无 source 时不附来源
+  [PASS]   └ 缺 content 的 dict 被丢弃
+  [PASS] 数字 / 布尔 / None / 任意对象 → 全部丢弃（不塞 repr）  -> []
+  [PASS] ★ 标量丢弃后仍保留真知识  -> ['真知识']
+  [PASS] tuple 也可（Sequence）
+  [PASS] set 先按 str 排序 → 确定性  -> ['a', 'b', 'c']
+  [PASS] 同输入同输出（纯函数）
+  [PASS] 不修改入参  -> [{'content': 'A', 'source': 'handbook://mysql/index', 'metadata': {}}]
+
+--------------------------------------------------------------------------
+[2] 向后兼容（单条 / 每条来源仅一片 ⇒ 与 normalize 逐字节相同）
+--------------------------------------------------------------------------
+  [PASS] 单条 dict（带来源）：format == normalize  -> format=['唯一一条知识正文（来源：handbook://mysql/index）'] normalize=['唯一一条知识正文（来源：handbook://mysql/index）']
+  [PASS] 单条 str：format == normalize  -> format=['唯一一条知识正文'] normalize=['唯一一条知识正文']
+  [PASS] 单条无来源 dict：format == normalize  -> format=['唯一一条知识正文'] normalize=['唯一一条知识正文']
+  [PASS] 两条不同来源：format == normalize  -> format=['甲（来源：handbook://mysql/index）', '乙（来源：handbook://redis/persistence）'] normalize=['甲（来源：handbook://mysql/index）', '乙（来源：handbook://redis/persistence）']
+  [PASS] 两条无来源：format == normalize  -> format=['甲', '乙'] normalize=['甲', '乙']
+  [PASS] 混合：无来源 str + 带来源 dict：format == normalize  -> format=['甲', '乙（来源：handbook://redis/persistence）'] normalize=['甲', '乙（来源：handbook://redis/persistence）']
+  [PASS] 空 / None：format == normalize  -> format=[] normalize=[]
+
+--------------------------------------------------------------------------
+[3] 同源分组（来源标注每个来源只写一次）
+--------------------------------------------------------------------------
+  [PASS] ★ 三片同源 ⇒ 合并为 1 行  -> 1
+  [PASS] ★ 来源标注恰好出现 1 次  -> 1
+  [PASS] 三片正文都在（顺序 = 输入顺序）  -> '第一片正文。第二片正文。第三片正文。（来源：handbook://mysql/i'
+  [PASS]   └ 来源标注在块尾  -> '正文。（来源：handbook://mysql/index）'
+  [PASS] ★ 组序 = 首次出现顺序（SRC_B 先出现 ⇒ 排在前面）  -> ['A1A2（来源：handbook://redis/persistence）', 'B1（来源：handbook://mysql/index）']
+  [PASS] ★ 无来源条目各自成行（不被合并）  -> ['甲', '乙', '丙（来源：handbook://mysql/index）']
+  [PASS] ★ 同源完全重复的两片只保留一份  -> ['完全相同的正文。（来源：handbook://mysql/index）']
+  [PASS] 不同来源的相同正文各自保留（不跨来源去重）  -> ['相同正文。（来源：handbook://mysql/index）', '相同正文。（来源：handbook://redis/persistence）']
+
+--------------------------------------------------------------------------
+[4] 去切片重叠（chunker 的 80 字重叠）
+--------------------------------------------------------------------------
+  [PASS] 前提：重叠段长度 ≥ KNOWLEDGE_OVERLAP_MIN_CHARS  -> 29 vs 16
+  [PASS] ★ 同源两片合并为 1 行  -> 1
+  [PASS] ★ 重叠段只保留一次  -> 1
+  [PASS] ★ 正文长度 == 两片之和 − 重叠段长度  -> 137 vs 110
+  [PASS]   └ 拼接结果 = head + 重叠段 + tail  -> 'InnoDB 使用 B+ 树作为索引结构，非叶子节点只存键值不存数据。联合索引遵循最左前缀原则，范围查询之后的列无法继续'
+  [PASS] ★ 三片链式重叠 ⇒ 合并为 1 行  -> 1
+  [PASS] ★ 第一段重叠只出现 1 次  -> 1
+  [PASS] ★ 第二段重叠只出现 1 次  -> 1
+  [PASS]   └ 三段正文按原顺序拼齐（内容不丢失）  -> 'InnoDB 使用 B+ 树作为索引结构，非叶子节点只存键值不存数据。联合索引遵循最左前缀原则，范围查询之后的列无法继续'
+  [PASS] ★ 短于 16 字的重复不剥离（防误删）  -> ['主键即聚簇索引索引的列顺序很重要（来源：handbook://mysql/index）']
+  [PASS] ★ 跨来源不做去重叠（重叠段各留一份）  -> [1, 1]
+
+--------------------------------------------------------------------------
+[5] 总量上限（KNOWLEDGE_CONTEXT_MAX_CHARS）
+--------------------------------------------------------------------------
+  [PASS] 上限是正数常量  -> 4000
+  [PASS] ★ 上限 ≥ 默认 top_k(5) × 默认切片(500) 的规模（正常检索不触发）  -> 4000 vs 2500
+  [PASS] ★ 单行超限 ⇒ 恰好 1 行  -> 1
+  [PASS] ★ 该行以截断标记结尾  -> '长长长长长长长长长……（参考知识已截断）'
+  [PASS] ★ 该行长度 == 上限（不溢出）  -> 4000
+  [PASS] ★ 多行超限 ⇒ 只保留放得下的整行 + 1 条标记行  -> len=3（1516×2+1=3033 ≤ 4000 < 1516×3+2=4550）
+  [PASS]   └ 最后一行是截断标记  -> '……（参考知识已截断）'
+  [PASS]   └ 未截断任何保留行的正文（整行粒度）  -> [1516, 1516, 11]
+  [PASS] ★ 截断后的总长 ≤ 上限 + 标记长度  -> 3045
+  [PASS] ★ 恰好等于上限 ⇒ 不截断（边界为闭区间）  -> len=4000
+  [PASS] ★ 超上限 1 字 ⇒ 触发截断  -> len=4000
+
+--------------------------------------------------------------------------
+[6] 结构不变（render_question_prompt 返回形状 / 只改知识小节）
+--------------------------------------------------------------------------
+  [PASS] ★ 返回值仍是二元组  -> <class 'tuple'>
+  [PASS] ★ 模板名仍是字符串常量  -> question_knowledge
+  [PASS] ★ Prompt 正文仍是 str
+  [PASS] 空知识仍走原模板
+  [PASS] 空知识 Prompt 与「直接渲染原模板」逐字节相同
+  [PASS] ★ 知识小节**之前**的部分逐字节不变
+  [PASS] ★ 知识小节**之后**的部分逐字节不变
+  [PASS] ★ 知识小节确实变了（否则本优化无从体现）
+  [PASS]   └ 变短了  -> 273 vs 332
+  [PASS] 无未渲染占位符
+  [PASS] ★ 切片重叠段只出现 1 次（未重复注入）  -> 1
+  [PASS]   └ 两段正文都在且各 1 次
+  [PASS]   └ 来源标注每个来源各 1 次
+  [PASS] ★ generate_question 返回字段集恒为 8 键  -> ['difficulty', 'error', 'expected_points', 'ok', 'question', 'question_type', 'reason', 'topic']
+  [PASS]   └ 出题成功  -> None
+  [PASS]   └ 只调用一次模型  -> 1
+  [PASS]   └ 实际发出的 Prompt 含合并后的知识（重叠已去）  -> 1
+  [PASS] ★ 无知识时实际 Prompt == 直接渲染原模板（逐字节）
+
+--------------------------------------------------------------------------
+[7] metadata 不进 Prompt（只取 content 与 source）
+--------------------------------------------------------------------------
+  [PASS] ★ 归一后恰好 1 行  -> 1
+  [PASS] ★ 该行 == '- 正文（来源：…）'，无 metadata 痕迹  -> '只有正文与来源该进 Prompt。（来源：handbook://mysql/index）'
+  [PASS] ★ score 数值不进 Prompt
+  [PASS] ★ metadata 的键名也不进 Prompt  -> ['chunk_id', 'document_id', 'embedding_model', 'index', 'score']
+
+--------------------------------------------------------------------------
+[8] 源码守卫（render_question_prompt 用的是新 formatter）
+--------------------------------------------------------------------------
+  [PASS] ★ render_question_prompt 调用 format_knowledge_context  -> ['dict', 'format_knowledge_context', 'render_prompt']
+  [PASS]   └ 不再直接调用 normalize_knowledge_context（已退化为内部形态）  -> ['dict', 'format_knowledge_context', 'render_prompt']
+  [PASS] ★ 守卫自检：能找到正向写法
+  [PASS] ★ 守卫自检：能找到反例写法（否则守卫恒为真、从未生效）
+  [PASS] ★ normalize_knowledge_context 仍是公开函数（基准/套件依赖它）
+  [PASS] ★ format_knowledge_context 是公开函数
+
+==========================================================================
+结果: 通过 79 项，失败 0 项
+==========================================================================

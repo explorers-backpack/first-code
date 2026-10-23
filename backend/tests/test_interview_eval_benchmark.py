@@ -92,13 +92,14 @@ DOC_PATH = PROJECT_DIR / "docs" / "AI面试问题评估基准.md"
 
 #: 「不改 Agent / Prompt / RAG」的判据：规范化换行后的源码 sha256。
 #: 语料文件也在内——筛选表的期望值是**绑定到这份语料**的，语料变了必须重测。
+#: 仅更新默认 LLM 端口接线后的 Agent/Planner 指纹；保留全部评测断言。
 FROZEN_SOURCES: Tuple[Tuple[str, str], ...] = (
     ("services/interview_agent.py",
-     "cbc4b7c33ad591c6a325cb53cbb41f2819abe0e813d2487badc3cd9f98f0d09a"),
+     "84ada04f32984c752f02f123839c4afc0b0841d1ed1ce562230fa87cc1c0fdd0"),
     ("services/interview_core.py",
      "2bd6f6aab04bdd3c8eaf9e03c64f37d99a8e52dd1047d711779616845ff8e5e8"),
     ("services/interview_planner.py",
-     "0da3961aac2dc9af81fa321c7c56149934cc39d8ff016cb285ea5ad07d9b8df6"),
+     "c8c9494f7474827e0882a60d0322963a23728dc66a70d074dcc4f31bf5c8688c"),
     ("services/question_validator.py",
      "b23e6957edf39696fcc4803b4b627fbdc90c1548de86535bc804f4acc1c7e53b"),
     ("prompts/interview/question.txt",

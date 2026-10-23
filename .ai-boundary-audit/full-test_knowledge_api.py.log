@@ -1,0 +1,100 @@
+====================================================================
+知识库 HTTP 接口自检（缺口②导入 + 缺口③删除 / 重建）
+====================================================================
+
+[1] 鉴权（未登录 401）
+  [PASS] 读列表无 token → 401
+  [PASS] 写导入无 token → 401
+
+[2] 权限（写接口仅 admin）
+  [PASS] 普通用户导入 → 403
+  [PASS] 普通用户重建 → 403
+  [PASS] 普通用户删除 → 403
+  [PASS] 普通用户读列表 → 200
+
+[3] 导入（admin）
+  [PASS] 状态码 200
+  [PASS] ok=true
+  [PASS] status=ok
+  [PASS] stage=done
+  [PASS] 回传 document_id
+  [PASS] chunk_count ≥ 1
+  [PASS] embedded_chunks == chunk_count
+  [PASS] 空标题 → 400
+  [PASS] 非法 category → 400
+  [PASS] 缺 category → 422
+
+[4] 列表
+  [PASS] 状态码 200
+  [PASS] total == 1
+  [PASS] items 非空
+  [PASS] 列表项不含正文
+  [PASS] 列表项含来源
+  [PASS] category 过滤命中
+  [PASS] category 过滤未命中
+  [PASS] 非法 category → 400
+  [PASS] 分页越界被拒（422）
+
+[5] 详情
+  [PASS] 状态码 200
+  [PASS] 含正文
+  [PASS] 不存在 → 404
+
+[7] 重建（admin）
+  [PASS] 状态码 200
+  [PASS] errors 为空
+  [PASS] rebuilt_chunks == scanned_chunks
+  [PASS] 重复重建 rebuilt 数不变
+  [PASS] 重复重建不产生重复行（幂等）
+  [PASS] 按文档重建：scanned == 该文档切片数
+  [PASS] 按不存在文档重建：scanned == 0
+
+[7b] purge 参数（先清空派生索引再重建）
+  [PASS] 响应键集合 == KnowledgeRebuildResponse（7 键）
+  [PASS] 默认 purge 未传 ⇒ purged_chunks 为 None
+  [PASS] 默认 purge 未传 ⇒ purge_note 为空串
+  [PASS] purge=true 状态码 200（拒绝也走 200，理由进 purge_note）
+  [PASS] sql 后端 purge ⇒ purged_chunks 为 None（没清）
+  [PASS] sql 后端 purge ⇒ purge_note == PURGE_REFUSED_HINT
+  [PASS] purge 被拒时仍完成 upsert 重建
+  [PASS] purge 与 document_id 互斥 ⇒ purge_note == PURGE_SCOPED_HINT
+  [PASS] purge 非法布尔值 → 422（不静默当 false）
+
+[8] 重建的脏数据口径
+  [PASS] 脏行被计入 scanned
+  [PASS] 脏行被 skipped
+  [PASS] errors 仍为空（脏数据不打挂重建）
+
+[9] 服务层删除语义
+  [PASS] deleted_document=True
+  [PASS] deleted_chunks ≥ 2
+  [PASS] 无删除接口的后端 → index_error 如实说明
+  [PASS] index_removed 保持 None（没同步就不谎报）
+
+[6] 删除（admin）
+  [PASS] 状态码 200
+  [PASS] deleted_document=True
+  [PASS] deleted_chunks ≥ 1
+  [PASS] sql 后端无需同步 ⇒ index_error 为 None
+  [PASS] 文档数减 1
+  [PASS] 切片数按 deleted_chunks 减少
+  [PASS] 重复删除 → 404
+  [PASS] 删除后详情 → 404
+
+[10] 源码守卫（AST）
+  [PASS] import_knowledge_document 挂 get_current_admin
+  [PASS] delete_knowledge_document 挂 get_current_admin
+  [PASS] rebuild_knowledge_index 挂 get_current_admin
+  [PASS] list_knowledge_documents 挂 get_current_user
+  [PASS] list_knowledge_documents 不挂 admin 依赖
+  [PASS] get_knowledge_document 挂 get_current_user
+  [PASS] get_knowledge_document 不挂 admin 依赖
+  [PASS] 知识库路由层不 import interview_core
+  [PASS] 知识库路由层不 import interview_agent
+  [PASS] 知识库路由层不 import interview_service
+  [PASS] 知识库路由层不 import interview_planner
+  [PASS] 知识库路由层不 import 具体向量后端
+
+====================================================================
+结果: 通过 71 项，失败 0 项
+====================================================================

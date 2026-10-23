@@ -1,0 +1,96 @@
+======================================================================
+登录失败限流 · 共享存储自检
+======================================================================
+
+[1] 后端开关：默认 memory、空串 memory、db、非法值不静默
+  [PASS] [1.1] 空串（未配置）⇒ memory（行为不变）
+  [PASS] [1.2] 键不存在 ⇒ memory
+  [PASS] [1.3] 'db' ⇒ db
+  [PASS] [1.4] use_shared_store() 与 store_mode() 一致
+  [PASS] [1.5] 大小写不敏感
+  [PASS] [1.6] ★ 非法值回退 memory（不静默接受，但也不炸）
+
+[2] 键摘要：不落明文
+  [PASS] [2.1] 64 位十六进制
+  [PASS] [2.2] ★ 摘要不含明文邮箱 / IP
+  [PASS] [2.3] 同一输入稳定
+  [PASS] [2.4] 不同输入不同
+
+[3] memory 模式：转调旧实现，**不写库**
+  [PASS] [3.1] 初始放行
+  [PASS] [3.2] ★ memory 模式确实被限流（真的接到旧实现上）
+  [PASS] [3.3] ★ memory 模式一行都没写库
+
+[4] db 模式：滑窗计数 + Retry-After
+  [PASS] [4.1] 初始放行
+  [PASS] [4.2] ★ 前 4 次失败后仍放行（第 5 次才算满）
+  [PASS] [4.3] ★★ 第 5 次失败后开始拦截
+  [PASS] [4.4] Retry-After 在 (0, 窗口] 内
+  [PASS] [4.5] 恰好 5 行失败记录
+  [PASS] [4.6] ★★ 库里只有摘要，没有明文
+  [PASS] [4.7] ★ 库里没有任何含邮箱的字符串
+
+[4b] ★ Retry-After 钳制：时间戳晚于 now 快照也不会超过窗口
+     （check 先取 now 再查询，另一实例可能在这之后写入 ⇒ 不钳会算出 901）
+  [PASS] [4b.1] ★ 未来时间戳 ⇒ 仍被拦（>0）
+  [PASS] [4b.2] ★★ Retry-After 被钳到窗口上限 900
+
+[5] 窗口过期：老记录不再计数
+  [PASS] [5.1] ★ 全部滑出窗口后重新放行
+  [PASS] [5.2] 过期行仍在表里（由 record/prune 机会式清理）
+
+[6] reset：登录成功清空计数
+  [PASS] [6.0] 前置：已满 5 次
+  [PASS] [6.1] ★ reset 后放行
+  [PASS] [6.2] 该键的行被删干净
+
+[7] ★ 跨实例：两个独立连接看到同一份计数
+  [PASS] [7.1] ★★ 实例 A 记的失败，实例 B 读得到（共享计数）
+  [PASS] [7.2] reset 也是共享的（B 重置后 A 也放行）
+
+[8] 存储不可用：fail closed（不静默放行）
+  [PASS] [8.1] ★★ check 抛 LoginThrottleUnavailable（不是返回 0）
+  [PASS] [8.2] ★★ record 同样抛（失败无法记账就不能假装记上了）
+  [PASS] [8.3] reset 只记 WARNING、不抛（清不掉计数不阻断登录成功）
+  [PASS] [8.4] prune 失败返回 0（机会式维护不打断主流程）
+
+[9] prune：删窗口外、留窗口内
+  [PASS] [9.1] 删掉 2 条窗口外的
+  [PASS] [9.2] 窗口内 1 条保留
+
+[10] ★ 并发突发：内存实现与共享实现**同样是 check-then-act**
+     判据不是「谁更严」，而是「共享实现有没有比原实现更差」。
+     这里用 asyncio.gather 模拟 20 个请求在 check 与 record 之间交错
+     （真实路由中间隔着 bcrypt 与一次 await，交错是必然的）。
+     内存实现：20 并发中放行 20 次（只记内存，不落库）
+     共享实现：20 并发中放行 20 次（落库 20 行）
+  [PASS] [10.1] ★ 内存实现同样会突破上限（说明 check-then-act 是既有语义）
+  [PASS] [10.2] ★★ 共享实现的溢出量与内存实现**同量级**（不是本次引入的退化）
+  [PASS] [10.3] 共享实现的落库行数与放行次数一致
+  [PASS] [10.4] ★★ 突发之后的下一个请求被拦（窗口内不再放行）
+  [PASS] [10.5] ★★ 持续攻击被全局封住：第二波 20 并发一个都放不进来
+  [PASS] [10.6] 第二波没有新增行
+
+[11] 接线守卫：登录用例真的调了新实现（不是只改签名）
+  [PASS] [11.1] ★ 认证用例从 services.login_throttle_store 导入
+  [PASS] [11.2] ★ 认证用例不再直接导入 utils.login_throttle
+  [PASS] [11.2b] ★★ 入口文件 main.py 里**不再**出现登录限流的调用（已归属 auth 模块）
+  [PASS] [11.3] ★★ 三个动作都带 db 参数（旧签名只有一个参数）
+  [PASS] [11.4] ★ 三个动作都被 await（不是调了个协程就丢掉）
+  [PASS] [11.5] 存储不可用映射成 503（不混进 401 / 429）
+
+[12] 启动日志会暴露后端（否则多 worker 后限流被放大都没人知道）
+  [PASS] [12.1] 存在 _report_auth_throttle_status
+  [PASS] [12.2] ★ 进程内模式会打出「上限 × 进程数」的警告
+  [PASS] [12.3] 并给出 AUTH_LOGIN_STORE=db 的处置建议
+  [PASS] [12.4] lifespan 真的调用了它
+
+======================================================================
+结果: 通过 51 项，失败 0 项
+======================================================================
+login_throttle_unknown_store value='redis' fallback=memory allowed=memory,db
+login_throttle_unknown_store value='redis' fallback=memory allowed=memory,db
+login_throttle_check_failed error=OperationalError
+login_throttle_record_failed error=OperationalError
+login_throttle_reset_failed error=OperationalError
+login_throttle_prune_failed error=OperationalError

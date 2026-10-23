@@ -28,7 +28,7 @@
 [11] **真实 ASGI / WebSocket 栈上的行为取证**：空闲超时**真的**会以 ``4408`` 关连接；
      连接数超限**真的**会以 ``4409`` 拒绝
 
-★ 为什么 [11] 必须真连：``api/interview_ws.py`` 的既有自检用的是**真栈**，而
+★ 为什么 [11] 必须真连：``modules/interview/ws.py`` 的既有自检用的是**真栈**，而
 「接线对不对」这件事——``asyncio.wait_for`` 有没有真的包住 ``receive_json``、
 闸门有没有真的在鉴权之后调用——**只有在真连一次时才会暴露**（本项目已复发多次）。
 
@@ -69,8 +69,12 @@ from starlette.testclient import TestClient  # noqa: E402
 from starlette.websockets import WebSocketDisconnect  # noqa: E402
 
 import main  # noqa: E402
+# ★ 用别名：本文件第 556 行有个局部变量 `health = asyncio.run(_fetch_health())`，
+#   直接 `from common import health` 会被它遮蔽，`health.production_status()`
+#   就变成「在 dict/Response 上找方法」⇒ AttributeError。
+from common import health as health_report  # noqa: E402
 import models  # noqa: E402,F401
-from api import interview_ws as ws  # noqa: E402
+from modules.interview import ws as ws  # noqa: E402
 from database import Base, get_db  # noqa: E402
 from models import Job, User, UserSession  # noqa: E402
 from services import interview_production as prod  # noqa: E402
@@ -571,8 +575,8 @@ def run() -> bool:  # noqa: C901 - 自检脚本，顺序即文档
         return stable
 
     _health_metrics = body.get("metrics") or {}
-    _status_metrics = main.production_status()
-    _check("  └ 与 main.production_status() **同源**（除实时 uptime 外逐键相等）",
+    _status_metrics = health_report.production_status()
+    _check("  └ 与 health_report.production_status() **同源**（除实时 uptime 外逐键相等）",
            _stable(_health_metrics) == _stable(_status_metrics)
            and isinstance((_health_metrics.get("metrics") or {}).get("uptime_seconds"), float),
            str(_health_metrics))
@@ -644,15 +648,15 @@ def run() -> bool:  # noqa: C901 - 自检脚本，顺序即文档
 
     # ★ 既有断言「编排层消费者收口为唯一闭集」必须仍然成立（生产化模块没打破它）
     consumers = []
-    for path in sorted((_BACKEND / "services").glob("*.py")) + sorted((_BACKEND / "api").glob("*.py")):
+    for path in sorted((_BACKEND / "services").glob("*.py")) + sorted((_BACKEND / "api").glob("*.py")) + sorted((_BACKEND / "modules").rglob("*.py")):
         if _ORCH_MODULE in _all_imports(path.read_text(encoding="utf-8")):
             consumers.append(path.relative_to(_BACKEND).as_posix())
     if _ORCH_MODULE in _all_imports(_read("main.py")):
         consumers.append("main.py")
     _check("★★ 编排层消费者仍是唯一闭集（新增模块未打破「可选层」性质）",
-           consumers == ["api/interview_ws.py"], str(consumers))
+           consumers == ["modules/interview/ws.py"], str(consumers))
 
-    ws_src = _read("api/interview_ws.py")
+    ws_src = _read("modules/interview/ws.py")
     _check("实时通道已接线：注册会话淘汰回调", "register_evict_hook" in ws_src)
     _check("实时通道已接线：空闲超时用 asyncio.wait_for 包住 receive_json",
            "asyncio.wait_for" in ws_src and "receive_json()" in ws_src)
@@ -663,9 +667,9 @@ def run() -> bool:  # noqa: C901 - 自检脚本，顺序即文档
     _check("实时通道已接线：每会话互斥", "try_enter" in ws_src and "mutex.exit" in ws_src)
     _check("实时通道已接线：指标计数", "METRICS.incr" in ws_src)
     _check("实时通道已接线：结构化日志", "log_event" in ws_src)
-    _check("★ api/interview.py **仍未被改**（文字面试 HTTP 契约一行未动）",
-           "WebSocket" not in _read("api/interview.py")
-           and "interview_ws" not in _read("api/interview.py"))
+    _check("★ modules/interview/api.py **仍未被改**（文字面试 HTTP 契约一行未动）",
+           "WebSocket" not in _read("modules/interview/api.py")
+           and "interview_ws" not in _read("modules/interview/api.py"))
 
     svc_dir = _BACKEND / "services"
     offenders = sorted(

@@ -1,0 +1,6 @@
+.........Executing <Task pending name='Task-61' coro=<IsolatedAsyncioTestCase._asyncioLoopRunner() running at C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\unittest\async_case.py:95> wait_for=<Future pending cb=[Task.task_wakeup()] created at C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\asyncio\base_events.py:429> created at C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\unittest\async_case.py:117> took 27.219 seconds
+..
+----------------------------------------------------------------------
+Ran 11 tests in 58.227s
+
+OK

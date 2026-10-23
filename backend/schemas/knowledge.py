@@ -82,12 +82,16 @@ class KnowledgeDocumentListResponse(BaseModel):
 
 
 class KnowledgeImportReport(BaseModel):
-    """导入报告 —— 与 ``IMPORT_RESULT_FIELDS`` 的 12 键一一对应，**形状恒定**。
+    """导入报告 —— 与 ``IMPORT_RESULT_FIELDS`` 的 13 键一一对应，**形状恒定**。
 
     ``ok=False`` 时 ``status="failed"``，``stage`` 指出失败发生在哪一步
     （``document`` / ``chunk`` / ``embedding`` / ``persist`` / ``vector``），
     ``failed_index`` 是切片序号，``errors`` 是稳定错误码。
     计数字段保留**已经做完的部分**，因此「跑到哪儿了」可读、重跑会接着做。
+
+    ``removed_stale_chunks`` 是**残留切片清理**的如实计数：同一文档被改短后，
+    ``chunk_index`` 超出本次切片数的旧行会被删除（否则过期正文仍可被检索到）。
+    只在本次零失败时清理，因此中途失败时该值恒为 ``0``。
     """
 
     ok: bool
@@ -98,6 +102,7 @@ class KnowledgeImportReport(BaseModel):
     saved_chunks: int = 0
     embedded_chunks: int = 0
     skipped_chunks: int = 0
+    removed_stale_chunks: int = 0
     reused_document: bool = False
     failed_index: Optional[int] = None
     errors: List[str] = Field(default_factory=list)
@@ -107,7 +112,7 @@ class KnowledgeImportReport(BaseModel):
 class KnowledgeUploadReport(KnowledgeImportReport):
     """**文件上传**导入报告 = 导入报告 + 「这份文本是怎么来的」。
 
-    继承 ``KnowledgeImportReport``，因此 12 键形状**完全不变**（前端可复用同一块
+    继承 ``KnowledgeImportReport``，因此 13 键形状**完全不变**（前端可复用同一块
     报告渲染），额外携带解析阶段的如实信息：
 
     - ``parsed_format``  —— 实际走的解析器（``pdf`` / ``docx`` / ``pptx`` / ``html`` / ``text``）

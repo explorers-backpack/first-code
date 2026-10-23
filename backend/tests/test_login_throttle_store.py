@@ -385,26 +385,36 @@ def run() -> bool:
     os.environ["AUTH_LOGIN_STORE"] = "db"
 
     # ========================================================
-    print("\n[11] 接线守卫：main.login 真的调了新实现（不是只改签名）")
+    print("\n[11] 接线守卫：登录用例真的调了新实现（不是只改签名）")
+    # ★ 登录用例已随认证模块迁到 modules/auth/service.py（原 main.login）。
+    #   判据的**意图**不变：仍要求「真的调了带 db 的新签名，且 await 了结果」。
+    #   同时新增一条反向断言：入口文件里不许再出现登录限流（防止有人复制回去）。
     src = (_BACKEND / "main.py").read_text(encoding="utf-8")
-    _check("[11.1] ★ main.py 从 services.login_throttle_store 导入",
-           "from services.login_throttle_store import" in src)
-    _check("[11.2] ★ main.py 不再直接导入 utils.login_throttle",
-           "from utils.login_throttle import" not in src)
+    auth_src = (_BACKEND / "modules" / "auth" / "service.py").read_text(encoding="utf-8")
+    # ★ 状态上报函数在 P4 整体迁到 common/health.py（原 main.py 242-661 行），
+    #   所以「源码里有这段实现」要在新位置找；main.py 只剩 lifespan 的调用点。
+    health_src = (_BACKEND / "common" / "health.py").read_text(encoding="utf-8")
+    _check("[11.1] ★ 认证用例从 services.login_throttle_store 导入",
+           "from services.login_throttle_store import" in auth_src)
+    _check("[11.2] ★ 认证用例不再直接导入 utils.login_throttle",
+           "from utils.login_throttle import" not in auth_src)
+    _check("[11.2b] ★★ 入口文件 main.py 里**不再**出现登录限流的调用（已归属 auth 模块）",
+           "throttle_check" not in src and "throttle_record" not in src
+           and "throttle_reset" not in src)
     _check("[11.3] ★★ 三个动作都带 db 参数（旧签名只有一个参数）",
-           "throttle_check(db, throttle_key)" in src
-           and "throttle_record(db, throttle_key)" in src
-           and "throttle_reset(db, throttle_key)" in src)
+           "throttle_check(db, throttle_key)" in auth_src
+           and "throttle_record(db, throttle_key)" in auth_src
+           and "throttle_reset(db, throttle_key)" in auth_src)
     _check("[11.4] ★ 三个动作都被 await（不是调了个协程就丢掉）",
-           "await _throttle(throttle_check(db, throttle_key))" in src
-           and "await _throttle(throttle_record(db, throttle_key))" in src
-           and "await throttle_reset(db, throttle_key)" in src)
+           "await _throttle(throttle_check(db, throttle_key))" in auth_src
+           and "await _throttle(throttle_record(db, throttle_key))" in auth_src
+           and "await throttle_reset(db, throttle_key)" in auth_src)
     _check("[11.5] 存储不可用映射成 503（不混进 401 / 429）",
-           "status_code=503" in src and "LoginThrottleUnavailable" in src)
+           "status_code=503" in auth_src and "LoginThrottleUnavailable" in auth_src)
 
     # ========================================================
     print("\n[12] 启动日志会暴露后端（否则多 worker 后限流被放大都没人知道）")
-    report_src = src[src.find("def _report_auth_throttle_status"):]
+    report_src = health_src[health_src.find("def _report_auth_throttle_status"):]
     report_src = report_src[: report_src.find("def _report_avatar_status")]
     _check("[12.1] 存在 _report_auth_throttle_status", bool(report_src.strip()))
     _check("[12.2] ★ 进程内模式会打出「上限 × 进程数」的警告",

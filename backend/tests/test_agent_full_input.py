@@ -107,13 +107,14 @@ from services.vector_store_sql import SqlAlchemyVectorStore  # noqa: E402
 #: 用源码文本而不是 AST——``ast.dump`` 的输出随 Python 版本变化，
 #: 换解释器就会假失败。
 #: 两个 Prompt 模板也在内：改模板同样会改「模型实际收到什么」。
+#: 本轮仅更新 Agent/Planner 的默认 LLM 端口接线指纹，业务函数与 Prompt 未改。
 FROZEN_SOURCES: Tuple[Tuple[str, str], ...] = (
     ("services/interview_agent.py",
-     "cbc4b7c33ad591c6a325cb53cbb41f2819abe0e813d2487badc3cd9f98f0d09a"),
+     "84ada04f32984c752f02f123839c4afc0b0841d1ed1ce562230fa87cc1c0fdd0"),
     ("services/interview_core.py",
      "2bd6f6aab04bdd3c8eaf9e03c64f37d99a8e52dd1047d711779616845ff8e5e8"),
     ("services/interview_planner.py",
-     "0da3961aac2dc9af81fa321c7c56149934cc39d8ff016cb285ea5ad07d9b8df6"),
+     "c8c9494f7474827e0882a60d0322963a23728dc66a70d074dcc4f31bf5c8688c"),
     # ★ 本次并发加固改过一次：``create_context`` 的 TOCTOU 收敛
     #   （改成「已存在即不写」的原子 INSERT + 提交后重读，全程不 rollback）。
     #   仅改写入方式，投影 / 字段 / 返回结构逐字节未动。

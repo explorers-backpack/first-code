@@ -1,0 +1,382 @@
+
+[1] 签发：随机、URL-safe、库里只存摘要
+  [PASS] ticket 是非空字符串
+  [PASS] 长度 ≥ 32（256-bit 熵的 base64url 编码）
+  [PASS] 两次生成不同（不是时间戳/自增）
+  [PASS] 只含 URL-safe 字符
+  [PASS] ★ 库里按 sha256(ticket) 能查到行
+  [PASS] ★ 库里存的是摘要（64 位 hex），不是明文
+  [PASS] 行里不含 ticket 明文（任何字段都查不到）
+
+[2] 正常签发 + 消费
+  [PASS] 首次消费返回 user_id
+  [PASS] 消费后 used_at 已写入（不是删除行，便于区分'用过'与'不存在'）
+
+[3] 单次使用：第二次失败
+  [PASS] ★ 二次消费失败（不可重放）
+
+[4] 过期：expires_at 已过 → 消费失败
+  [PASS] ★ 过期 ticket 消费失败
+
+[5] 会话绑定：错配失败，且不消耗
+  [PASS] ★ 拿 A 会话的 ticket 连 B 会话 → None
+  [PASS]   └ 原会话仍可用（错配不消耗 ticket）
+
+[6] 空 / 不存在：fail-closed
+  [PASS] 空串消费失败
+  [PASS] 不存在的 ticket 消费失败
+
+[7] 撤销：单个 / 按用户
+  [PASS] 撤销单个 ticket 返回 True
+  [PASS] ★ 撤销后不可消费
+  [PASS] 重复撤销返回 False（已不可再撤销）
+  [PASS] 按用户批量撤销，撤销了 2 条
+
+[8] 清理：只删过期行
+  [PASS] 清理删掉了过期的行（≥1）
+  [PASS] ★ 未过期的 ticket 仍然可用
+
+[9] 存储不可用：抛异常（不是返回 None）
+  [PASS] ★★ 表缺失时抛 TicketStoreUnavailable（可区分于'凭证无效'）
+  [PASS] ★★ 签发时同样抛 TicketStoreUnavailable（不返回废票）
+[ai] 运行模式=offline —— 不联网，AI 调用一律失败并走各自的降级路径（缺凭据：无）。要调用真实模型请配置凭据或显式设置 AI_RUN_MODE=production。
+[embedding][WARN] provider=hash-local dim=256 semantic=False —— 这是**离线占位**（词面哈希），检索出的「相似度」没有语义含义，RAG 知识注入会静默失效。生产部署请配置 EMBEDDING_* 后重启。
+[vector] backend=sql ann=False chunks=0（全表扫描）
+[threshold][WARN] 检索阈值可能**已过期**（换过模型或改过语料？）：
+             · Embedding 已变：阈值是对着 xinghuo-embedding 标的，当前是 hash-local。
+             · Embedding 维度已变：标定时 2560 维，当前 256 维。
+             · 检索参数 top_k 未配置，而标定时是 8。
+             · 检索参数 min_score 未配置，而标定时是 0.7685。
+             · 检索参数 min_score_ratio 未配置，而标定时是 0.9947。
+             重跑 tests/rag_production_query_calibration_spark_run.py 后，用 scripts/apply_threshold_calibration.py --yes 一键写回并登记溯源。
+[avatar] provider=mock —— 数字人通道走**离线 Mock**（不产生真实音视频）；avatar 模式面试照常跑完，交付内容与 text 逐字段一致。要接真实讯飞虚拟人请配置 AVATAR_PROVIDER=iflytek 与 AVATAR_IFLYTEK_* 后重启。
+[production] 实时通道：空闲超时 300.0s / 会话 TTL 21600.0s / 跟踪上限 2000 / 每用户连接上限 4 / 每用户会话上限 3 / 作答限流 未限制
+[production] （提示）作答限流未开启；需要防连点/脚本重放请设置 INTERVIEW_ANSWER_MIN_INTERVAL=0.4 后重启。
+[auth] 登录失败限流 = **进程内**：5 次 / 900s。★ 多 worker 时每个进程独立计数 ⇒ 实际上限 × 进程数；需要多 worker 请设 AUTH_LOGIN_STORE=db 后重启。
+[production] 撤销广播轮询器**已关闭**（INTERVIEW_WS_REVOCATION_WATCH=0）：踢下线 / 登出对已建立连接的生效延迟退化为周期性复核（60s 量级）。生产环境不建议关闭。
+
+[10] 端点：鉴权 / 归属 / 正常签发
+  [PASS] 无 Authorization → 401
+  [PASS] ★ 他人会话 → 404（不是 403，避免泄露存在性）
+  [PASS] 本人会话 → 200
+  [PASS] 响应含 ticket 字符串
+  [PASS] 响应含 expires_in（秒）
+  [PASS] ★ 响应里没有 user_id 之类的内部字段（只给 ticket + 有效期）
+
+[12] 实时通道：用 ticket 连接成功（先收到 hello）
+  [PASS] 连接成功并收到 hello
+  [PASS] hello 带回 session_id
+
+[13] 实时通道：同一 ticket 第二次连接 → 4401
+  [PASS] ★ 被拒时先收到 error 事件（不是无声断开）
+  [PASS] ★ 随后以 4401 关闭（ticket 不可重放）
+
+[14] 实时通道：既无 ticket 也无 token → 4401
+  [PASS] 先收到 error 事件
+  [PASS] 以 4401 关闭
+
+[15] 实时通道：拿他人 token 连他人会话 → 4404（归属校验）
+  [PASS] 先收到 error 事件
+  [PASS] ★ 以 4404 关闭（会话不存在或不属于当前用户）
+
+[15b] Origin 校验：白名单放行 / 跨站拒绝
+  [PASS] 白名单 Origin → 握手成功
+  [PASS] ★ 跨站 Origin → 先收到 error
+  [PASS] ★ 跨站 Origin → 以 4403 关闭
+
+[15c] 兼容路径开关：INTERVIEW_WS_TOKEN_AUTH（默认开 / 可显式关）
+  [PASS] ★ 未配置 / 空串 ⇒ 默认**开启**（= 改造前行为，不改变任何既有断言）
+  [PASS] 显式 1 / true / on ⇒ 开启
+  [PASS] ★ 显式 0 / false / no / off ⇒ 关闭
+  [PASS] ★ 非法值**不静默**：按默认（开启）处理，不是「关掉了但没生效」
+  [PASS] ★ 关闭后 ?token= 先收到 error（不是 hello）
+  [PASS] ★★ 关闭后 ?token= → 4401（长期凭证路径真的被切断了）
+  [PASS] ★ 关闭 ?token= 不影响 ticket 路径（并列，不是「token 兜底 ticket」）
+  [PASS] 恢复默认后 ?token= 又能用（开关是**实时读**，不是 import 期缓存）
+
+[16] 实时通道：存储不可用 → 1011（安全失败，不降级）
+  [PASS] ★ 先收到 error(service_error)，而不是被当成未登录
+  [PASS] ★★ 以 1011 关闭（标准码 ⇒ 前端会重连重试，而不是当成登录过期）
+  [PASS] ★ 1011 不是 4xxx（不破坏「4xxx = 应用自定义」约定）
+
+[11] 端点：存储不可用 → 503（不发废票）
+  [PASS] ★★ 503（不是 500，也不是 200 + 废票）
+  [PASS]   └ 响应体里没有 ticket
+
+[17] 登出：作废该用户未使用的 ticket
+  [PASS] 登出成功
+  [PASS] ★★ 登出后该 ticket 不可再用（登出 ⇒ 立即失效）
+
+[18] 源码守卫：进程内字典已移除 / 存储只在 service 层
+  [PASS] ★ 文字面试 HTTP 契约文件不含 ticket 逻辑
+  [PASS]   └ 也不 import 实时通道
+  [PASS] ticket 的签发与校验入口仍在实时通道层
+  [PASS] ★★ api 层不再有进程内 ticket 字典（AST 取模块级标识符）
+  [PASS] ★ 实时通道不再 import threading（没有进程内锁可加）
+  [PASS] ★ 实时通道委托给 service 层存储
+  [PASS] ★ 消费用 UPDATE … WHERE used_at IS NULL（rowcount 判成败）
+  [PASS] ★ 消费后立刻 commit（否则行锁会握到 WS 连接结束）
+  [PASS] ★ 存储模块不 import 编排层（不把可选层变成必经路径）
+  [PASS] 实时通道 router 上确实注册了 ws-ticket 端点
+  [PASS] 临时 SQLite 目录已清理
+
+====================================================================
+结果: 通过 66 项，失败 0 项
+====================================================================
+ws_ticket_not_consumable digest=b1d288c2
+ws_ticket_not_consumable digest=1a0baf21
+ws_ticket_session_mismatch digest=7ff2ba55 expected=10 actual=9
+ws_ticket_not_consumable digest=97a0a130
+ws_ticket_store_unavailable op=consume error=OperationalError
+ws_ticket_issue_failed session_id=1 user_id=1 error=OperationalError
+Exception terminating connection <AdaptedConnection <aiosqlite.core.Connection object at 0x000002147A138A60>>
+Traceback (most recent call last):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\pool\base.py", line 373, in _close_connection
+    self._dialect.do_terminate(connection)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 479, in do_terminate
+    dbapi_connection.terminate()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\connectors\asyncio.py", line 402, in terminate
+    self.await_(asyncio.shield(self._terminate_graceful_close()))  # type: ignore[attr-defined] # noqa: E501
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+asyncio.exceptions.CancelledError: Cancelled via cancel scope 2147a187100 by <Task pending name='anyio.from_thread.BlockingPortal._call_func' coro=<BlockingPortal._call_func() running at C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\from_thread.py:255> cb=[TaskGroup._spawn.<locals>.task_done() at C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\_backends\_asyncio.py:821]>
+Task exception was never retrieved
+future: <Task finished name='Task-150' coro=<AsyncSession.close() done, defined at C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\ext\asyncio\session.py:1002> exception=OperationalError('(sqlite3.OperationalError) no active connection')>
+Traceback (most recent call last):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 307, in rollback
+    self.await_(self._connection.rollback())
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\aiosqlite\core.py", line 197, in rollback
+    await self._execute(self._conn.rollback)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\aiosqlite\core.py", line 137, in _conn
+    raise ValueError("no active connection")
+ValueError: no active connection
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1128, in _rollback_impl
+    self.engine.dialect.do_rollback(self.connection)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py", line 712, in do_rollback
+    dbapi_connection.rollback()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 309, in rollback
+    self._handle_exception(error)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 338, in _handle_exception
+    raise self.dbapi.sqlite.OperationalError(
+sqlite3.OperationalError: no active connection
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 1016, in close
+    await greenlet_spawn(self.sync_session.close)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 203, in greenlet_spawn
+    result = context.switch(value)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py", line 2507, in close
+    self._close_impl(invalidate=False)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py", line 2576, in _close_impl
+    transaction.close(invalidate)
+  File "<string>", line 2, in close
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py", line 1417, in close
+    transaction.close()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2597, in close
+    self._do_close()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2735, in _do_close
+    self._close_impl()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2721, in _close_impl
+    self._connection_rollback_impl()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2713, in _connection_rollback_impl
+    self.connection._rollback_impl()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1130, in _rollback_impl
+    self._handle_dbapi_exception(e, None, None, None, None)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1128, in _rollback_impl
+    self.engine.dialect.do_rollback(self.connection)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py", line 712, in do_rollback
+    dbapi_connection.rollback()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 309, in rollback
+    self._handle_exception(error)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 338, in _handle_exception
+    raise self.dbapi.sqlite.OperationalError(
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no active connection
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+ws_ticket_not_consumable digest=f12ac561
+ws_unauthorized session_id=1
+ws_unauthorized session_id=1
+Exception terminating connection <AdaptedConnection <aiosqlite.core.Connection object at 0x0000021479F65360>>
+Traceback (most recent call last):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\pool\base.py", line 373, in _close_connection
+    self._dialect.do_terminate(connection)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 479, in do_terminate
+    dbapi_connection.terminate()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\connectors\asyncio.py", line 402, in terminate
+    self.await_(asyncio.shield(self._terminate_graceful_close()))  # type: ignore[attr-defined] # noqa: E501
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+asyncio.exceptions.CancelledError: Cancelled via cancel scope 2147a139720 by <Task pending name='anyio.from_thread.BlockingPortal._call_func' coro=<BlockingPortal._call_func() running at C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\from_thread.py:255> cb=[TaskGroup._spawn.<locals>.task_done() at C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\_backends\_asyncio.py:821]>
+Task exception was never retrieved
+future: <Task finished name='Task-183' coro=<AsyncSession.close() done, defined at C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\ext\asyncio\session.py:1002> exception=OperationalError('(sqlite3.OperationalError) no active connection')>
+Traceback (most recent call last):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 307, in rollback
+    self.await_(self._connection.rollback())
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\aiosqlite\core.py", line 197, in rollback
+    await self._execute(self._conn.rollback)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\aiosqlite\core.py", line 137, in _conn
+    raise ValueError("no active connection")
+ValueError: no active connection
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1128, in _rollback_impl
+    self.engine.dialect.do_rollback(self.connection)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py", line 712, in do_rollback
+    dbapi_connection.rollback()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 309, in rollback
+    self._handle_exception(error)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 338, in _handle_exception
+    raise self.dbapi.sqlite.OperationalError(
+sqlite3.OperationalError: no active connection
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 1016, in close
+    await greenlet_spawn(self.sync_session.close)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 203, in greenlet_spawn
+    result = context.switch(value)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py", line 2507, in close
+    self._close_impl(invalidate=False)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py", line 2576, in _close_impl
+    transaction.close(invalidate)
+  File "<string>", line 2, in close
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py", line 1417, in close
+    transaction.close()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2597, in close
+    self._do_close()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2735, in _do_close
+    self._close_impl()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2721, in _close_impl
+    self._connection_rollback_impl()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2713, in _connection_rollback_impl
+    self.connection._rollback_impl()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1130, in _rollback_impl
+    self._handle_dbapi_exception(e, None, None, None, None)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1128, in _rollback_impl
+    self.engine.dialect.do_rollback(self.connection)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py", line 712, in do_rollback
+    dbapi_connection.rollback()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 309, in rollback
+    self._handle_exception(error)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 338, in _handle_exception
+    raise self.dbapi.sqlite.OperationalError(
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no active connection
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+ws_origin_rejected origin=https://evil.example session_id=1
+ws_token_auth_invalid_config fallback=enabled value=maybe
+ws_token_auth_rejected reason=token_auth_disabled session_id=1
+ws_unauthorized session_id=1
+Exception terminating connection <AdaptedConnection <aiosqlite.core.Connection object at 0x000002147A1876D0>>
+Traceback (most recent call last):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\pool\base.py", line 373, in _close_connection
+    self._dialect.do_terminate(connection)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 479, in do_terminate
+    dbapi_connection.terminate()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\connectors\asyncio.py", line 402, in terminate
+    self.await_(asyncio.shield(self._terminate_graceful_close()))  # type: ignore[attr-defined] # noqa: E501
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+asyncio.exceptions.CancelledError: Cancelled via cancel scope 2147a186d10 by <Task pending name='anyio.from_thread.BlockingPortal._call_func' coro=<BlockingPortal._call_func() running at C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\from_thread.py:255> cb=[TaskGroup._spawn.<locals>.task_done() at C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\anyio\_backends\_asyncio.py:821]>
+Task exception was never retrieved
+future: <Task finished name='Task-212' coro=<AsyncSession.close() done, defined at C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\ext\asyncio\session.py:1002> exception=OperationalError('(sqlite3.OperationalError) no active connection')>
+Traceback (most recent call last):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 307, in rollback
+    self.await_(self._connection.rollback())
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\aiosqlite\core.py", line 197, in rollback
+    await self._execute(self._conn.rollback)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\aiosqlite\core.py", line 137, in _conn
+    raise ValueError("no active connection")
+ValueError: no active connection
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1128, in _rollback_impl
+    self.engine.dialect.do_rollback(self.connection)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py", line 712, in do_rollback
+    dbapi_connection.rollback()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 309, in rollback
+    self._handle_exception(error)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 338, in _handle_exception
+    raise self.dbapi.sqlite.OperationalError(
+sqlite3.OperationalError: no active connection
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\ext\asyncio\session.py", line 1016, in close
+    await greenlet_spawn(self.sync_session.close)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 203, in greenlet_spawn
+    result = context.switch(value)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py", line 2507, in close
+    self._close_impl(invalidate=False)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py", line 2576, in _close_impl
+    transaction.close(invalidate)
+  File "<string>", line 2, in close
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\state_changes.py", line 137, in _go
+    ret_value = fn(self, *arg, **kw)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\orm\session.py", line 1417, in close
+    transaction.close()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2597, in close
+    self._do_close()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2735, in _do_close
+    self._close_impl()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2721, in _close_impl
+    self._connection_rollback_impl()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2713, in _connection_rollback_impl
+    self.connection._rollback_impl()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1130, in _rollback_impl
+    self._handle_dbapi_exception(e, None, None, None, None)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 2363, in _handle_dbapi_exception
+    raise sqlalchemy_exception.with_traceback(exc_info[2]) from e
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\base.py", line 1128, in _rollback_impl
+    self.engine.dialect.do_rollback(self.connection)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py", line 712, in do_rollback
+    dbapi_connection.rollback()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 309, in rollback
+    self._handle_exception(error)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 338, in _handle_exception
+    raise self.dbapi.sqlite.OperationalError(
+sqlalchemy.exc.OperationalError: (sqlite3.OperationalError) no active connection
+(Background on this error at: https://sqlalche.me/e/20/e3q8)
+Task was destroyed but it is pending!
+task: <Task pending name='Task-211' coro=<AsyncAdapt_aiosqlite_connection._terminate_graceful_close() done, defined at C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py:344> wait_for=<Future pending cb=[Task.task_wakeup()]>>
+ws_ticket_store_unavailable op=consume error=OperationalError
+ws_ticket_store_unavailable error=ticket 存储不可用：OperationalError session_id=1
+ws_ticket_issue_failed session_id=1 user_id=1 error=OperationalError
+ws_ticket_issue_unavailable error=ticket 存储不可用：OperationalError session_id=1 user_id=1
+ws_ticket_not_consumable digest=dda29214

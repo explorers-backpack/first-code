@@ -1,0 +1,79 @@
+====================================================================
+AI 模拟面试 · 交互模式分流（text / avatar 通道）自检
+====================================================================
+
+[1] 数字人通道入口（services/avatar_interview.py）
+  [PASS] CHANNEL == 'avatar'
+  [PASS] STATUS == ready（通道已实现，provider 层已接入）
+  [PASS] 四项外部能力在 provider 层已具备：iflytek / asr / tts 全为 True
+  [PASS] enter 是协程函数
+  [PASS] enter 签名保持 db / session / payload（未为 provider 改签名）
+  [PASS] __all__ 覆盖公开常量与入口
+  [PASS] enter 始终原样返回同一对象（不新增 / 不改写交付字段）
+
+[2] text 流程不变（默认路径完全不碰通道入口）
+  [PASS] 模式常量：INTERVIEW_MODES == (text, avatar)
+  [PASS] 不传 mode 时默认 text（与既有行为一致）
+  [PASS] text 模式未调用数字人通道入口
+  [PASS] start 返回结构恰好 4 个键（未新增字段）
+  [PASS] message 仍为「面试已开始」
+  [PASS] question 仍为第 1 题
+  [PASS] session 状态推进为 ongoing / current_question_no=1
+  [PASS] 回传 interview_mode=text
+  [PASS] _deliver(text) 原样返回同一对象（未拷贝、未改写）
+
+[3] avatar 可以创建 session
+  [PASS] 创建成功且落库为 avatar
+  [PASS]   └ 初始状态 created、题号 0
+  [PASS]   └ 可正常查询（题目/作答为空）
+
+[4] avatar 走 AvatarInterview 入口
+  [PASS] 数字人通道入口被调用恰好 1 次
+  [PASS]   └ 入参为 (db, session, payload)
+  [PASS]   └ 传入的是本次 avatar 会话行
+  [PASS]   └ payload 即 Service 组装好的 4 键交付内容
+  [PASS]   └ payload 里已带 interview_mode=avatar
+  [PASS] 入口返回值被原样交回调用方（驱动 provider 不改变交付内容）
+  [PASS] avatar 会话状态机正常推进（分流不阻塞流程）
+
+[5] 两种模式互不影响
+  [PASS] 同岗位同配置下两模式第一题完全相同
+  [PASS] 整场题目计划逐题一致（模式不参与出题）
+  [PASS] 交错作答后题号各自独立（text 到第 3 题、avatar 到第 2 题）
+  [PASS]   └ 各自已作答数量正确
+  [PASS]   └ 两边模式字段未被互相污染
+  [PASS] avatar 结束后 text 会话状态不受影响（仍 ongoing）
+  [PASS]   └ text 题号未被改动
+  [PASS]   └ avatar 已 finished 且有自己的报告
+  [PASS]   └ 两条会话 id 不同、互不覆盖
+  [PASS] text 会话可完整走完（4 题 + 报告）
+
+[6] HTTP 全链路（avatar）
+  [PASS] POST /create mode=avatar → 200
+  [PASS]   └ 回传 interview_mode=avatar
+  [PASS] POST /{id}/start（avatar）→ 200 且返回第一题
+  [PASS]   └ 出参仍为 4 键（provider 驱动未污染 API 契约）
+  [PASS] POST /{id}/start（text）行为与 avatar 一致（都正常出题）
+  [PASS] GET /api/health 回带 avatar 状态（未配置 ⇒ mock）
+  [PASS]   └ avatar 与 health.avatar_status() 同源（逐键相等）
+  [PASS]   └ 既有键 status / service 未变（加键不改键）
+
+[7] 边界（通道层不认识厂商 SDK，分层不被破坏）
+  [PASS] 通道模块顶层只 import 标准库 + sqlalchemy + provider 接口（无 websocket / requests）
+  [PASS]   └ 已接 provider 抽象层（import services.avatar_provider）
+  [PASS]   └ 顶层不 import 具体讯飞实现（延迟到 _build_provider 内，换厂商不用改顶层）
+  [PASS]   └ 不 import main（避免拉入 Spark / 循环依赖）
+  [PASS]   └ 不 import interview_core / interview_service（通道层不反向依赖业务层）
+  [PASS] Service 只经通道层调用数字人（import 了 services.avatar_interview）
+  [PASS]   └ Service 仍不直接 import Agent / Validator（既有约束未被破坏）
+  [PASS]   └ Service 不直接 import provider（必须经通道层）
+  [PASS] InterviewCore 未反向依赖通道层（源码不含 avatar_interview）
+  [PASS] enter 是「驱动 + 降级」结构（含 try/except，不再是空实现）
+  [PASS]   └ 函数体最后一条仍是 return payload（交付契约恒定）
+  [PASS]   └ 阶段判别 / 驱动已下沉到纯函数（classify_payload / spoken_text / drive）
+  [PASS] health.avatar_status 固定 7 键、未配置 ⇒ mock / configured=True / error=None
+  [PASS]   └ 配置非法时**不抛异常**（健康检查永不 500），把原因塞进 error
+
+====================================================================
+结果: 通过 58 项，失败 0 项
+====================================================================

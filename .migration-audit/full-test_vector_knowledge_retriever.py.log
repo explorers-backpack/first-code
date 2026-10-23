@@ -1,0 +1,137 @@
+======================================================================
+AI 面试知识库 · 真实知识检索器（VectorKnowledgeRetriever）自检
+======================================================================
+
+[1] 接口兼容（可无感替换 Mock / 空实现）
+  [PASS] services.vector_knowledge_retriever 可导入
+  [PASS] ★ 继承自 KnowledgeRetriever（isinstance 可用）
+  [PASS] ★ retrieve 签名与基类**逐字一致**
+  [PASS]   └ 参数就是 (self, job_info, topic, context)
+  [PASS]   └ retrieve 是 async（真实检索要访问外部服务）
+  [PASS] ★ 签名里没有 db（知识检索不耦合业务数据库）
+  [PASS] source_name 与基类 / Mock 都不同
+  [PASS] 摊平视图的键恰为 (content, source, score)
+  [PASS]   └ 分数键常量是 'score'
+
+[2] query 构造（build_query，纯函数）
+  [PASS] ★ topic 优先（最精确的检索线索）
+  [PASS]   └ topic 为空 → 回落到 context.current_stage
+  [PASS]   └ topic 空白串也算空（去首尾空白）
+  [PASS]   └ 都空 → 回落到岗位名（job_name）
+  [PASS]   └ 岗位字段按 job_name / title / name / position 顺序找
+  [PASS] ★ 全空 → 空串（没有可检索的线索）
+  [PASS]   └ 支持 ORM 行风格的对象（取属性，非 Mapping）
+  [PASS]   └ 列表值（如 skills）用空格连接
+  [PASS]   └ bool / dict / 对象 不会被 str() 成查询文本
+  [PASS]   └ 纯函数：不改入参
+  [PASS]   └ 同输入同输出（确定性）
+
+[3] 查询返回知识（脚本化 embedder + 手写向量，精确断言）
+  [PASS] ★ 查到 3 条知识
+  [PASS] ★ 返回的都是 KnowledgeChunk 值对象
+  [PASS] ★ 按相似度降序：x(1.0) > x+y(0.707) > y(0.0)
+  [PASS]   └ 最相关的排第一
+  [PASS] ★ 每次调用都是**新建**对象（改它不污染检索器）
+  [PASS]   └ 入参被记录在 queries 里（观测用，不影响输出）
+  [PASS]   └ query 真的传给了 embedder
+  [PASS] ★ source 从切片 metadata 提升到顶层字段
+  [PASS]   └ 提升后 metadata 里不再重复留 source
+  [PASS] ★ metadata 带分数（供排序 / 观测）
+  [PASS]   └ metadata 带 chunk_id / document_id（面试场景必须可溯源）
+  [PASS]   └ metadata 带 embedding_model（换模型后能看出这批向量是谁算的）
+  [PASS]   └ 切片自身的元信息保留（category / chunk_index）
+  [PASS]   └ content 原样保留（可取证，不悄悄改写正文）
+  [PASS] ★ 摊平视图恰为 {content, source, score}（需求点名的返回形状）
+  [PASS]   └ 摊平视图的分数与 metadata 逐位相等（只读投影，不做二次计算）
+  [PASS]   └ 数值等于 45° 余弦（9 位小数；注意 1/sqrt(2) 与 2**-0.5 差 1 ULP）
+  [PASS]   └ chunk_to_result 是只读投影（不改原对象）
+  [PASS]   └ 手工构造的片段（无 score）不报错，给 0.0
+
+[4] 无结果返回 []（不是异常）
+  [PASS] ★ 空向量库 → []
+  [PASS] ★ 全部低于 min_score → []（余弦上限是 1.0，阈值取 1.01）
+  [PASS]   └ min_score 恰好等于最高分时**保留**它
+  [PASS] ★ 没有查询线索（topic / stage / 岗位名全空）→ []
+  [PASS]   └ 且**根本不调用** embedder / 向量库（省一次外部调用）
+  [PASS]   └ 空 query 仍记进 queries（便于排查「为什么没知识」）
+  [PASS] ★ 库里只有**别的模型**的向量 → []（不拿不可比的向量算分）
+  [PASS]   └ 显式 model='' 关掉过滤后能查到
+
+[5] 错误处理（按类型分流，原始异常挂 __cause__）
+  [PASS] ★ embedder 报「入参错」 → RetrieverConfigError
+  [PASS] ★ embedder 报「维度错」 → RetrieverConfigError
+  [PASS] ★ embedder 报「不可用」 → RetrieverUnavailableError
+  [PASS] ★ embedder 抛未预期异常 → RetrieverUnavailableError
+  [PASS] ★ embedder 返回非法向量（非数值序列） → RetrieverConfigError
+  [PASS] ★ embedder 返回空向量 → RetrieverConfigError
+  [PASS] ★ 向量库报「维度不符」（换模型没重算） → RetrieverConfigError
+  [PASS] ★ 向量库报「入参错」 → RetrieverConfigError
+  [PASS] ★ 向量库报「其他领域错」 → RetrieverUnavailableError
+  [PASS] ★ 向量库抛未预期异常 → RetrieverUnavailableError
+  [PASS] ★ 原始异常挂在 __cause__ 上（不丢根因）
+  [PASS]   └ 错误信息里带 query 预览（便于排查是哪次检索）
+  [PASS]   └ 维度不符的提示里点明「换了模型」（最常见的真实原因）
+  [PASS] ★ 两类异常都能被领域基类一把捕获
+  [PASS] ★ 两类互不误捕（类型分流才有意义）
+  [PASS]   └ 空结果与异常的边界：查不到不是异常
+
+[6] 配置校验（错误在构造期暴露，不伪装成「检索不到」）
+  [PASS] ★ 构造期拒绝：embedder 缺 embed 方法
+  [PASS] ★ 构造期拒绝：store 缺 search 方法
+  [PASS] ★ 构造期拒绝：top_k=0
+  [PASS] ★ 构造期拒绝：top_k=True
+  [PASS] ★ 构造期拒绝：top_k='3'
+  [PASS] ★ 构造期拒绝：min_score='x'
+  [PASS] ★ 构造期拒绝：min_score=True
+  [PASS] ★ 构造期拒绝：dedup=1（非 bool）
+  [PASS]   └ 合法配置可构造（min_score=None / dedup=False 都行）
+
+[7] 过滤 / 去重 / 截断
+  [PASS] ★ top_k 截断
+  [PASS] ★ min_score 过滤
+  [PASS] ★ category 过滤（透传给向量库）
+  [PASS] ★ document_id 过滤（透传给向量库）
+  [PASS] ★ 空 / 纯空白正文的切片被跳过（占 Prompt 预算没意义）
+  [PASS] ★ 重复正文去重（忽略空白差异），保留最高分那条
+  [PASS]   └ dedup=False 时不去重
+  [PASS] ★ model_name 默认取 embedder.name（不同模型向量不可比）
+  [PASS]   └ 显式 model='' → None（关掉过滤）
+  [PASS]   └ 显式 model='other' → 覆盖 embedder.name
+
+[8] 端到端：HashEmbeddingService → 内存向量库 → 检索 → 喂给 Agent
+  [PASS] ★ 命中它自己且相似度 == 1（全链路接线正确）
+  [PASS]   └ 结果按相似度降序
+  [PASS]   └ 溯源信息齐全（source 来自切片 metadata）
+  [PASS] ★ 结果可直接喂给 Agent 的归一函数（Agent 无需任何修改）
+  [PASS]   └ 归一后带正文与来源
+  [PASS]   └ 分数**没有**渗进 Prompt（不污染给大模型的文本）
+  [PASS] ★ 通过 Core 的唯一接线点调用 → 走同一条链路（可无感替换 Mock / 空实现）
+  [PASS]   └ 与 current_topic 推导出的 topic 串起来可用
+
+[9] 端到端（真实表）：knowledge_chunk 扩展字段
+  [PASS] ★ 走真实表也能检索到知识
+  [PASS]   └ 相似度 == 1（同一条切片）
+  [PASS]   └ chunk_id 是数据库真主键（可溯源到行）
+  [PASS]   └ 与内存向量库的检索结果一致（换后端不换语义）
+  [PASS]   └ 表里确实写进了向量三列
+
+[10] 未接线 + 不破坏既有约定
+  [PASS] ★ 消费者**收口为唯一组装器** knowledge_rag（面试流程不直接用它）
+  [PASS]   └ 面试流程模块（interview_*）都不直接 import 本模块
+  [PASS] ★ 零第三方依赖（顶层只有 __future__ / collections / math / typing / services）
+  [PASS]   └ 不 import 任何具体后端 / 数据库 / 框架
+  [PASS]   └ 尤其**不 import** vector_store_sql（SQLAlchemy 不能被拉进来）
+  [PASS] 子进程（无 DATABASE_URL）可导入本模块
+  [PASS]   └ 导入后无第三方 / 基础设施模块泄漏进 sys.modules
+  [PASS]   └ services/knowledge_retriever.py 未被改动（不 import 本模块）
+  [PASS]   └ services/interview_agent.py 未被改动（不 import 本模块）
+  [PASS]   └ services/interview_core.py 未被改动（不 import 本模块）
+  [PASS]   └ services/embedding_service.py 未被改动（不 import 本模块）
+  [PASS]   └ services/vector_store.py 未被改动（不 import 本模块）
+  [PASS] ★ knowledge_retriever.py 的三键契约**未被改动**
+  [PASS]   └ MockKnowledgeRetriever 仍在（测试仍可用）
+  [PASS]   └ 空实现（基类）仍返回 []（默认不接知识库）
+
+======================================================================
+结果: 通过 110 项，失败 0 项
+======================================================================

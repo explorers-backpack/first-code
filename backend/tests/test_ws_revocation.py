@@ -35,6 +35,7 @@
 
 import asyncio
 import ast
+import inspect
 import os
 import pathlib
 import shutil
@@ -68,7 +69,7 @@ from starlette.websockets import WebSocketDisconnect  # noqa: E402
 
 import main  # noqa: E402
 import models  # noqa: E402,F401
-from api import interview_ws as ws  # noqa: E402
+from modules.interview import ws as ws  # noqa: E402
 from database import Base  # noqa: E402
 from models import InterviewSession, User, UserSession, WsRevocation  # noqa: E402
 from services import ws_revocation  # noqa: E402
@@ -568,20 +569,21 @@ def _wiring_guards() -> None:
     print("\n[9] 接线守卫：轮询器 / 回调 / 依赖方向")
     text_watcher = (_BACKEND / "services" / "ws_revocation_watcher.py").read_text(encoding="utf-8")
     text_revocation = (_BACKEND / "services" / "ws_revocation.py").read_text(encoding="utf-8")
-    text_ws = (_BACKEND / "api" / "interview_ws.py").read_text(encoding="utf-8")
+    text_ws = (_BACKEND / "modules" / "interview" / "ws.py").read_text(encoding="utf-8")
     text_main = (_BACKEND / "main.py").read_text(encoding="utf-8")
+    text_admin = (_BACKEND / "modules/admin/api.py").read_text(encoding="utf-8")
 
     # ★ 判 import 关系用 AST，不用子串：这两个文件的**文档里**就写着对方的名字
     #   （解释"为什么不反向依赖"），子串判断会恒假失败。
     watcher_imports = _imported_modules(_BACKEND / "services" / "ws_revocation_watcher.py")
     revocation_imports = _imported_modules(_BACKEND / "services" / "ws_revocation.py")
-    ws_imports = _imported_modules(_BACKEND / "api" / "interview_ws.py")
+    ws_imports = _imported_modules(_BACKEND / "modules" / "interview" / "ws.py")
 
     _check("★ 轮询器**不** import 实时通道（靠 register_handler 解耦）",
-           not any("interview_ws" in m for m in watcher_imports),
+           not any("interview_ws" in m or m == "modules.interview.ws" for m in watcher_imports),
            str(sorted(watcher_imports)))
     _check("★ 撤销存储**不** import 实时通道 / 编排层",
-           not any(("interview_ws" in m) or ("orchestrator" in m) for m in revocation_imports),
+           not any(("interview_ws" in m) or (m == "modules.interview.ws") or ("orchestrator" in m) for m in revocation_imports),
            str(sorted(revocation_imports)))
     _check("★ 实时通道**不** import 轮询器（只 import 共享存储）",
            not any("ws_revocation_watcher" in m for m in ws_imports),
@@ -608,10 +610,13 @@ def _wiring_guards() -> None:
     _check("★ 高风险操作（answer/finish）执行前复核",
            "ws_auth_revoked_on_high_risk" in text_ws)
     _check("★ 复核用 auth_session_id 查 user_session（不是只查 User 存在）",
-           "UserSession.id == int(auth_session_id)" in text_ws)
+           "await load_session_by_id(db, int(auth_session_id))" in inspect.getsource(ws._auth_still_valid)
+           and "security.load_session_by_id" in ws_imports
+           and "select(UserSession).where(UserSession.id == int(session_id))"
+           in inspect.getsource(ws.load_session_by_id))
     _check("★ 管理员踢下线端点存在且要求 admin 依赖",
-           '"/api/admin/users/{user_id}/kick"' in text_main
-           and "Depends(get_current_admin)" in text_main)
+           '"/api/admin/users/{user_id}/kick"' in text_admin
+           and "Depends(get_current_admin)" in text_admin)
     _check("★ ws_ticket.auth_session_id 已登记到 schema_sync（既有表加列必须补）",
            "auth_session_id" in (_BACKEND / "utils" / "schema_sync.py").read_text(encoding="utf-8"))
 

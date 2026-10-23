@@ -1,0 +1,65 @@
+MM .github/workflows/ci.yml
+A  AI_LAYER_REFACTOR_REPORT.md
+M  PRODUCTION_CHECKLIST.md
+A  RAG_AUDIT_REPORT.md
+MM backend/main.py
+AM backend/modules/ai/__init__.py
+AM backend/modules/ai/boundary.py
+AM backend/modules/ai/compat.py
+A  backend/modules/ai/errors.py
+AM backend/modules/ai/factory.py
+AM backend/modules/ai/llm.py
+AM backend/modules/ai/llm_fake.py
+AM backend/modules/ai/llm_spark.py
+AM backend/modules/ai/modes.py
+AM backend/modules/ai/policy.py
+AM backend/modules/ai/telemetry.py
+R  backend/api/interview.py -> backend/modules/interview/api.py
+RM backend/api/interview_ws.py -> backend/modules/interview/ws.py
+M  backend/schemas/knowledge.py
+ M backend/scripts/create_admin.py
+A  backend/scripts/rag_eval_report.json
+ M backend/security.py
+M  backend/services/__init__.py
+ M backend/services/job_matching.py
+M  backend/services/knowledge_import_pipeline.py
+A  backend/services/rag_diagnostics.py
+A  backend/tests/rag_eval_metrics.py
+AM backend/tests/rag_eval_run.py
+MM backend/tests/regression_env.py
+ M backend/tests/test_admin_role.py
+AM backend/tests/test_ai_layer.py
+ M backend/tests/test_analyze_endpoint.py
+ M backend/tests/test_auth_security.py
+ M backend/tests/test_avatar_channel.py
+ M backend/tests/test_avatar_loop.py
+ M backend/tests/test_embedding_status_surface.py
+ M backend/tests/test_interview_core.py
+M  backend/tests/test_interview_knowledge_dataset.py
+ M backend/tests/test_interview_orchestrator.py
+ M backend/tests/test_interview_production.py
+ M backend/tests/test_interview_ws.py
+ M backend/tests/test_job_matching.py
+MM backend/tests/test_knowledge_import_pipeline.py
+M  backend/tests/test_knowledge_upload_api.py
+ M backend/tests/test_login_throttle_store.py
+AM backend/tests/test_rag_diagnostics.py
+A  backend/tests/test_rag_eval_metrics.py
+ M backend/tests/test_rag_interview.py
+ M backend/tests/test_rag_production_route.py
+ M backend/tests/test_rag_retriever_config.py
+ M backend/tests/test_rag_threshold_provenance.py
+ M backend/tests/test_strategy_wiring.py
+ M backend/tests/test_vector_backend_surface.py
+ M backend/tests/test_ws_revocation.py
+ M backend/tests/test_ws_ticket.py
+?? .migration-audit/
+?? MIGRATION_CLEANUP_REPORT.md
+?? MODULAR_MONOLITH_PLAN.md
+?? backend/_run_all_tests.sh
+?? backend/common/
+?? backend/modules/__init__.py
+?? backend/modules/auth/
+?? backend/modules/career/
+?? backend/modules/interview/__init__.py
+?? backend/tests/test_module_boundaries.py

@@ -5,7 +5,7 @@
 # 本仓库此前**没有任何 CI 配置**（无 .github/、无 .gitlab-ci.yml）。
 # 这里补上的重点是「真实 MySQL 不再只是本地手工验证」：
 #
-#   backend-regression    74 套 SQLite 自检 + worker_guard 安全网断言
+#   backend-regression    78 套 SQLite 自检 + worker_guard 安全网断言
 #   frontend-regression   前端自检（WS ticket fail-closed / 重连退避）
 #   mysql-integration     ★ MySQL 8 service container + 5 个真实并发运行器
 #

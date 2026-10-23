@@ -636,7 +636,7 @@ async def run() -> bool:
     # ★ 反向依赖：下层**不得** import 编排层（否则「可选编排」变成「必经路径」）
     for rel in ("services/interview_core.py", "services/interview_service.py",
                 "services/avatar_interview.py", "services/avatar_provider.py",
-                "services/avatar_provider_iflytek.py", "api/interview.py", "main.py"):
+                "services/avatar_provider_iflytek.py", "modules/interview/api.py", "main.py"):
         mods = _all_imports((_BACKEND / rel).read_text(encoding="utf-8"))
         _check(f"{rel} 不反向 import 编排层",
                "services.interview_orchestrator" not in mods, str(sorted(mods)))

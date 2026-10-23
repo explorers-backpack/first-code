@@ -69,7 +69,7 @@ from starlette.websockets import WebSocketDisconnect  # noqa: E402
 
 import main  # noqa: E402
 import models  # noqa: E402,F401
-from api import interview_ws as ws  # noqa: E402
+from modules.interview import ws as ws  # noqa: E402
 from database import Base  # noqa: E402
 from models import InterviewSession, User, UserSession, WsTicket  # noqa: E402
 from services import ws_ticket_store as store  # noqa: E402
@@ -561,8 +561,8 @@ def _ws_checks(client: TestClient, ticket: str, owner_sid: int, other_sid: int) 
 
 def _source_guards() -> None:
     print("\n[18] 源码守卫：进程内字典已移除 / 存储只在 service 层")
-    text_api = (_BACKEND / "api" / "interview.py").read_text(encoding="utf-8")
-    text_ws = (_BACKEND / "api" / "interview_ws.py").read_text(encoding="utf-8")
+    text_api = (_BACKEND / "modules" / "interview" / "api.py").read_text(encoding="utf-8")
+    text_ws = (_BACKEND / "modules" / "interview" / "ws.py").read_text(encoding="utf-8")
     text_store = (_BACKEND / "services" / "ws_ticket_store.py").read_text(encoding="utf-8")
 
     _check("★ 文字面试 HTTP 契约文件不含 ticket 逻辑", "ws-ticket" not in text_api)

@@ -188,7 +188,7 @@ async def run() -> bool:
         _check("parsed_format=docx", body.get("parsed_format") == "docx", str(body.get("parsed_format")))
         _check("parsed_chars > 0", isinstance(body.get("parsed_chars"), int) and body["parsed_chars"] > 0, str(body.get("parsed_chars")))
         _check("docx 无 parse_warnings", body.get("parse_warnings") == [], str(body.get("parse_warnings")))
-        _check("继承导入报告的 12 键（chunk_count）", "chunk_count" in body, str(list(body.keys())))
+        _check("继承导入报告的 13 键（chunk_count）", "chunk_count" in body, str(list(body.keys())))
         _check("document_id 为 int", isinstance(body.get("document_id"), int), str(body.get("document_id")))
         _check("chunk_count ≥ 1", body.get("chunk_count", 0) >= 1, str(body.get("chunk_count")))
         _check(
@@ -402,10 +402,10 @@ async def run() -> bool:
 
         expected = set(KnowledgeUploadReport.model_fields.keys())
         _check(
-            "KnowledgeUploadReport 继承导入报告的 12 键",
+            "KnowledgeUploadReport 继承导入报告的 13 键",
             {"ok", "status", "stage", "document_id", "chunk_count", "saved_chunks",
-             "embedded_chunks", "skipped_chunks", "reused_document", "failed_index",
-             "errors", "error"} <= expected,
+             "embedded_chunks", "skipped_chunks", "removed_stale_chunks",
+             "reused_document", "failed_index", "errors", "error"} <= expected,
             str(sorted(expected)),
         )
         _check(

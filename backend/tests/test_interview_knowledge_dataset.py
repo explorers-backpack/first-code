@@ -171,7 +171,7 @@ async def check_import(db: AsyncSession, docs: List[Dict[str, str]]) -> List[Dic
     for index, doc in enumerate(docs):
         reports.append(await pipeline.import_document(doc))
 
-    _check("报告键集恒为 IMPORT_RESULT_FIELDS（12 键）",
+    _check("报告键集恒为 IMPORT_RESULT_FIELDS（13 键）",
            all(set(r) == set(IMPORT_RESULT_FIELDS) for r in reports),
            str([sorted(set(r) ^ set(IMPORT_RESULT_FIELDS)) for r in reports
                 if set(r) != set(IMPORT_RESULT_FIELDS)][:1]))

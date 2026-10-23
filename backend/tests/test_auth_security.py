@@ -30,6 +30,8 @@ import main  # noqa: E402
 import models  # noqa: E402,F401
 from database import Base, get_db  # noqa: E402
 from models import User, UserSession  # noqa: E402
+# ★ 旧格式口令助手随认证模块迁到 modules/auth/service.py（原 main._hash_password）
+from modules.auth import service as auth_service  # noqa: E402
 from security import (  # noqa: E402
     hash_password,
     verify_password,
@@ -97,7 +99,7 @@ async def run() -> bool:
     _check("bcrypt 校验通过", ok)
     _check("bcrypt 不需要升级", not up)
 
-    old_hash = main._hash_password(_USER_PASSWORD)
+    old_hash = auth_service._hash_password(_USER_PASSWORD)
     ok2, up2 = verify_password(_USER_PASSWORD, old_hash)
     _check("sha256 校验通过", ok2)
     _check("sha256 需要升级", up2)
@@ -176,7 +178,7 @@ async def run() -> bool:
         async with session_factory() as s:
             old_user = User(
                 username="oldie", email="oldie@example.com",
-                password_hash=main._hash_password("oldie123456"), role="user")
+                password_hash=auth_service._hash_password("oldie123456"), role="user")
             s.add(old_user)
             await s.commit()
 

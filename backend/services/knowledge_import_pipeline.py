@@ -94,21 +94,22 @@
 
 出参契约
 --------
-``import_document`` 恒返回 ``IMPORT_RESULT_FIELDS`` 这 12 个键（成功 / 跳过 / 失败同一形状，
+``import_document`` 恒返回 ``IMPORT_RESULT_FIELDS`` 这 13 个键（成功 / 跳过 / 失败同一形状，
 调用方无分支取值）：:
 
-    ok                 bool   是否成功（``skipped`` 也算成功）
-    status             str    ok / skipped / failed
-    stage              str    document / chunk / embedding / persist / vector / done
-    document_id        int    落库或复用的文档 id（失败于 document 之前为 None）
-    chunk_count        int    切片器产出的切片数
-    saved_chunks       int    **新建**的切片行数（复用的不算）
-    embedded_chunks    int    本次写入向量的切片数
-    skipped_chunks     int    已有同模型向量且正文未变、直接跳过的切片数
-    reused_document    bool   文档是否复用了既有行
-    failed_index       int    失败切片序号；不适用为 None
-    errors             list   稳定错误码列表
-    error              str    可读错误信息；成功为 ""
+    ok                    bool   是否成功（``skipped`` 也算成功）
+    status                str    ok / skipped / failed
+    stage                 str    document / chunk / embedding / persist / vector / done
+    document_id           int    落库或复用的文档 id（失败于 document 之前为 None）
+    chunk_count           int    切片器产出的切片数
+    saved_chunks          int    **新建**的切片行数（复用的不算）
+    embedded_chunks       int    本次写入向量的切片数
+    skipped_chunks        int    已有同模型向量且正文未变、直接跳过的切片数
+    removed_stale_chunks  int    本次清理掉的**残留切片**行数（文档被改短时才有）
+    reused_document       bool   文档是否复用了既有行
+    failed_index          int    失败切片序号；不适用为 None
+    errors                list   稳定错误码列表
+    error                 str    可读错误信息；成功为 ""
 
 刻意不做
 --------
@@ -116,9 +117,18 @@
   ``{title, content, category, source}`` 形态的**纯文本**。「二进制 → 文本」是解析器的职责。
 - **HTTP 路由**：加路由要先定「谁能导入知识」（管理员 / 普通用户），属权限设计。
 - **不改 InterviewAgent、不改 Retriever 接口**（需求点名不做）。
-- **不删过期切片**：若同一文档的内容被改短，多出来的旧切片行会**保留**
-  （本模块只 upsert、不删）。清理由独立的维护动作负责——静默删数据风险更大。
 - **不做全局单例**：由调用方构造并注入 ``chunker`` / ``embedder`` / ``store``。
+
+.. note:: **「不删过期切片」这条早期约定已被推翻（有实测依据）**
+   本模块早期版本刻意只 upsert、不删过期切片，理由是「静默删数据风险更大」。
+   但那条约定留下的是**半替换语义**：内容被改短时，``chunk_index`` 在
+   ``0..n-1`` 的行会被覆盖成新正文，``chunk_index >= n`` 的行**原样保留**；
+   而检索**只看 ``embedding``、不看 ``chunk_index``**，于是那些过期正文仍会被
+   检索到并注入 Prompt——「文档改短了，模型却还在引用被删掉的段落」。
+
+   现在的做法是**删 + 记账**（:meth:`KnowledgeImportPipeline._remove_stale_chunks`）：
+   只在**本次零失败**时清理、把条数写进 ``removed_stale_chunks``、索引同步失败
+   写进 ``errors``——「不静默」由**报告字段**保证，而不是靠「不删」。
 """
 
 from __future__ import annotations
@@ -126,6 +136,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any, Dict, List, Optional, Tuple
 
+from sqlalchemy import delete as sa_delete
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -141,7 +152,7 @@ from services.vector_store import VectorRecord
 #: 出参键集合（顺序即 ``_new_report`` 的插入顺序；成功 / 跳过 / 失败同一形状）
 IMPORT_RESULT_FIELDS = (
     "ok", "status", "stage", "document_id", "chunk_count",
-    "saved_chunks", "embedded_chunks", "skipped_chunks",
+    "saved_chunks", "embedded_chunks", "skipped_chunks", "removed_stale_chunks",
     "reused_document", "failed_index", "errors", "error",
 )
 
@@ -163,6 +174,10 @@ ERROR_CHUNK_EMPTY = "chunk_empty"
 ERROR_EMBEDDING_FAILED = "embedding_failed"
 ERROR_PERSIST_FAILED = "persist_failed"
 ERROR_VECTOR_FAILED = "vector_failed"
+#: 残留切片（``chunk_index >= 本次切片数``）删除失败——权威行没删掉
+ERROR_STALE_PERSIST_FAILED = "stale_persist_failed"
+#: 残留切片已从权威表删除，但**派生索引**（ANN）同步失败 ⇒ 需要一次 rebuild
+ERROR_STALE_INDEX_FAILED = "stale_index_failed"
 
 #: 默认批量编码大小（一次 ``embed_batch`` 调用喂几片）。
 #: 与 ``embedding_provider.DEFAULT_BATCH_SIZE`` 同值（16），但**刻意各自声明**——
@@ -244,6 +259,7 @@ def _new_report() -> Dict[str, Any]:
         "saved_chunks": 0,
         "embedded_chunks": 0,
         "skipped_chunks": 0,
+        "removed_stale_chunks": 0,
         "reused_document": False,
         "failed_index": None,
         "errors": [],
@@ -446,10 +462,87 @@ class KnowledgeImportPipeline:
                 index=failure[0],
             )
 
-        # ---- 收尾：全部跳过 = 已完整入库（成功的空操作）----
+        # ---- 收尾①：清理「本次切片变少」留下的残留切片 ----
+        # 文档被改短后，``chunk_index >= len(chunks)`` 的旧行既不会被复用（本次只规划
+        # 0..n-1）、也不会被删除 ⇒ 旧正文继续留在库里，而检索**只看 embedding、不看
+        # chunk_index**，于是这些过期切片仍会被检索到并注入 Prompt。
+        # 只在**本次零失败**时清理：中途失败时保留原状，避免「新内容没写完、旧内容已删」。
+        report["removed_stale_chunks"] = await self._remove_stale_chunks(
+            report, document_id, existing, len(chunks)
+        )
+
+        # ---- 收尾②：全部跳过 = 已完整入库（成功的空操作）----
         if report["embedded_chunks"] == 0 and report["saved_chunks"] == 0:
             report["status"] = STATUS_SKIPPED
         return report
+
+    # --------------------------------------------------------
+    # 内部：残留切片清理
+    # --------------------------------------------------------
+    async def _remove_stale_chunks(
+        self,
+        report: Dict[str, Any],
+        document_id: int,
+        existing: Dict[int, Tuple[Any, int, bool, str, str]],
+        keep_count: int,
+    ) -> int:
+        """删掉 ``chunk_index >= keep_count`` 的既有切片，返回**真正删除**的行数。
+
+        ``keep_count`` 是本次切片的条数（``chunk_index`` 从 0 连续编号），因此
+        「本次不再覆盖」的切片就是 ``chunk_index >= keep_count`` 的那些。
+
+        三件事一起做（顺序重要）：
+
+        1. **删权威行**（``knowledge_chunk``）——这是「检索不到」的根因；
+        2. **同步派生索引**（``store.delete`` / ``store.remove``，若后端提供）——
+           ``chroma`` 的 ANN 索引与权威行分离，只删行的话索引里仍留着旧向量，
+           检索会返回**已经不存在的** ``chunk_id``（下游按 id 取正文会取不到）；
+        3. **如实记账**——索引同步失败写进 ``errors``（稳定码
+           :data:`ERROR_STALE_INDEX_FAILED`），**绝不假装同步成功**。
+
+        刻意**不**因为清理失败而把整次导入判失败：新内容已经写入且可检索，
+        残留清理是「附加的正确性修复」，失败只降级为「需要一次 rebuild」。
+        失败时 ``removed_stale_chunks`` 仍如实反映**权威行**删掉了几条。
+        """
+        stale_ids = [
+            row_id
+            for index, (_row, row_id, _has_vector, _model, _content) in existing.items()
+            if index >= keep_count
+        ]
+        if not stale_ids:
+            return 0
+
+        try:
+            await self.db.execute(
+                sa_delete(KnowledgeChunk).where(KnowledgeChunk.id.in_(stale_ids))
+            )
+            await self.db.commit()
+        except Exception as exc:  # noqa: BLE001 - 变成可读的 errors，不抛
+            await self._safe_rollback(report)
+            report["errors"].append(
+                f"{ERROR_STALE_PERSIST_FAILED}: {type(exc).__name__}: {exc}"
+            )
+            return 0
+
+        hook = getattr(self.store, "delete", None) or getattr(self.store, "remove", None)
+        if hook is not None:
+            try:
+                result = hook(stale_ids)
+                if hasattr(result, "__await__"):
+                    await result
+            except Exception as exc:  # noqa: BLE001 - 变成可读的 errors，不抛
+                report["errors"].append(
+                    f"{ERROR_STALE_INDEX_FAILED}: {type(exc).__name__}: {exc}"
+                )
+
+        return len(stale_ids)
+
+    async def _safe_rollback(self, report: Dict[str, Any]) -> None:
+        """回滚会话（失败也要如实上报，否则后续步骤全部会以同样方式失败）。"""
+        try:
+            await self.db.rollback()
+        except Exception as exc:  # noqa: BLE001 - 回滚本身失败也要如实上报
+            report["errors"].append(f"rollback 失败：{type(exc).__name__}: {exc}")
 
     # --------------------------------------------------------
     # 内部：分批编码

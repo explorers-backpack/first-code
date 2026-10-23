@@ -1,0 +1,148 @@
+
+[1] 后端选择：VECTOR_STORE 解析 + 组装器按后端返回不同实现
+  [PASS] ★ 不设 VECTOR_STORE → 默认 sql（**接入 ANN 不改变默认行为**）
+  [PASS]   └ 空字符串同样视为未设置
+  [PASS]   └ 只有空白字符也视为未设置
+  [PASS]   └ 'chroma' → chroma（大小写 / 空白不敏感）
+  [PASS]   └ 'ChromaDB' → chroma（大小写 / 空白不敏感）
+  [PASS]   └ 'CHROMA' → chroma（大小写 / 空白不敏感）
+  [PASS]   └ '  chromadb  ' → chroma（大小写 / 空白不敏感）
+  [PASS]   └ 'sql' → sql
+  [PASS]   └ 'SQL' → sql
+  [PASS]   └ 'sqlalchemy' → sql
+  [PASS]   └ 'mysql' → sql
+  [PASS] ★ 非法取值**报错**而不是静默退回默认（否则「以为开了 ANN」会藏起来）
+  [PASS]   └ build_vector_store 不给 db → RetrieverConfigError
+  [PASS]   └ backend='sql' → SqlAlchemyVectorStore
+  [PASS] ★ backend='chroma' → ChromaVectorStore（真实 ANN 后端）
+  [PASS]   └ 两者都拿同一个 db：切片行的权威副本始终在 knowledge_chunk
+  [PASS]   └ 显式传非法 backend 也报错
+  [PASS]   └ 组装器真的会读环境变量（VECTOR_STORE=chroma → ChromaVectorStore）
+  [PASS]   └ 环境变量撤销后回到默认 sql（不留残留状态）
+
+[3] 保存向量（测试要求 1）：新建 / 补向量 / 报错路径
+  [PASS] ★ add 返回写入条数
+  [PASS] ★ 索引里确实存下了 3 条向量（向量保存）
+  [PASS]   └ 权威行也建好了（切片行仍在 knowledge_chunk）
+  [PASS]   └ 权威行的 embedding 列已写入（Pipeline 的幂等判据依赖它）
+  [PASS]   └ 权威行的 embedding_model 已写入
+  [PASS]   └ 索引条数 == 权威已向量化条数（索引是派生数据，1:1）
+  [PASS]   └ add([]) → 0（空批次是合法入参）
+  [PASS]   └ 把单个 VectorRecord 当批量传 → VectorStoreInputError
+  [PASS]   └ add(None) → VectorStoreInputError（提示传 []）
+  [PASS] ★ 补向量只更新向量三列，**不动**切片正文
+  [PASS]   └ 元数据 / 文档 id 也一律不动
+  [PASS]   └ 向量与模型确实换了
+  [PASS] ★ 索引内容取自权威行：补向量后索引里的正文**没有**被入参覆盖
+  [PASS]   └ 索引里的元数据同样来自权威行
+  [PASS] ★ chunk_id 指向不存在的切片 → 报错（不悄悄新建）
+  [PASS]   └ 新建切片缺 document_id → 报错
+  [PASS]   └ 新建切片正文全空白 → 报错
+
+[4] 查询 top_k（测试要求 2）：截断 / min_score / 三种过滤
+  [PASS] ★ top_k=1 → 只回 1 条
+  [PASS]   └ 且是相似度最高的那条（向量 x 命中自己）
+  [PASS]   └ top_k=2 → 2 条
+  [PASS]   └ top_k 超过候选数 → 返回全部候选（不报错）
+  [PASS]   └ 不传 top_k → 用默认值（这里候选少于默认值，返回全部）
+  [PASS]   └ top_k=0 → 报错（检索语义参数不静默收敛）
+  [PASS] ★ min_score 过滤：只剩 x（1.0）
+  [PASS]   └ 阈值 0.5 → x(1.0) + x+y(0.7071)
+  [PASS]   └ 阈值 1.01（余弦上限之上）→ 空
+  [PASS] ★ model 过滤：只看 m2 的向量（不同模型的向量不可比）
+  [PASS]   └ 不传 model → 用构造函数的默认值 m1
+  [PASS] ★ document_id 过滤（真列语义）
+  [PASS]   └ 指向不存在的文档 → 空
+  [PASS] ★ category 过滤：只剩 job 那一条（第二条）
+  [PASS]   └ category=technical → 两条
+  [PASS]   └ 多条件同时生效（model + document_id + category）
+  [PASS] ★ 空索引 → []（而不是抛维度错）
+  [PASS]   └ 空索引 count == 0
+
+[5] 返回结果正确（测试要求 3）：score 是精确余弦 + 降序 + to_dict 形状
+  [PASS] ★ 命中自己时 score ≈ 1.0
+  [PASS] ★ score 与 cosine_similarity **逐位一致**（精确余弦，不是距离换算）
+  [PASS]   └ 第三名 score 也逐位一致（正交向量 x·y = 0）
+  [PASS]   └ x·(x+y) = 1/√2 ≈ 0.707106781
+  [PASS]   └ 顺序：x(1.0) > x+y(0.7071) > y(0.0)
+  [PASS]   └ 结果按 score 降序
+  [PASS]   └ 元数据里的非标量值**保真**回传（索引层也是完整元数据）
+  [PASS]   └ to_dict 形状 == VECTOR_MATCH_FIELDS（不含向量本体）
+  [PASS]   └ to_dict 里带 score
+  [PASS]   └ chunk_id 是整数（与权威行主键一致）
+  [PASS]   └ 同分时按 chunk_id 升序（与 SQL 后端的主键升序口径一致）
+  [PASS]   └ 两条 score 确实相同（构造有效）
+
+[6] 换后端不换语义：内存 / SQL / chroma 三后端结果一致
+  [PASS]   └ 权威后端建了 3 行并回读成 3 条记录
+  [PASS] ★ top_k=1：三个后端结果**完全一致**（含 chunk_id 与 score）
+  [PASS] ★ top_k=2：三个后端结果**完全一致**（含 chunk_id 与 score）
+  [PASS] ★ top_k=3：三个后端结果**完全一致**（含 chunk_id 与 score）
+  [PASS]   └ 过滤 {'min_score': 0.9} 时也一致
+  [PASS]   └ 过滤 {'category': 'job'} 时也一致
+  [PASS]   └ 过滤 {'document_id': 1} 时也一致
+  [PASS]   └ 三后端 count 一致
+
+[7] ANN 维度契约：单索引单维度，且**在写库之前**就报错
+  [PASS] ★ 同一批次里混用维度 → VectorStoreDimensionError
+  [PASS] ★ 且**没有**写进权威表（校验在写库之前 → 不留半截状态）
+  [PASS]   └ 索引也仍然为空
+  [PASS] ★ 与索引已有维度不符 → VectorStoreDimensionError（HNSW 只支持单一维度）
+  [PASS] ★ 查询维度与索引不符 → VectorStoreDimensionError（不静默返回空）
+  [PASS]   └ 对照：SQL 后端允许混存不同维度（它逐行记维度，不是 ANN 索引）
+
+[8] 持久化：重开客户端索引仍在（真实向量库，不是进程内实现）
+  [PASS]   └ 写入后索引有 3 条
+  [PASS] ★ 重开客户端后索引数据**仍在**（真的落盘了）
+  [PASS] ★ 检索结果与重开前完全一致
+  [PASS]   └ 索引条数与权威已向量化条数一致（索引是派生数据）
+  [PASS]   └ 集合名可显式指定（默认与权威表同名，便于排查）
+  [PASS] ★ open_client 按 CHROMA_PATH 打开持久化客户端（不需要注入 client）
+  [PASS]   └ 因此不注入 client 也能检索到刚写的索引
+  [PASS]   └ 没给 db → ChromaConfigError
+  [PASS]   └ 集合名为空 → ChromaConfigError
+  [PASS]   └ oversample=0 → ChromaConfigError
+  [PASS]   └ oversample 是 bool → ChromaConfigError
+  [PASS]   └ 索引目录是纯空白 → ChromaConfigError（不悄悄退回默认目录）
+  [PASS] ★ 底层索引打不开 → 包成领域异常（不是裸 RuntimeError）
+
+[10] 入库 Pipeline 端到端：文档 → 切片 → 向量 → ANN 索引（重跑幂等）
+  [PASS] ★ 文档成功入库
+  [PASS]   └ 产生了切片
+  [PASS]   └ 每片都写了向量（embedded_chunks == chunk_count）
+  [PASS]   └ 没有失败
+  [PASS] ★ ANN 索引里确实有这些向量
+  [PASS] ★ 用查询向量能检索到入库的知识（返回 content + score）
+  [PASS]   └ 检索结果的 chunk_id 都能对上权威行
+  [PASS] ★ 重跑幂等：status='skipped'（索引镜像**没有**破坏幂等判据）
+  [PASS]   └ 没有重复写向量
+  [PASS]   └ 索引条数不变
+  [PASS] ★ 组装器造出的 ANN 后端可直接用于入库（默认参数即可）
+
+[9] 依赖收口：chromadb 延迟导入、接口零依赖未被破坏、消费者闭集
+  [PASS] ★ 接口模块仍是**零第三方依赖**（这正是 ANN 后端必须另起模块的原因）
+  [PASS]   └ 接口模块不 import 任何具体后端
+  [PASS] ★ chromadb **不在模块顶层** import（默认后端不装它也能跑）
+  [PASS]   └ 它只在函数体内延迟导入
+  [PASS]   └ load_chromadb() 未安装时给可读的领域异常（不是裸 ImportError）
+  [PASS] ★ 组装器顶层仍只有标准库（缺 DATABASE_URL 也能 import）
+  [PASS]   └ chroma 后端在组装器里也是**函数内延迟导入**
+  [PASS] ★ 两个后端的消费者都**恰好**是 knowledge_rag（收口为唯一组装器）
+  [PASS]   └ services/interview_core.py 不碰 ANN 后端
+  [PASS]   └ services/interview_agent.py 不碰 ANN 后端
+  [PASS]   └ services/interview_service.py 不碰 ANN 后端
+  [PASS]   └ services/knowledge_retriever.py 不碰 ANN 后端
+  [PASS]   └ services/vector_knowledge_retriever.py 不碰 ANN 后端
+  [PASS]   └ services/embedding_service.py 不碰 ANN 后端
+  [PASS] ★ 检索器仍只依赖**接口**（需求：不改 Retriever 调用方式）
+  [PASS]   └ 检索器构造签名未变（embedder + store + 关键字参数）
+  [PASS]   └ 默认过采样倍率 >= 1（给精确重排留腾挪空间）
+  [PASS]   └ ChromaVectorStore 是 VectorStore 的子类（接口未变）
+  [PASS]   └ 它没有重写 add/search/count 之外的接口方法
+
+======================================================================
+结果: 通过 123 项，失败 0 项
+======================================================================
+C:\Users\DELL-PC\Desktop\career-ai\backend\tests\test_vector_store_chroma.py:304: RuntimeWarning: coroutine '_suite_metadata_codec' was never awaited
+  _suite_metadata_codec()             # 纯函数，不需要库
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback

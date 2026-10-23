@@ -1,0 +1,159 @@
+======================================================================
+AI 面试知识库数据模型 自检（只建数据结构）
+======================================================================
+
+[1] 模型可导入（要求 1）
+  [PASS] models.knowledge 可导入
+  [PASS] 从 models 包可直接取到两个模型
+  [PASS]   └ 均继承 Base（是 ORM 模型）
+  [PASS] 两个模型都出现在 models.__all__ 中
+  [PASS] 分类常量已导出
+  [PASS] 恰好四类知识：岗位 / 技术 / 公司 / 项目
+  [PASS]   └ 四个具名常量与元组一致
+  [PASS]   └ 中文名齐全且与取值一一对应
+  [PASS] 表已注册进 Base.metadata（create_all 才会建）
+
+[2] 表结构（模型定义）
+  [PASS] 表名正确
+  [PASS] ★ KnowledgeDocument 列名与顺序 = 需求字段清单
+  [PASS] ★ KnowledgeChunk 列名与顺序 = 需求字段清单
+  [PASS] 两表主键都是自增整数 id
+  [PASS] document.title 是 VARCHAR(300) 且非空
+  [PASS] document.content / chunk.content 是 TEXT 且非空
+  [PASS] document.category 非空且建索引（要按分类检索）
+  [PASS] document.source 非空、Python 默认值与库默认值口径一致
+  [PASS] document.created_at 是 DATETIME
+  [PASS] chunk.metadata 是 JSON 且非空
+  [PASS]   └ 默认值是 dict 工厂（可调用），不是共享字面量 {}
+  [PASS] chunk.document_id 外键指向 knowledge_document.id
+  [PASS]   └ document_id 非空且建索引（1:N 关联查询）
+  [PASS] 两表之间不建 ORM relationship（与既有代码风格一致，避免异步惰性加载）
+
+[3] 表结构（真实 DDL，MySQL 8 方言）
+  [PASS] document DDL 含「建表语句」
+  [PASS] document DDL 含「自增主键」
+  [PASS] document DDL 含「title」
+  [PASS] document DDL 含「content」
+  [PASS] document DDL 含「category」
+  [PASS] document DDL 含「source 默认空串」
+  [PASS] document DDL 含「created_at」
+  [PASS] document DDL 含「主键约束」
+  [PASS] chunk DDL 含「建表语句」
+  [PASS] chunk DDL 含「document_id」
+  [PASS] chunk DDL 含「content」
+  [PASS] chunk DDL 含「metadata 列名与 JSON 类型」
+  [PASS] chunk DDL 含「外键约束」
+  [PASS] chunk DDL 含「embedding 可空 JSON（向量本体）」
+  [PASS] chunk DDL 含「embedding_model 默认空串」
+  [PASS] chunk DDL 含「embedding_dim 可空整数」
+  [PASS] create_all 成功建出两张表
+  [PASS]   └ 库里实际列名与模型一致
+
+[4] 字段清单与需求逐字对齐（不多不少）
+  [PASS] KnowledgeDocument 恰好 6 列
+  [PASS] KnowledgeChunk 恰好 7 列（原 4 列 + 向量预留 3 列）
+  [PASS]   └ ★ 原 4 列原样保留且仍在最前（未删 / 未改名 / 未重排）
+  [PASS]   └ 没有自行加 created_at / updated_at 等额外列
+
+[4.5] 向量存储列（预留，只建结构）
+  [PASS] embedding 是 JSON 且可空（NULL = 尚未向量化）
+  [PASS] embedding_model 是 VARCHAR(100) 且非空
+  [PASS]   └ Python 默认值与库默认值口径一致（都是空串）
+  [PASS] embedding_dim 是 INTEGER 且可空
+  [PASS]   └ 三列都未建索引（本阶段不做向量检索，无需索引）
+  [PASS]   └ 向量是**独立列**，未塞进 metadata（metadata 要保持轻量）
+
+[5] metadata 保留名避让（SQLAlchemy Declarative 限制）
+  [PASS] 数据库列名仍是 metadata（与需求一致）
+  [PASS] ★ Python 属性名是 chunk_metadata（metadata 是保留名，不能直接用作属性）
+  [PASS]   └ 该属性映射到名为 metadata 的列
+  [PASS]   └ 类上没有名为 metadata 的属性（未遮蔽 Base.metadata）
+
+[6] 与 utils.schema_sync 口径一致
+  [PASS] knowledge_document 已登记进 DESIRED_COLUMNS
+  [PASS]   └ 登记列 == 模型非主键列（不遗漏、不臆造）
+  [PASS]   └ title 类型一致
+  [PASS]   └ title 可空性一致
+  [PASS]   └ title 未声明默认值时 ORM 也不该有 server_default
+  [PASS]   └ content 类型一致
+  [PASS]   └ content 可空性一致
+  [PASS]   └ content 未声明默认值时 ORM 也不该有 server_default
+  [PASS]   └ category 类型一致
+  [PASS]   └ category 可空性一致
+  [PASS]   └ category 未声明默认值时 ORM 也不该有 server_default
+  [PASS]   └ source 类型一致
+  [PASS]   └ source 可空性一致
+  [PASS]   └ source 默认值一致（ORM 必须有 server_default）
+  [PASS]   └ created_at 类型一致
+  [PASS]   └ created_at 可空性一致
+  [PASS]   └ created_at 未声明默认值时 ORM 也不该有 server_default
+  [PASS] knowledge_chunk 已登记进 DESIRED_COLUMNS
+  [PASS]   └ 登记列 == 模型非主键列（不遗漏、不臆造）
+  [PASS]   └ document_id 类型一致
+  [PASS]   └ document_id 可空性一致
+  [PASS]   └ document_id 未声明默认值时 ORM 也不该有 server_default
+  [PASS]   └ content 类型一致
+  [PASS]   └ content 可空性一致
+  [PASS]   └ content 未声明默认值时 ORM 也不该有 server_default
+  [PASS]   └ metadata 类型一致
+  [PASS]   └ metadata 可空性一致
+  [PASS]   └ metadata 未声明默认值时 ORM 也不该有 server_default
+  [PASS]   └ embedding 类型一致
+  [PASS]   └ embedding 可空性一致
+  [PASS]   └ embedding 未声明默认值时 ORM 也不该有 server_default
+  [PASS]   └ embedding_model 类型一致
+  [PASS]   └ embedding_model 可空性一致
+  [PASS]   └ embedding_model 默认值一致（ORM 必须有 server_default）
+  [PASS]   └ embedding_dim 类型一致
+  [PASS]   └ embedding_dim 可空性一致
+  [PASS]   └ embedding_dim 未声明默认值时 ORM 也不该有 server_default
+  [PASS] 登记项本身合法（DDL 可渲染，不抛 UnsupportedColumnSpecError）
+
+[7] 同名不同物：ORM 行 vs 检索值对象
+  [PASS] ★ 两个 KnowledgeChunk 是不同的类
+  [PASS]   └ 检索侧的是 frozen dataclass（内存值对象，无 id / document_id）
+  [PASS]   └ 检索侧仍零依赖：未 import models（保持可脱离 DB 单测）
+
+[8] 边界：不改 Interview 逻辑；不引入向量库 / Embedding
+  [PASS] models/interview.py 未 import 新增的知识库模型（Interview 逻辑未改）
+  [PASS] services/interview_core.py 未 import 新增的知识库模型（Interview 逻辑未改）
+  [PASS] services/interview_agent.py 未 import 新增的知识库模型（Interview 逻辑未改）
+  [PASS] services/interview_service.py 未 import 新增的知识库模型（Interview 逻辑未改）
+  [PASS] models/knowledge.py 未 import 向量库 / Embedding / LLM
+  [PASS]   └ 也不 import Retriever / Interview（纯数据结构）
+
+[9] 端到端：四类知识可真实读写
+  [PASS] 四类知识各写入一条
+  [PASS]   └ created_at 由 ORM 自动填充（非 None）
+  [PASS]   └ source 落库正确
+  [PASS] 按 category 检索可用（分类是索引列）
+  [PASS] 切片按 document_id 查回（1:N 关联可用）
+  [PASS]   └ metadata 为 JSON 字典且可读
+  [PASS]   └ 未显式传 metadata 的切片默认是空 dict（不是 None / 共享对象）
+  [PASS] ★ 未向量化的切片：embedding 为 NULL（即「待处理」筛选条件）
+  [PASS]   └ embedding_model 默认落成空串（不是 NULL）
+  [PASS]   └ embedding_dim 默认为 NULL
+  [PASS] ★ 向量可写入并原样读回（JSON 列保真）
+  [PASS]   └ 模型名与维度一并落库（换模型后可筛出旧向量）
+  [PASS]   └ 可用 SQL 直接筛「待向量化」的行（embedding IS NULL）
+
+[10] schema_sync 接入验证：老库缺列能自动补齐
+  [PASS] 老库确实缺 source / created_at
+  [PASS] ★ ensure_columns 自动补上缺失列
+  [PASS]   └ 补齐后列集合与模型一致
+  [PASS]   └ 幂等：第二次调用不重复 ALTER
+  [PASS]   └ 表不存在时跳过、不建表（knowledge_chunk 未被创建）
+
+[11] schema_sync：老库的 knowledge_chunk 缺向量列 → 自动补齐
+  [PASS] 老库的 knowledge_chunk 确实只有原 4 列
+  [PASS] ★ ensure_columns 自动补上三个向量列
+  [PASS]   └ 补齐后列集合与模型一致
+  [PASS]   └ 幂等：第二次调用不重复 ALTER
+  [PASS] ★ 既有行未被清空（只加列，不动数据）
+  [PASS]   └ 既有行的 embedding 为 NULL（尚未向量化）
+  [PASS]   └ 既有行的 embedding_model 自动填默认空串（NOT NULL 有 DEFAULT 才能补）
+  [PASS]   └ 既有行的 embedding_dim 为 NULL
+
+======================================================================
+结果: 通过 128 项，失败 0 项
+======================================================================

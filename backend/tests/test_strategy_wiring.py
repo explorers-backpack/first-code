@@ -397,7 +397,7 @@ async def run() -> bool:
         # ------------------------------------------------------------
         print("\n[6] 接线取证（AST / 源码）")
 
-        ws_src = (BACKEND_DIR / "api" / "interview_ws.py").read_text(encoding="utf-8")
+        ws_src = (BACKEND_DIR / "modules" / "interview" / "ws.py").read_text(encoding="utf-8")
         _check("[6.1] WS 的 start 处理走策略化入口",
                "await orch.start_questions(" in ws_src)
         _check("  └ 不再调用旧的 orch.start(（避免两条路径并存）",
@@ -429,9 +429,9 @@ async def run() -> bool:
                "build_question_plan" in start_src)
         _check("  └ start_session 不认识出题策略（源码不含策略层模块名）",
                "question_generator" not in start_src)
-        _check("[7.2] HTTP 契约层（api/interview.py）不出现策略化入口",
+        _check("[7.2] HTTP 契约层（modules/interview/api.py）不出现策略化入口",
                "start_questions" not in (
-                   (BACKEND_DIR / "api" / "interview.py").read_text(encoding="utf-8")))
+                   (BACKEND_DIR / "modules" / "interview" / "api.py").read_text(encoding="utf-8")))
         _check("[7.3] 策略层不反向依赖 Service（不 import interview_service）",
                "services.interview_service" not in _all_imports(
                    inspect.getsource(qg)))

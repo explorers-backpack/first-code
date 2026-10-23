@@ -47,6 +47,7 @@ from sqlalchemy.ext.asyncio import (  # noqa: E402
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 import main  # noqa: E402
+from common import health  # noqa: E402
 import models  # noqa: E402,F401
 from database import Base, get_db  # noqa: E402
 from deps import get_current_user  # noqa: E402
@@ -396,9 +397,9 @@ async def run() -> bool:
         _check("GET /api/health 回带 avatar 状态（未配置 ⇒ mock）",
                r.status_code == 200 and (r.json().get("avatar") or {}).get("provider") == "mock",
                f"{r.status_code} {r.json().get('avatar')}")
-        _check("  └ avatar 与 main.avatar_status() 同源（逐键相等）",
-               r.json().get("avatar") == main.avatar_status(),
-               f"{r.json().get('avatar')} vs {main.avatar_status()}")
+        _check("  └ avatar 与 health.avatar_status() 同源（逐键相等）",
+               r.json().get("avatar") == health.avatar_status(),
+               f"{r.json().get('avatar')} vs {health.avatar_status()}")
         _check("  └ 既有键 status / service 未变（加键不改键）",
                r.json().get("status") == "ok"
                and r.json().get("service") == "Career.ai FastAPI")
@@ -465,16 +466,16 @@ async def run() -> bool:
            all(callable(getattr(avatar_interview, fn, None))
                for fn in ("classify_payload", "spoken_text", "drive")))
 
-    # main.avatar_status：健康检查用的只读上报，**配置非法也不许抛**
-    st = main.avatar_status()
-    _check("main.avatar_status 固定 7 键、未配置 ⇒ mock / configured=True / error=None",
+    # health.avatar_status：健康检查用的只读上报，**配置非法也不许抛**
+    st = health.avatar_status()
+    _check("health.avatar_status 固定 7 键、未配置 ⇒ mock / configured=True / error=None",
            set(st) == {"provider", "known", "configured", "host", "base_path",
                        "masked_api_key", "error"}
            and st["provider"] == "mock" and st["configured"] is True and st["error"] is None,
            str(st))
     os.environ["AVATAR_PROVIDER"] = "bogus"
     try:
-        st_bad = main.avatar_status()
+        st_bad = health.avatar_status()
         _check("  └ 配置非法时**不抛异常**（健康检查永不 500），把原因塞进 error",
                bool(st_bad["error"]) and st_bad["configured"] is False, str(st_bad))
     finally:

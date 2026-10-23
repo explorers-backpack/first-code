@@ -1,0 +1,121 @@
+====================================================================
+AI 模拟面试 · 会话生命周期自检（service 层）
+====================================================================
+
+[1] 创建会话（status=created，不生成题目）
+  [PASS] 初始状态为 created
+  [PASS] current_question_no 为 0
+  [PASS] 未生成题目（first_question 为空）
+  [PASS] 回传岗位名
+
+  -- 入参校验（Pydantic 层）--
+  [PASS] 非法 interview_type 被拒
+  [PASS] 非法 difficulty 被拒
+  [PASS] total_questions 越界被拒
+  [PASS] duration 越界被拒
+  [PASS] 空回答文本被拒
+
+  -- 业务校验（service 层）--
+  [PASS] 不存在的 job_id 被拒（400）
+  [PASS] 不存在的 resume_id 被拒（400）
+  [PASS] created 状态不能提交回答（400）
+  [PASS] created 状态不能结束（400）
+  [PASS] created 状态读报告（404）
+
+[2] 开始面试（生成题目，status=ongoing）
+  [PASS] 状态变为 ongoing
+  [PASS] started_at 已写入
+  [PASS] current_question_no 为 1
+  [PASS] 返回第一题
+  [PASS] 第一题是自我介绍
+  [PASS] 题量等于 total_questions
+  [PASS] 题号连续 1..N
+  [PASS] 最后一题为收尾题
+  [PASS] 题目均带 expected_points
+  [PASS] 生成技术题
+  [PASS] 技术题命中岗位技能
+  [PASS] 重复 start 被拒（400）
+
+[3] 获取当前题目
+  [PASS] 返回第 1 题
+  [PASS] answered 为 False
+  [PASS] all_answered 为 False
+
+[4] 提交回答（规则评分）
+  [PASS] 总分在 0-100
+  [PASS] technical_score 在 0-100
+  [PASS] logic_score 在 0-100
+  [PASS] expression_score 在 0-100
+  [PASS] adaptability_score 在 0-100
+  [PASS] feedback 非空
+  [PASS] feedback 含取证信息
+  [PASS] audio_url 允许为空
+  [PASS] 推进到第 2 题
+  [PASS] 返回下一题
+  [PASS] all_answered 为 False
+        优秀回答得分 = 82（技术 65 / 逻辑 80 / 表达 100 / 应变 94）
+  [PASS] 空白回答被拒（400）
+
+  -- 评分确定性 --
+  [PASS] 同输入两次评分一致
+  [PASS] 好坏回答可区分
+  [PASS] 切题的技术回答技术分 >= 70
+        技术题「Python」得分 = 75（技术 77）
+
+[5] 重复作答保护（独立会话）
+  [PASS] 已作答的题再次提交被拒（400）
+
+[6] 完成剩余题目
+  [PASS] 全部作答后 all_answered 为 True
+  [PASS] 不再返回下一题
+  [PASS] 题号超出总题量
+  [PASS] 取题接口提示 all_answered
+  [PASS] 全部作答后继续提交被拒（400）
+
+[7] 结束面试并生成报告
+  [PASS] 状态变为 finished
+  [PASS] ended_at 已写入
+  [PASS] 报告 total_score 在 0-100
+  [PASS] 报告 technical_score 在 0-100
+  [PASS] 报告 project_score 在 0-100
+  [PASS] 报告 logic_score 在 0-100
+  [PASS] 报告 expression_score 在 0-100
+  [PASS] 报告 communication_score 在 0-100
+  [PASS] 报告 adaptability_score 在 0-100
+  [PASS] 报告 job_match_score 在 0-100
+  [PASS] 岗位匹配度已计算（指定了岗位技能）
+  [PASS] strengths 非空
+  [PASS] weaknesses 非空
+  [PASS] suggestions 非空
+        总分 83 | 技术 71 | 项目 72 | 逻辑 80 | 表达 100 | 沟通 98 | 应变 94 | 岗位匹配 80
+        亮点 5 条 / 不足 1 条
+  [PASS] 报告可通过 get_report 读回
+  [PASS] 重复 end 幂等（返回既有报告）
+
+[8] 越权与不存在的会话
+  [PASS] 他人会话不可读（404）
+  [PASS] 他人会话不可作答（404）
+  [PASS] 他人会话不可读报告（404）
+  [PASS] 不存在的会话（404）
+
+[9] 提前结束（仅答 2 题即结束）
+  [PASS] 仅落库 2 条作答
+  [PASS] 可提前结束
+  [PASS] 报告基于已作答内容生成
+  [PASS] 建议中说明作答题数
+
+[10] 未指定岗位时的处理
+  [PASS] 未指定岗位时 job_match_score 为 None（不猜）
+  [PASS] 其余维度仍正常计算
+  [PASS] 总分已按可用维度归一化
+
+[11] 不同面试类型的题型配比
+  [PASS] 技术面题量为 6
+  [PASS] 技术面技术题占比最高
+        技术面题型分布：['intro', 'technical', 'technical', 'technical', 'project', 'closing']
+  [PASS] 行为面行为题占比最高
+        行为面题型分布：['intro', 'project', 'behavioral', 'behavioral', 'behavioral', 'closing']
+
+====================================================================
+结果: 通过 80 项，失败 0 项
+====================================================================

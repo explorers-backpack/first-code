@@ -1,0 +1,96 @@
+======================================================================
+AI 模拟面试 · QuestionGenerator 抽象层自检（rule / agent 共存）
+======================================================================
+
+[1] 抽象层与工厂
+  [PASS] QuestionGenerator 是抽象基类
+  [PASS]   └ generate 是抽象方法
+  [PASS]   └ 抽象基类不可直接实例化
+  [PASS] RuleQuestionGenerator.mode == 'rule'
+  [PASS] AgentQuestionGenerator.mode == 'agent'
+  [PASS] 两个实现都继承 QuestionGenerator
+  [PASS] 两个实现的 generate 都是协程函数
+  [PASS] GENERATOR_MODES == ('rule', 'agent')
+  [PASS] 默认模式为 rule（不改变现有行为）
+  [PASS] get_generator() 默认返回规则生成器
+  [PASS] get_generator('agent') 返回 Agent 生成器
+  [PASS] 生成器无状态，可共享单例（同一对象）
+  [PASS] 未知 mode 抛 UnknownModeError
+  [PASS]   └ UnknownModeError 继承 QuestionGeneratorError
+  [PASS]   └ 同时继承 ValueError（编程错误，贴近内建异常）
+  [PASS] 信封字段契约已声明（9 键）
+  [PASS] 单题字段契约与 build_question_plan 产出一致
+
+[2] rule 模式：结果与修改前（build_question_plan）逐字段一致
+  [PASS] [2.1] ok=True / mode='rule'
+  [PASS]   └ questions **逐字段完全等于** build_question_plan 的输出
+  [PASS]   └ count 与计划题量一致
+  [PASS]   └ errors 为空、error 为 None
+  [PASS]   └ rule 模式不产生 reason / stage（恒为空串）
+  [PASS]   └ 每道题恒为 6 字段
+  [PASS]   └ 题号从 1 连续到 N
+  [PASS]   └ 不落库：题目表行数不变
+  [PASS]   └ 确定性：两次调用结果完全相同
+  [PASS]   └ 注入「一调就炸」的 Spark 仍成功 → 规则模式从不调用大模型
+  [PASS]   └ 注入 plan 不改变规则出题结果（该参数在 rule 模式不参与生成）
+  [PASS]   └ 三种面试类型（technical/behavioral/comprehensive）均逐字段一致
+  [PASS]   └ 注入 context 后 question 指向 current_question_no 那一道
+  [PASS]   └ 未注入 context 时 question 退回第一道
+  [PASS]   └ 会话不存在：ok=False + session_not_found
+
+[3] agent 模式：调用 Mock Agent 生成问题
+  [PASS] [3.1] ok=True / mode='agent'
+  [PASS]   └ 恰好调用一次 Spark
+  [PASS]   └ 只产出 1 道题（单题粒度）
+  [PASS]   └ 题目为统一 6 字段
+  [PASS]   └ 题目内容来自模型输出
+  [PASS]   └ question 访问器指向同一道题
+  [PASS]   └ 信封带 reason（模型出题理由）
+  [PASS]   └ 信封带 stage（当前面试阶段）
+  [PASS]   └ 不落库（持久化由调用方负责）
+  [PASS] [3.2] Agent 失败：ok=False
+  [PASS]   └ questions 为空、question 为 None
+  [PASS]   └ count == 0
+  [PASS]   └ errors 含 agent_failed
+  [PASS]   └ 非法 JSON 触发 1 次修复（共 2 次调用）
+  [PASS] [3.3] Validator 失败：ok=False + validation_failed
+  [PASS]   └ 保留 Validator 原始错误码 invalid_difficulty
+  [PASS]   └ questions 为空（不放行未通过校验的问题）
+  [PASS] [3.4] 全部答完：all_answered
+  [PASS]   └ 已结束：session_finished
+
+[4] 两种模式互不影响
+  [PASS] [4.1] 跑过 agent 之后，rule 结果完全不变
+  [PASS] [4.2] rule 模式只走 build_question_plan
+  [PASS]   └ agent 模式只走 generate_next_question
+  [PASS]   └ 替换规则实现后 agent 结果不受影响
+  [PASS]   └ 替换 agent 实现后 rule 结果不受影响
+  [PASS]   └ 两种模式信封字段集完全相同
+  [PASS]   └ 两种模式题目项字段集完全相同
+
+[5] 不改变默认 start_session 行为
+  [PASS] [5.1] build_question_plan 未被删除（仍在 Core 且可调用）
+  [PASS]   └ 仍在 Core 的 __all__ 中
+  [PASS] [5.2] start_session 未引用 question_generator（默认路径不变）
+  [PASS]   └ start_session 仍直接调用 Core 的 build_question_plan
+  [PASS]   └ Service 不 import question_generator
+  [PASS]   └ Core 不 import question_generator（避免成环）
+  [PASS] [5.3] start_session 生成的题目 == build_question_plan 结果
+  [PASS]   └ create→start→answer→end 全链路仍正常
+
+[6] 依赖边界与统一契约
+  [PASS] [6.1] question_generator 不反向依赖 interview_service
+  [PASS]   └ 不 import main（避免与 Spark 单例成环）
+  [PASS]   └ 只依赖 Core 与 resume_scoring 两个 services 模块
+  [PASS] [6.2] 无 DATABASE_URL 也能导入本模块（不在导入期读库）
+  [PASS]   └ 导入期不拉入 models
+  [PASS]   └ 导入期不拉入 database / sqlalchemy
+  [PASS]   └ 导入期不拉入 main
+  [PASS]   └ 导入期不拉入 interview_service（无循环）
+  [PASS] [6.3] 模块 __all__ 已声明且覆盖核心符号
+  [PASS]   └ 便捷入口 generate_questions 是协程函数
+  [PASS]   └ 工厂返回值即便捷入口所用生成器
+
+======================================================================
+结果: 通过 77 项，失败 0 项
+======================================================================

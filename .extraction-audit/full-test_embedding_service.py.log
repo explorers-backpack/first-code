@@ -1,0 +1,109 @@
+======================================================================
+AI 面试知识库 · EmbeddingService（文本向量化）自检
+======================================================================
+
+[1] 模块可导入 + 契约
+  [PASS] services.embedding_service 可导入
+  [PASS] EmbeddingService 是抽象基类（不能直接实例化）
+  [PASS]   └ 直接实例化被拒（未实现 _embed_one）
+  [PASS] 公开三个实现：基类 + 离线哈希 + 测试替身
+  [PASS] 默认维度是正整数
+  [PASS] __all__ 导出四类异常与两个实现
+  [PASS] tokenize：英文按词、小写归一
+  [PASS] tokenize：中文按单字 + 相邻二字组
+  [PASS] tokenize：无内容 → 空列表
+  [PASS] tokenize：中英混排都能取到 token
+
+[2] 单文本生成向量（测试要求 1）
+  [PASS] ★ embed 返回 list
+  [PASS] ★ 维度 == 声明的 dimension
+  [PASS]   └ 元素全是 float
+  [PASS]   └ 不是全零（文本确实被编码了）
+  [PASS]   └ 默认做了 L2 归一（模长 ≈ 1）
+  [PASS] normalize=False 时不归一（模长 != 1）
+  [PASS]   └ 归一与不归一只差一个比例因子（方向一致）
+  [PASS] ★ 同文本 → 完全相同的向量（确定性）
+  [PASS] ★ 不同文本 → 不同向量
+  [PASS] 中英混排可编码
+  [PASS] 只有标点（无可编码 token）→ 全零向量，不除零报错
+  [PASS] ★ 拒绝入参：空串
+  [PASS] ★ 拒绝入参：纯空白
+  [PASS] ★ 拒绝入参：None
+  [PASS] ★ 拒绝入参：整数
+  [PASS] ★ 拒绝入参：列表
+  [PASS] dimension=0 被拒（正整数校验）
+  [PASS]   └ dimension=True 被拒（bool 是 int 子类，要单独挡）
+
+[3] 批量生成向量（测试要求 2）
+  [PASS] ★ 返回列表且条数一致
+  [PASS] ★ 每条形如单条 embed 的结果（维度一致）
+  [PASS] ★ 顺序与入参一致（逐条比对）
+  [PASS]   └ tuple 入参同样可用
+  [PASS]   └ 单元素批次可用
+  [PASS] ★ 空批次 → []（不报错）
+  [PASS] ★ 拒绝批量入参：None
+  [PASS] ★ 拒绝批量入参：整数
+  [PASS] ★ 拒绝批量入参：含 None 元素
+  [PASS] ★ 拒绝批量入参：含空文本元素
+  [PASS] ★ 把**单个字符串**传进批量接口被拒（否则会被逐字符拆开）
+  [PASS]   └ 元素级错误指出是第几条
+  [PASS]   └ 空文本元素同样被拒且指出索引
+
+[4] 支持后续替换模型（换模型 = 实现一个钩子）
+  [PASS] ★ 子类只实现 _embed_one 即可获得完整能力
+  [PASS]   └ tuple 返回值被接受（真实 SDK 常返回 tuple / numpy）
+  [PASS]   └ embed_batch 对子类同样可用（逐条复用基类校验）
+  [PASS]   └ name 用于标记「哪次编码产生的」（写进 embedding_model）
+  [PASS] ★ 子类返回维度与声明不符 → EmbeddingDimensionError（不放过脏向量）
+  [PASS] ★ 拒绝非法向量：空向量
+  [PASS] ★ 拒绝非法向量：字符串
+  [PASS] ★ 拒绝非法向量：含 bool
+  [PASS] ★ 拒绝非法向量：含字符串元素
+  [PASS] ★ 拒绝非法向量：含 None 元素
+  [PASS] ★ 拒绝非法向量：不可迭代
+  [PASS] dimension=0（不声明）时不校验维度长度
+  [PASS] ★ embed_batch 是可覆盖点（原生批量接口）
+  [PASS] MockEmbeddingService 返回固定向量
+  [PASS]   └ 记录每次调用的文本（按断言被调次数用，不比对数值）
+
+[5] 不绑定具体厂商（AST 取证）
+  [PASS] ★ 顶层依赖恰为标准库（无任何厂商 SDK / HTTP 客户端）
+  [PASS]   └ 模块名里也没有厂商 / 向量库 / HTTP 依赖
+  [PASS]   └ 未 import 业务侧（models / database / fastapi / Retriever / Interview）
+  [PASS]   └ 未做全局单例（无模块级实例，由调用方显式构造并注入）
+
+[6] 异常处理清晰（入参错 vs 服务错可分流）
+  [PASS] 四类异常都继承 EmbeddingError（可一把捕获）
+  [PASS] ★ EmbeddingInputError 同时是 ValueError（调用方改代码，不该重试）
+  [PASS] ★ EmbeddingUnavailableError 同时是 RuntimeError（服务问题，可重试/降级）
+  [PASS] EmbeddingDimensionError 同时是 ValueError（实现写错，必须暴露）
+  [PASS]   └ 三类互不误捕（Input 不是 RuntimeError，Unavailable 不是 ValueError）
+  [PASS] ★ 用 EmbeddingError 能捕获全部向量化异常
+  [PASS] ★ 服务级异常原样向上传播（不被基类吞掉 / 不换类型）
+  [PASS]   └ 批量路径同样传播
+
+[7] 确定性与区分度
+  [PASS] 同一实例两次结果相同
+  [PASS] 不同实例（同参数）结果相同
+  [PASS] 换 seed → 换向量（seed 确实生效）
+  [PASS] 与自己余弦相似度 == 1
+  [PASS] ★ 共享 token 的文本比不相关文本更相似（有区分度）
+  [PASS] ★★ 跨进程 / 跨 PYTHONHASHSEED 完全一致（未依赖内置 hash()）
+
+[8] 边界：消费者收口（能力已就绪，消费方都是显式接线）
+  [PASS] ★ 消费者收口为已知闭集（实现方 Provider + 真实检索器）
+  [PASS]   └ services/interview_core.py 未被改动（未 import 本服务）
+  [PASS]   └ services/interview_agent.py 未被改动（未 import 本服务）
+  [PASS]   └ services/interview_service.py 未被改动（未 import 本服务）
+  [PASS]   └ services/knowledge_retriever.py 未被改动（未 import 本服务）
+  [PASS]   └ models/knowledge.py 不依赖本服务（模型不反向依赖服务）
+
+[9] 与预留存储联动：embedding 列可存可读
+  [PASS] ★ KnowledgeChunk 已预留三列
+  [PASS] ★ 向量写入后原样读回（JSON 列保真，浮点不丢精度）
+  [PASS]   └ 同时记录模型名与维度（换模型后可筛出旧向量重算）
+  [PASS]   └ 未向量化的切片可用 embedding IS NULL 筛出
+
+======================================================================
+结果: 通过 84 项，失败 0 项
+======================================================================

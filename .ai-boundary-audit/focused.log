@@ -1,0 +1,32 @@
+.......E.
+======================================================================
+ERROR: test_startup_rejects_missing_config_or_transport_before_database (__main__.BusinessAiTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\unittest\mock.py", line 1556, in __enter__
+    setattr(self.target, self.attribute, new_attr)
+AttributeError: 'AsyncEngine' object attribute 'begin' is read-only
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\unittest\async_case.py", line 64, in _callTestMethod
+    self._callMaybeAsync(method)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\unittest\async_case.py", line 87, in _callMaybeAsync
+    return self._asyncioTestLoop.run_until_complete(fut)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\asyncio\base_events.py", line 649, in run_until_complete
+    return future.result()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\unittest\async_case.py", line 101, in _asyncioLoopRunner
+    ret = await awaitable
+  File "C:\Users\DELL-PC\Desktop\career-ai\backend\tests\test_ai_business_boundary.py", line 123, in test_startup_rejects_missing_config_or_transport_before_database
+    with patch.object(main.engine,'begin',side_effect=AssertionError('must not touch DB')):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\unittest\mock.py", line 1569, in __enter__
+    if not self.__exit__(*sys.exc_info()):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\unittest\mock.py", line 1577, in __exit__
+    delattr(self.target, self.attribute)
+AttributeError: 'AsyncEngine' object attribute 'begin' is read-only
+
+----------------------------------------------------------------------
+Ran 9 tests in 26.513s
+
+FAILED (errors=1)

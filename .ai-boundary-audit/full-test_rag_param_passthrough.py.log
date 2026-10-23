@@ -1,0 +1,105 @@
+
+--------------------------------------------------------------------------
+[1] 签名契约（keyword-only retriever_kwargs，默认 None；既有顺序不动）
+--------------------------------------------------------------------------
+  [PASS] resolve_retriever 参数顺序为 (db, retriever, use_rag, *, retriever_kwargs)  -> ['db', 'retriever', 'use_rag', 'retriever_kwargs']
+  [PASS]   └ retriever / use_rag 默认值未变（None / False）
+  [PASS]   └ retriever_kwargs 是 keyword-only 且默认 None
+  [PASS] Core.generate_next_question 前 7 个参数顺序未变  -> ['db', 'session_id', 'user_id', 'spark', 'context', 'plan', 'retriever', 'use_rag', 'retriever_kwargs']
+  [PASS]   └ retriever_kwargs 追加在**最后**（不打断既有位置参数）  -> ['db', 'session_id', 'user_id', 'spark', 'context', 'plan', 'retriever', 'use_rag', 'retriever_kwargs']
+  [PASS]   └ 且是 keyword-only、默认 None
+  [PASS] Service.generate_next_question 前 3 个参数为 (db, user_id, session_id)  -> ['db', 'user_id', 'session_id', 'spark', 'retriever', 'use_rag', 'retriever_kwargs']
+  [PASS]   └ 也有 keyword-only retriever_kwargs（默认 None）
+  [PASS] QuestionGenerator.generate 也有 keyword-only retriever_kwargs  -> ['self', 'db', 'session_id', 'context', 'plan', 'retriever', 'use_rag', 'retriever_kwargs', 'spark']
+  [PASS] RuleQuestionGenerator.generate 也有 keyword-only retriever_kwargs  -> ['self', 'db', 'session_id', 'context', 'plan', 'retriever', 'use_rag', 'retriever_kwargs', 'spark']
+  [PASS] AgentQuestionGenerator.generate 也有 keyword-only retriever_kwargs  -> ['self', 'db', 'session_id', 'context', 'plan', 'retriever', 'use_rag', 'retriever_kwargs', 'spark']
+  [PASS] question_generator.generate_questions 同样具备
+  [PASS] 守卫自检：签名检查能发现参数缺失（对不存在的名字必须为假）
+
+--------------------------------------------------------------------------
+[2] 透传是结构性的（AST：每一跳都真的传下去；且不越层扩散）
+--------------------------------------------------------------------------
+  [PASS] 取到 Core.generate_next_question 的 AST 节点
+  [PASS] ★ Core.generate_next_question 把 retriever_kwargs 传给 resolve_retriever
+  [PASS]   └ 且 resolve_retriever 体内确实调用了 build_vector_retriever
+  [PASS] ★ Service.generate_next_question 把 retriever_kwargs 传给 Core
+  [PASS] ★ AgentQuestionGenerator.generate 把 retriever_kwargs 传给 Core
+  [PASS] ★ question_generator.generate_questions 把它转发给生成器
+  [PASS] build_question_plan 签名里没有 retriever_kwargs（规则路径不受影响）
+  [PASS] interview_agent.generate_question 签名里没有它（Agent 只收 knowledge_context）
+  [PASS] retrieve_knowledge 签名里没有它（检索接缝只认 retriever）
+  [PASS] validate_candidate_question 签名里没有它（Validator 与检索无关）
+  [PASS] ★ RuleQuestionGenerator.generate 方法体**不读取** retriever_kwargs
+  [PASS]   └ 规则出题方法体里也没有任何检索调用
+  [PASS] ★ Core 源码里 retriever_kwargs 只出现在那**两个**函数体内（没有第三处）
+
+--------------------------------------------------------------------------
+[3] 组装层语义（resolve_retriever 透传 / 降级 / 注入优先）
+--------------------------------------------------------------------------
+  [PASS] ★ retriever_kwargs 省略 / None / {} 三者配置逐字段等价（默认行为不变）  -> (5, None, True, None, None, 'hash-local') vs (5, None, True, None, None, 'hash-local')
+  [PASS]   └ 默认口径 = top_k 取默认值、min_score=None（与任务 69 实测一致）  -> top_k=5 min_score=None
+  [PASS] ★ retriever_kwargs 真正生效（top_k / min_score 都落到检索器上）  -> top_k=3 min_score=0.25
+  [PASS]   └ 未提及的参数仍取检索器默认值（不是整体覆盖）  -> dedup=True category=None
+  [PASS]   └ 多个键可同时生效（top_k / min_score / dedup / category）
+  [PASS] ★ 注入了 retriever ⇒ retriever_kwargs 不被读取（注入者自带配置）
+  [PASS]   └ 即使 kwargs 非法，注入路径也照样返回注入的检索器（不组装、不报错）
+  [PASS] ★ 非法 retriever_kwargs（top_k 传字符串）⇒ 静默降级为「无知识」+ warning（不抛异常）  -> ['knowledge_retrieval_failed']
+  [PASS] ★ 非法 retriever_kwargs（top_k 传 bool）⇒ 静默降级为「无知识」+ warning（不抛异常）  -> ['knowledge_retrieval_failed']
+  [PASS] ★ 非法 retriever_kwargs（min_score 传字符串）⇒ 静默降级为「无知识」+ warning（不抛异常）  -> ['knowledge_retrieval_failed']
+  [PASS] ★ 非法 retriever_kwargs（未知键）⇒ 静默降级为「无知识」+ warning（不抛异常）  -> ['knowledge_retrieval_failed']
+  [PASS] ★ 非法 retriever_kwargs（非映射（字符串））⇒ 静默降级为「无知识」+ warning（不抛异常）  -> ['knowledge_retrieval_failed']
+
+--------------------------------------------------------------------------
+[4] 端到端（use_rag=True + retriever_kwargs ⇒ 与显式注入检索器逐字段相等）
+--------------------------------------------------------------------------
+  [PASS] 场景的 current_topic 与基准声明一致（检索 query 未漂移）  -> 'MySQL 索引' vs 'MySQL 索引'
+  [PASS] 探测：候选非空且分数降序（期望值由实测派生，不硬编码）  -> n=32 top=[0.5476094267474777, 0.37796447300922753, 0.15653209603896637]
+  [PASS] ★ 默认（不传 retriever_kwargs）：出题成功且只调一次模型  -> None
+  [PASS]   └ 组装器实际收到 []（接线取证）  -> {}
+  [PASS]   └ knowledge_context == 显式注入检索器的结果（逐字段）  -> n=5 vs 5
+  [PASS]   └ 条数为 5（实测口径）  -> 5
+  [PASS] ★ top_k=2（截断）：出题成功且只调一次模型  -> None
+  [PASS]   └ 组装器实际收到 ['top_k']（接线取证）  -> {'top_k': 2}
+  [PASS]   └ knowledge_context == 显式注入检索器的结果（逐字段）  -> n=2 vs 2
+  [PASS]   └ 条数为 2（实测口径）  -> 2
+  [PASS] ★ top_k=2 + dedup=False：出题成功且只调一次模型  -> None
+  [PASS]   └ 组装器实际收到 ['dedup', 'top_k']（接线取证）  -> {'top_k': 2, 'dedup': False}
+  [PASS]   └ knowledge_context == 显式注入检索器的结果（逐字段）  -> n=2 vs 2
+  [PASS]   └ 条数为 2（实测口径）  -> 2
+  [PASS] ★ min_score 卡在 1/2 名之间（0.4628）：出题成功且只调一次模型  -> None
+  [PASS]   └ 组装器实际收到 ['dedup', 'min_score']（接线取证）  -> {'min_score': 0.4627869498783526, 'dedup': False}
+  [PASS]   └ knowledge_context == 显式注入检索器的结果（逐字段）  -> n=1 vs 1
+  [PASS]   └ 条数为 1（实测口径）  -> 1
+  [PASS] ★ min_score 高于全部命中：出题成功且只调一次模型  -> None
+  [PASS]   └ 组装器实际收到 ['min_score']（接线取证）  -> {'min_score': 1.01}
+  [PASS]   └ knowledge_context == 显式注入检索器的结果（逐字段）  -> n=0 vs 0
+  [PASS]   └ 条数为 0（实测口径）  -> 0
+  [PASS] ★ category=technical（只留手册）：出题成功且只调一次模型  -> None
+  [PASS]   └ 组装器实际收到 ['category']（接线取证）  -> {'category': 'technical'}
+  [PASS]   └ knowledge_context == 显式注入检索器的结果（逐字段）  -> n=5 vs 5
+  [PASS]   └ category 过滤真的生效（只剩 handbook:// 手册切片）  -> ['handbook://jvm/memory-and-gc', 'handbook://mysql/index', 'handbook://redis/persistence-and-ha', 'handbook://spring/auto-configuration']
+  [PASS] ★ document_id=MySQL 手册：出题成功且只调一次模型  -> None
+  [PASS]   └ 组装器实际收到 ['document_id']（接线取证）  -> {'document_id': 6}
+  [PASS]   └ knowledge_context == 显式注入检索器的结果（逐字段）  -> n=2 vs 2
+  [PASS]   └ document_id 过滤真的生效（只剩该文档的切片）  -> {6}
+  [PASS] 默认口径命中 5 条（与 rag_baseline.json 的实测一致）  -> 5
+  [PASS]   └ 组装与检索都正常（结果无 warning）  -> []
+  [PASS] ★ 阈值高到无命中 ⇒ knowledge_context 为空  -> 0
+  [PASS]   └ 且结果无 warning（「检索不到」不是「检索失败」）  -> []
+  [PASS] ★ 且 Prompt 回落到「无知识」模板（逐字节相同）
+  [PASS]   └ 默认口径的 Prompt 与它不同、且含参考知识小节（知识确实进了 Prompt）
+  [PASS]   └ 无知识模板里不含参考知识小节
+
+--------------------------------------------------------------------------
+[5] Service 层透传（经 HTTP 之下那一层走一遍，效果与 Core 直调一致）
+--------------------------------------------------------------------------
+  [PASS] Service.generate_next_question 出题成功且只调一次模型  -> None
+  [PASS] ★ Service 层也把 retriever_kwargs 送到了组装器  -> {'top_k': 2, 'dedup': False}
+  [PASS] ★ 结果与显式注入检索器逐字段相等  -> n=2 vs 2
+  [PASS] ★ 非本人会话仍被拒绝（404）  -> HTTPException/404
+  [PASS] Service 未 import 组装器（只透传，不自己组装）  -> []
+  [PASS]   └ 策略层同样未 import 组装器（AgentQuestionGenerator 也只透传）
+
+==========================================================================
+结果: 通过 81 项，失败 0 项
+==========================================================================

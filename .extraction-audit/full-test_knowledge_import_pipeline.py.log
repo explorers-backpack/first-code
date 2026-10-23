@@ -1,0 +1,144 @@
+
+[1] 契约与配置（出参形状 / 构造期校验 / 默认值来源）
+  [PASS] ★ 报告键集合与顺序恒为 IMPORT_RESULT_FIELDS
+  [PASS]   └ 共 13 键（成功 / 跳过 / 失败同一形状）
+  [PASS]   └ 空白报告是成功态（ok=True / status=ok / stage=done）
+  [PASS]   └ 计数与错误字段初值为 0 / [] / ""
+  [PASS] ★ 没有 db → ImportConfigError（构造期就报）
+  [PASS]   └ ImportConfigError 是 ValueError（调用方改代码就能解决）
+  [PASS] ★ 默认 chunker 是 DocumentChunker
+  [PASS] ★ 默认 embedder 来自组装器 default_embedder()（不在此另写一份默认）
+  [PASS] ★ 默认 store 来自组装器 build_vector_store()（本模块不认识 DB 后端）
+  [PASS]   └ 组装器确实暴露了写侧入口 build_vector_store
+  [PASS] ★ 入参是协程接口（import_document 是 async）
+  [PASS]   └ 便捷入口 import_document 也是协程函数
+
+[2] 要求 1 · 文档成功入库
+  [PASS] ★ 导入成功（ok / status=ok / stage=done）
+  [PASS]   └ 报告键集合与顺序仍然恒定
+  [PASS]   └ 新建了文档（reused_document=False）
+  [PASS]   └ 拿到了 document_id
+  [PASS]   └ 无错误（errors=[] / error="" / failed_index=None）
+  [PASS] ★ 短文本整篇 1 片（chunk_count=1）
+  [PASS]   └ saved_chunks=1 / embedded_chunks=1 / skipped_chunks=0
+  [PASS] ★ 文档真的落库了（1 行）
+  [PASS] ★ 切片真的落库了（1 行）
+  [PASS]   └ 切片指向该文档
+  [PASS]   └ 切片正文与原文一致（原样保存）
+  [PASS] ★ 切片带上了向量（embedding 非空 / 维度对得上）
+  [PASS] ★ 记下了模型标识（换模型后据此重算）
+  [PASS]   └ embedding_dim 冗余列也写了
+  [PASS] ★ 切片 metadata 含来源三键 + 追加的 chunk_index
+  [PASS] ★ 向量库侧也数得到 1 条
+  [PASS] ★ 入参也接受对象形态（SimpleNamespace）
+
+[3] 要求 2 · 多 Chunk 成功保存
+  [PASS] ★ 长文本被切成多片
+  [PASS] ★ 每片都新建了切片行（saved_chunks == chunk_count）
+  [PASS] ★ 每片都写了向量（embedded_chunks == chunk_count）
+  [PASS]   └ 没有跳过任何片
+  [PASS] ★ 库里切片行数 == chunk_count
+  [PASS]   └ chunk_index 从 0 起连续
+  [PASS] ★ 每一片都有向量（没有留下待向量化的行）
+  [PASS]   └ 每一片维度都一致
+  [PASS]   └ 切片正文拼起来能覆盖原文的每一节（逐节取证）
+  [PASS] ★ 向量库侧计数 = 之前 2 条 + 本次 n 条
+  [PASS] ★ 入库后能被真实检索器检索到（写读两侧口径一致）
+  [PASS]   └ 命中的就是那片原文（自相似性 score == 1.0）
+  [PASS]   └ 检索结果带来源（可溯源）
+  [PASS] ★ 默认路径（不注入任何协作者）也能入库
+  [PASS]   └ use_rag=True 组装出真实检索器（默认模型与入库时同一口径）
+  [PASS] ★ 默认路径入库的知识能被 RAG 检索到（写读闭环）
+
+[4] 要求 3 · Embedding 失败处理
+  [PASS] ★ 编码失败 → ok=False / status=failed
+  [PASS] ★ 阶段明确指向 embedding
+  [PASS] ★ 定位到第几片失败（failed_index=1）
+  [PASS] ★ errors 是稳定错误码（不是散文）
+  [PASS] ★ error 里带原始异常类名（可据此区分该不该重试）
+  [PASS]   └ 报告键集合与顺序仍然恒定
+  [PASS]   └ chunk_count 仍然可读（知道一共有几片）
+  [PASS] ★ 已做完的部分被保留（embedded_chunks=1 / saved_chunks=1）
+  [PASS]   └ 失败片之前没有多写（半截数据最少化：只多落 1 行切片）
+  [PASS]   └ 文档只新建了 1 篇（失败不影响已落库的文档）
+  [PASS] ★ 重跑可以续做（ok=True）
+  [PASS] ★ 重跑复用了文档（不新建第二篇）
+  [PASS] ★ 已带向量的那一片被跳过（不重复编码）
+  [PASS]   └ 只补了剩下的片
+  [PASS] ★ 重跑把缺的片补齐（总数 = 失败前的 + (n-1)）
+  [PASS]   └ 文档数没再增加（仍是失败后那一篇）
+
+[5] 幂等 · 支持重复执行
+  [PASS] ★ 重复执行是成功的空操作（ok=True / status=skipped）
+  [PASS]   └ 复用了同一篇文档
+  [PASS] ★ 一片都没重复写（saved=0 / embedded=0 / skipped=全部）
+  [PASS] ★ 文档数没变
+  [PASS] ★ 切片数没变
+  [PASS] ★ 向量数没变
+  [PASS] ★ 换了模型 → 全部重算（旧向量不可比）
+  [PASS]   └ 切片行没有重复增加
+  [PASS]   └ embedding_model 已更新为新模型
+  [PASS] ★ 正文变了 → 重算（旧向量不能指向旧文字）
+  [PASS]   └ 末片正文已按新内容更新（追加的句子进来了）
+  [PASS]   └ 切片行数没有因为重算而增加
+
+[6] 其他失败路径
+  [PASS] ★ 向量阶段失败 → stage=vector / errors 稳定码
+  [PASS]   └ failed_index 指向第一片
+  [PASS] ★ 复用既有文档 + 空正文 → stage=chunk / chunk_empty（不炸）
+  [PASS]   └ 空正文没有产出任何切片
+  [PASS] ★ 空标题 → 400（入参契约，不是「中途失败」）
+  [PASS] ★ 空正文（新文档）→ 400
+  [PASS] ★ category 非法 → 400
+  [PASS]   └ 三次非法入参都没写出文档
+
+[7] 隔离守卫（不碰 InterviewAgent / 不改 Retriever 接口 / 不认识 DB 后端）
+  [PASS] ★ 入库 Pipeline 不 import 任何 Interview 模块（需求：不改 InterviewAgent）
+  [PASS] ★ 入库 Pipeline 不 import DB 向量后端（经组装器拿，换库只改组装器）
+  [PASS]   └ 也不 import 检索器 / 组装器的读侧（写读两侧互不依赖）
+  [PASS] ★ Retriever 接口未被修改（retrieve 签名逐字不变）
+  [PASS]   └ 真实检索器的 retrieve 签名也未变
+  [PASS]   └ 入库 Pipeline 一次都没调用 retrieve（它是写侧）
+  [PASS] ★ services.document_chunker 的消费者收口为已知闭集（入库 Pipeline 是写侧入口）
+  [PASS] ★ services.embedding_service 的消费者收口为已知闭集（入库 Pipeline 是写侧入口）
+  [PASS] ★ services.knowledge_document_service 的消费者收口为已知闭集（入库 Pipeline 是写侧入口）
+  [PASS] ★ 组装器的消费者 = 读侧(Core) + 写侧(入库 Pipeline) + 维护 + 迁移 + 状态上报
+
+[8] 批量编码（embed_batch 接线 / 批大小 / 条数不符回退 / 跨批失败定位）
+  [PASS] ★ embed_batch_size 是 keyword-only 且默认 DEFAULT_EMBED_BATCH
+  [PASS]   └ 非法 embed_batch_size=0 → ImportConfigError（不静默收敛）
+  [PASS]   └ 非法 embed_batch_size=-1 → ImportConfigError（不静默收敛）
+  [PASS]   └ 非法 embed_batch_size=True → ImportConfigError（不静默收敛）
+  [PASS]   └ 非法 embed_batch_size='3' → ImportConfigError（不静默收敛）
+  [PASS]   └ 非法 embed_batch_size=1.5 → ImportConfigError（不静默收敛）
+  [PASS] ★ 走批量：embed_batch 被调用、逐片 embed 为 0
+  [PASS]   └ 每批大小 == embed_batch_size（末批可更小）
+  [PASS]   └ 批次数 == ceil(片数 / 批大小)
+  [PASS]   └ 每片只喂一次（入参条数总和 == 片数）
+  [PASS] ★ 批量路径的结果与逐片一致（ok / 每片都有向量）
+  [PASS] ★ embed_batch_size=1 ⇒ 完全不碰 embed_batch（退回纯逐片）
+  [PASS]   └ 逐片与批量产出的报告除 document_id 外逐键相同
+  [PASS] ★ embed_batch 返回条数不符 ⇒ 回退逐片（不静默截断）
+  [PASS]   └ 回退后每片仍有向量（没有「少了几条」）
+  [PASS] ★ 第二批失败也能定位到具体第几片（failed_index=3 / stage=embedding）
+  [PASS]   └ 失败片之前的片照常落库（embedded_chunks=3 / saved_chunks=3）
+  [PASS]   └ errors 仍是稳定错误码
+
+[9] 残留切片清理（改短文档 ⇒ 过期切片必须消失，否则仍会被检索到）
+  [PASS] 首轮导入产生多片（否则本节的缩容场景不成立）
+  [PASS] ★ 对照组：缩容前「第39节」能被检索到
+  [PASS] 改短后切片数变少（前提成立）
+  [PASS] ★ removed_stale_chunks == 少掉的片数
+  [PASS]   └ 报告仍是成功态
+  [PASS] ★ 库里只剩新切片（行数 == 新切片数）
+  [PASS]   └ chunk_index 连续 0..n-1（没有空洞、没有尾巴）
+  [PASS] ★ 缩容后「第39节」检索不到（过期正文不再进 Prompt）
+  [PASS] ★ 派生索引也同步了（store.delete 收到被删的 chunk_id）
+  [PASS] ★ 重复导入是成功的空操作（status=skipped / 清理 0 条）
+  [PASS]   └ 空操作时完全不碰派生索引
+  [PASS] ★ 中途失败 ⇒ 报告失败且 removed_stale_chunks == 0（不清理）
+  [PASS]   └ 旧切片一条没少（失败时保留原状）
+
+======================================================================
+结果: 通过 122 项，失败 0 项
+======================================================================

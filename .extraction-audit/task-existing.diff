@@ -1,0 +1,570 @@
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\main.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\main.py"
+index 1a046a7..bdb61f1 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\main.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\main.py"
+@@ -5,31 +5,17 @@ Career.ai FastAPI 后端
+ 
+ import os
+ import re
+-import json
+ import sys
+-import asyncio
+ import logging
+-import hashlib
+-import hmac
+-import base64
+-import time
+-import secrets
+-from datetime import datetime
+-from urllib.parse import urlencode
+ from dotenv import load_dotenv
+ 
+ load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+ from contextlib import asynccontextmanager
+-from typing import List
+ 
+-from fastapi import FastAPI, HTTPException, Depends, Request
++from fastapi import FastAPI, Request
+ from fastapi.exceptions import RequestValidationError
+ from fastapi.responses import JSONResponse
+ from fastapi.middleware.cors import CORSMiddleware
+-from pydantic import BaseModel, ConfigDict, Field
+-
+-from sqlalchemy.ext.asyncio import AsyncSession
+-from sqlalchemy import select, update
+ 
+ # 保证以任意工作目录启动都能导入本项目的顶层模块
+ # （database / deps / models / services / api）
+@@ -95,18 +81,11 @@ from models import (  # noqa: E402,F401
+ 
+ # ---- 业务服务 ----
+ 
+-# ---- WS 一次性连接凭证的共享存储（登出时作废未使用的 ticket）----
+-# 放在这里而不是 api 层：登出端点在本文件，而 ticket 存储是多处共用的基础设施。
+-from services import ws_ticket_store  # noqa: E402
+-
+ # ---- 撤销广播（跨实例让实时通道主动断开）----
+ # 踢下线 / 登出时写一行；每个实例的轮询器读到后断开**自己身上**的连接。
+ from services import ws_revocation  # noqa: E402
+ from services import ws_revocation_watcher  # noqa: E402
+ 
+-#: 与 ``services/ws_ticket_store.py`` 同一个 logger 名 ⇒ 日志配置一处生效。
+-_ticket_log = logging.getLogger("careerai.ws_ticket")
+-
+ 
+ # ---- 路由：AI 模拟面试模块（独立分层，见 modules/interview/api.py）----
+ from modules.interview import router as interview_router  # noqa: E402
+@@ -125,77 +104,8 @@ from api.knowledge import router as knowledge_router  # noqa: E402
+ # ============================================================
+ # SparkAI X1 WebSocket（认证已修复）
+ # ============================================================
+-# 注：此处曾重复 `import hashlib` / `import datetime`。后者把顶部
+-# `from datetime import datetime` 绑定的「类」重新绑定为「模块」，
+-# 导致运行期 `datetime.now()` 抛 AttributeError（登录接口恒 500）。
+-# 相关依赖已统一收敛到文件顶部，此处不再重复导入。
+-try:
+-    import websocket as _ws
+-    _spark_ok = True
+-except ImportError:
+-    _spark_ok = False
+-
+-
+-def _make_url(host, path, api_key, api_secret):
+-    date_str = datetime.utcnow().strftime("%a, %d %b %Y %H:%M:%S GMT")
+-    sig_str = f"host: {host}\ndate: {date_str}\nGET {path} HTTP/1.1"
+-    sig = hmac.new(api_secret.encode(), sig_str.encode(), hashlib.sha256).digest()
+-    sig_b64 = base64.b64encode(sig).decode()
+-    auth_orig = (f'api_key="{api_key}", algorithm="hmac-sha256", '
+-                 f'headers="host date request-line", signature="{sig_b64}"')
+-    auth = base64.b64encode(auth_orig.encode()).decode()
+-    params = {"authorization": auth, "date": date_str, "host": host}
+-    return f"wss://{host}{path}?{urlencode(params)}"
+-
+-
+-class SparkAPI:
+-    def __init__(self):
+-        self.app_id = os.getenv("SPARK_APP_ID", "")
+-        self.api_key = os.getenv("SPARK_API_KEY", "")
+-        self.api_secret = os.getenv("SPARK_API_SECRET", "")
+-        self.host = "spark-api.xf-yun.com"
+-        self.path = "/v1/x1"
+-
+-    def chat(self, message: str) -> str:
+-        if not _spark_ok:
+-            return "SparkAPI not available"
+-        try:
+-            url = _make_url(self.host, self.path, self.api_key, self.api_secret)
+-            ws = _ws.create_connection(url, timeout=60)
+-            req = {
+-                "header": {"app_id": self.app_id, "uid": "user_001"},
+-                "parameter": {"chat": {"domain": "x1", "temperature": 0.5, "max_tokens": 2048}},
+-                "payload": {"message": {"text": [{"role": "user", "content": message}]}},
+-            }
+-            ws.send(json.dumps(req))
+-            text = ""
+-            reasoning = ""
+-            while True:
+-                frame = json.loads(ws.recv())
+-                hdr = frame.get("header", {})
+-                if hdr.get("code", 0) != 0:
+-                    ws.close()
+-                    return f"API调用失败: {hdr.get('message', hdr.get('code'))}"
+-                choices = frame.get("payload", {}).get("choices", {}).get("text", [])
+-                for choice in choices:
+-                    # X1 为推理模型：content 是最终答案，reasoning_content 是内部思考过程。
+-                    # 两者必须分开累计，否则会把思考过程当结论一起返回给用户。
+-                    if choice.get("content"):
+-                        text += choice["content"]
+-                    elif choice.get("reasoning_content"):
+-                        reasoning += choice["reasoning_content"]
+-                if hdr.get("status") == 2:
+-                    break
+-            ws.close()
+-            # 仅当 content 全程为空时才退回 reasoning，保证不返回空答案
+-            answer = text.strip() or reasoning.strip()
+-            return answer if answer else "AI 回答为空"
+-        except Exception as e:
+-            return f"API调用失败: {e}"
+-
+-    async def chat_async(self, message: str) -> str:
+-        loop = asyncio.get_event_loop()
+-        return await loop.run_in_executor(None, self.chat, message)
++# 签名、连接和收发归属 spark_transport；此处只保留旧类名/函数名导出。
++from modules.ai.spark_transport import SparkAPI, _make_url  # compatibility exports
+ 
+ 
+ # ============================================================
+@@ -209,8 +119,7 @@ class SparkAPI:
+ #   → 错误分类 → 指标 → 请求追踪 → Prompt 版本
+ #
+ # 门面**仍然**是 `async chat_async(prompt) -> str`，失败仍然给旧式哨兵串，
+-# 所以 services/interview_agent.py / interview_planner.py 等
+-# **源码指纹冻结文件一行都不用改**，却已经走在新链路上。
++# Agent/Planner 通过 common.llm 取得同一门面，不反向导入入口。
+ #
+ # 换供应商 = 换一个 transport（或换一个 Provider 实现），业务代码零改动。
+ # ============================================================
+@@ -223,6 +132,9 @@ from modules.ai import (  # noqa: E402
+ _SPARK_CLIENT = SparkAPI()
+ register_spark_transport(_SPARK_CLIENT.chat_async)
+ spark_api = build_legacy_spark_facade()
++from common.llm import configure as configure_interview_llm
++
++configure_interview_llm(spark_api)
+ 
+ 
+ # ============================================================
+@@ -232,12 +144,7 @@ spark_api = build_legacy_spark_facade()
+ # ``modules/auth/schemas.py``（它们只服务 ``/api/auth/*``）。
+ 
+ 
+-class JobCreate(BaseModel):
+-    job_name: str = Field(..., min_length=1, max_length=200)
+-    city: str = Field(..., min_length=1, max_length=50)
+-    salary: str = Field(default="面议", max_length=50)
+-    skills: List[str] = Field(default_factory=list)
+-    description: str = Field(default="")
++from modules.admin.schemas import JobCreate  # compatibility export
+ 
+ 
+ # ============================================================
+@@ -472,137 +379,10 @@ app.include_router(career_router)
+ # ============================================================
+ 
+ 
+-@app.get("/api/admin/user-logs", tags=["管理员"])
+-async def get_user_logs(
+-    current_admin: dict = Depends(get_current_admin),
+-    db: AsyncSession = Depends(get_db),
+-):
+-    """获取普通用户登录历史日志（仅 admin 可访问）。"""
+-    result = await db.execute(
+-        select(UserLoginLog).order_by(UserLoginLog.id.desc()).limit(100)
+-    )
+-    logs = result.scalars().all()
++from modules.admin import router as admin_router
++from modules.admin.api import get_user_logs, add_job, kick_user_sessions  # compatibility exports
+ 
+-    return {
+-        "logs": [
+-            {
+-                "email": log.email,
+-                "lastLogin": log.last_login,
+-                "role": log.role,
+-                "searchCount": log.search_count,
+-            }
+-            for log in logs
+-        ]
+-    }
+-
+-
+-@app.post("/api/admin/add-job", tags=["管理员"])
+-async def add_job(
+-    data: JobCreate,
+-    current_admin: dict = Depends(get_current_admin),
+-    db: AsyncSession = Depends(get_db),
+-):
+-    """添加新岗位（仅 admin 可访问）。"""
+-    new_job = Job(
+-        job_name=data.job_name,
+-        salary=data.salary,
+-        edu_require="本科",
+-        major_require="不限",
+-        skills=",".join(data.skills),
+-        duty=data.description,
+-        city=data.city,
+-        industry="互联网",
+-    )
+-    db.add(new_job)
+-    await db.commit()
+-    await db.refresh(new_job)
+-
+-    return {
+-        "success": True,
+-        "message": "岗位添加成功",
+-        "job": {
+-            "job_id": new_job.id,
+-            "job_name": new_job.job_name,
+-            "city": new_job.city,
+-            "salary": new_job.salary,
+-            "skills": new_job.skills,
+-            "description": new_job.duty,
+-        },
+-    }
+-
+-
+-@app.post("/api/admin/users/{user_id}/kick", tags=["管理员"])
+-async def kick_user_sessions(
+-    user_id: int,
+-    current_admin: dict = Depends(get_current_admin),
+-    db: AsyncSession = Depends(get_db),
+-):
+-    """**管理员踢下线**：撤销该用户全部登录会话，并让已建立的实时通道断开。
+-
+-    三步（顺序有意）：
+-    1. ``user_session.revoked_at = now``（**主效应**：HTTP 侧下一次请求即 401）；
+-    2. 作废该用户所有**未使用**的 WS ticket（防止踢完再用旧票建连）；
+-    3. 写一条**跨实例**撤销广播（``user_id`` 级）⇒ 各实例的轮询器读到后
+-       主动断开自己身上的连接（目标延迟见 ``services/ws_revocation_watcher``）。
+-
+-    ★ 为什么第 3 步不能省：``revoked_at`` 只是"以后不认"，而 WS 连接是**已经建立**
+-    的长连接，它不会自己回头查库。改造前实测：ticket 路径的连接在撤销后
+-    **>20s 内完全不失效**（上界是空闲超时 300s，而前端有心跳 ⇒ 实际永不失效）。
+-    ★ 第 1 步失败会直接 500（主效应必须成功）；第 2/3 步失败只记 WARNING
+-    ——主效应已落库，兜底是周期性复核。
+-    """
+-    target = (
+-        await db.execute(select(User).where(User.id == int(user_id)))
+-    ).scalar_one_or_none()
+-    if target is None:
+-        raise HTTPException(status_code=404, detail="用户不存在")
+-
+-    now = datetime.utcnow()
+-    result = await db.execute(
+-        update(UserSession)
+-        .where(UserSession.user_id == int(user_id), UserSession.revoked_at.is_(None))
+-        .values(revoked_at=now)
+-        .execution_options(synchronize_session=False)
+-    )
+-    await db.commit()
+-    revoked_sessions = int(result.rowcount or 0)
+-
+-    revoked_tickets = 0
+-    try:
+-        revoked_tickets = await ws_ticket_store.revoke_for_user(db, user_id=int(user_id))
+-    except ws_ticket_store.TicketStoreUnavailable as exc:
+-        _ticket_log.warning(
+-            "ws_ticket_revoke_on_kick_failed user_id=%s error=%s",
+-            user_id,
+-            type(exc).__name__,
+-        )
+-
+-    broadcast = True
+-    try:
+-        await ws_revocation.record(
+-            db,
+-            user_id=int(user_id),
+-            auth_session_id=None,  # 空 = 该用户所有会话
+-            reason=ws_revocation.REASON_ADMIN_KICK,
+-        )
+-    except ws_revocation.RevocationStoreUnavailable as exc:
+-        broadcast = False
+-        _ticket_log.warning(
+-            "ws_revocation_record_on_kick_failed user_id=%s error=%s",
+-            user_id,
+-            type(exc).__name__,
+-        )
+-
+-    return {
+-        "success": True,
+-        "message": "已踢下线",
+-        "user_id": int(user_id),
+-        "revoked_sessions": revoked_sessions,
+-        "revoked_tickets": revoked_tickets,
+-        # 广播失败时明确告知：调用方要知道"主动断开"这次可能不生效，
+-        # 而不是以为已经踢干净了。
+-        "broadcast": broadcast,
+-    }
++app.include_router(admin_router)
+ 
+ 
+ # ============================================================
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\services\\interview_agent.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\services\\interview_agent.py"
+index 42831b6..cc91bf4 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\services\\interview_agent.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\services\\interview_agent.py"
+@@ -234,11 +234,11 @@ def _is_spark_failure(raw: Any) -> bool:
+ 
+ 
+ def _default_spark() -> Any:
+-    """延迟获取全局 Spark 实例，避免 services → main 的模块级循环导入。"""
++    """获取装配层注册的 LLM 门面，不导入应用入口。"""
+     try:
+-        from main import spark_api  # noqa: PLC0415 - 刻意延迟导入
++        from common.llm import get_llm
+ 
+-        return spark_api
++        return get_llm()
+     except Exception:  # noqa: BLE001 - 环境不完整时视为不可用
+         return None
+ 
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\services\\interview_planner.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\services\\interview_planner.py"
+index ef48839..1e47bee 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\services\\interview_planner.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\services\\interview_planner.py"
+@@ -563,11 +563,11 @@ async def refine_plan_with_llm(
+ 
+ 
+ def _default_spark() -> Any:
+-    """延迟获取全局 Spark 实例，避免 services → main 的模块级循环导入。"""
++    """获取装配层注册的 LLM 门面，不导入应用入口。"""
+     try:
+-        from main import spark_api  # noqa: PLC0415 - 刻意延迟导入
++        from common.llm import get_llm
+ 
+-        return spark_api
++        return get_llm()
+     except Exception:  # noqa: BLE001 - 环境不完整时视为不可用
+         return None
+ 
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\tests\\rag_production_chain_spark_run.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\rag_production_chain_spark_run.py"
+index 5f0d2c4..6d228fe 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\tests\\rag_production_chain_spark_run.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\rag_production_chain_spark_run.py"
+@@ -261,8 +261,9 @@ async def main_async(args: argparse.Namespace) -> int:
+     main.app.dependency_overrides[get_db] = override_get_db
+ 
+     spark = SpySpark()
+-    original_spark = main.spark_api
+-    main.spark_api = spark  # type: ignore[assignment]
++    from common.llm import get_llm, configure
++    original_spark = get_llm()
++    configure(spark)
+ 
+     real_builder = knowledge_rag.build_vector_retriever
+     recorder = RecordingRetriever(None)
+@@ -513,7 +514,7 @@ async def main_async(args: argparse.Namespace) -> int:
+                 })
+     finally:
+         knowledge_rag.build_vector_retriever = real_builder  # type: ignore[assignment]
+-        main.spark_api = original_spark  # type: ignore[assignment]
++        configure(original_spark)
+         main.app.dependency_overrides.clear()
+         await engine.dispose()
+         # 生产连接池也要在**同一个事件循环内**释放，否则 aiomysql 的
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\tests\\test_admin_role.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_admin_role.py"
+index ba405ab..75e3f17 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\tests\\test_admin_role.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_admin_role.py"
+@@ -243,6 +243,19 @@ async def run() -> bool:
+                (await c.get("/api/admin/user-logs",
+                             headers={"Authorization": "Token abc"})).status_code == 401)
+ 
++        print("\n[13b] 三个管理员端点统一鉴权与踢下线 404 契约")
++        for method, path, payload in [
++            ("GET", "/api/admin/user-logs", None),
++            ("POST", "/api/admin/add-job", {"job_name": "guard", "city": "北京"}),
++            ("POST", "/api/admin/users/999999/kick", None),
++        ]:
++            for label, token, expected in [("缺失", None, 401), ("伪造", "invalid", 401), ("普通用户", user_token, 403)]:
++                headers = {} if token is None else {"Authorization": f"Bearer {token}"}
++                response = await c.request(method, path, headers=headers, json=payload)
++                _check(f"{path} {label}凭证 -> {expected}", response.status_code == expected)
++        missing = await c.post("/api/admin/users/999999/kick", headers={"Authorization": f"Bearer {admin_token}"})
++        _check("管理员踢不存在的用户 -> 404 原文案", missing.status_code == 404 and missing.json() == {"detail": "用户不存在"})
++
+         print("\n[14] 普通用户登录保持 role=user（需求 7）")
+         r = await c.post("/api/auth/login", json={"email": "alice@example.com", "password": "alice123456"})
+         _check(f"role == 'user'（实际 {r.json().get('user', {}).get('role')!r}）",
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\tests\\test_agent_full_input.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_agent_full_input.py"
+index cc68cca..fba31d3 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\tests\\test_agent_full_input.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_agent_full_input.py"
+@@ -107,13 +107,14 @@ from services.vector_store_sql import SqlAlchemyVectorStore  # noqa: E402
+ #: 用源码文本而不是 AST——``ast.dump`` 的输出随 Python 版本变化，
+ #: 换解释器就会假失败。
+ #: 两个 Prompt 模板也在内：改模板同样会改「模型实际收到什么」。
++#: 本轮仅更新 Agent/Planner 的默认 LLM 端口接线指纹，业务函数与 Prompt 未改。
+ FROZEN_SOURCES: Tuple[Tuple[str, str], ...] = (
+     ("services/interview_agent.py",
+-     "cbc4b7c33ad591c6a325cb53cbb41f2819abe0e813d2487badc3cd9f98f0d09a"),
++     "84ada04f32984c752f02f123839c4afc0b0841d1ed1ce562230fa87cc1c0fdd0"),
+     ("services/interview_core.py",
+      "2bd6f6aab04bdd3c8eaf9e03c64f37d99a8e52dd1047d711779616845ff8e5e8"),
+     ("services/interview_planner.py",
+-     "0da3961aac2dc9af81fa321c7c56149934cc39d8ff016cb285ea5ad07d9b8df6"),
++     "c8c9494f7474827e0882a60d0322963a23728dc66a70d074dcc4f31bf5c8688c"),
+     # ★ 本次并发加固改过一次：``create_context`` 的 TOCTOU 收敛
+     #   （改成「已存在即不写」的原子 INSERT + 提交后重读，全程不 rollback）。
+     #   仅改写入方式，投影 / 字段 / 返回结构逐字节未动。
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\tests\\test_ai_layer.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_ai_layer.py"
+index 129b7ac..b306517 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\tests\\test_ai_layer.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_ai_layer.py"
+@@ -588,8 +588,9 @@ def check_source_guards() -> bool:
+         ok &= _check("modules/ai/%s 顶层不 import %s" % (path.name, "/".join(forbidden)),
+                      offenders == [], str(offenders))
+ 
+-    ok &= _check("旧协议实现仍留在 main.py（本层不重写 websocket 协议）",
+-                 "class SparkAPI" in (_BACKEND / "main.py").read_text(encoding="utf-8"))
++    ok &= _check("Spark 协议实现独立归属传输模块，入口不再定义",
++                 "class SparkAPI" in (_BACKEND / "modules/ai/spark_transport.py").read_text(encoding="utf-8")
++                 and "class SparkAPI" not in (_BACKEND / "main.py").read_text(encoding="utf-8"))
+ 
+     main_src = (_BACKEND / "main.py").read_text(encoding="utf-8")
+     ok &= _check("main.py 已装配门面（spark_api = build_legacy_spark_facade()）",
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\tests\\test_interview_eval_benchmark.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_interview_eval_benchmark.py"
+index 14369a8..0ad26f9 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\tests\\test_interview_eval_benchmark.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_interview_eval_benchmark.py"
+@@ -92,13 +92,14 @@ DOC_PATH = PROJECT_DIR / "docs" / "AI面试问题评估基准.md"
+ 
+ #: 「不改 Agent / Prompt / RAG」的判据：规范化换行后的源码 sha256。
+ #: 语料文件也在内——筛选表的期望值是**绑定到这份语料**的，语料变了必须重测。
++#: 仅更新默认 LLM 端口接线后的 Agent/Planner 指纹；保留全部评测断言。
+ FROZEN_SOURCES: Tuple[Tuple[str, str], ...] = (
+     ("services/interview_agent.py",
+-     "cbc4b7c33ad591c6a325cb53cbb41f2819abe0e813d2487badc3cd9f98f0d09a"),
++     "84ada04f32984c752f02f123839c4afc0b0841d1ed1ce562230fa87cc1c0fdd0"),
+     ("services/interview_core.py",
+      "2bd6f6aab04bdd3c8eaf9e03c64f37d99a8e52dd1047d711779616845ff8e5e8"),
+     ("services/interview_planner.py",
+-     "0da3961aac2dc9af81fa321c7c56149934cc39d8ff016cb285ea5ad07d9b8df6"),
++     "c8c9494f7474827e0882a60d0322963a23728dc66a70d074dcc4f31bf5c8688c"),
+     ("services/question_validator.py",
+      "b23e6957edf39696fcc4803b4b627fbdc90c1548de86535bc804f4acc1c7e53b"),
+     ("prompts/interview/question.txt",
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\tests\\test_module_boundaries.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_module_boundaries.py"
+index c224843..813d7f4 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\tests\\test_module_boundaries.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_module_boundaries.py"
+@@ -123,21 +123,7 @@ _APP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "web
+ # ============================================================
+ #: R7：允许在路由层出现 SQL 的位置
+ #: 键 = 模块名（``api.x``）或 ``main:<函数名>``（``main.py`` 里 ``@app.*`` 装饰的函数）
+-R7_KNOWN_ALLOWED: Dict[str, str] = {
+-    "main:get_user_logs": (
+-        "管理员审计日志。main.py 的 admin 段还没迁出（P4）。"
+-        "清掉时机：P4 把 /api/admin/* 拆成 modules/admin/api.py + service.py。"
+-    ),
+-    "main:add_job": (
+-        "管理员新增岗位。清掉时机：同上（P4）。岗位写入本就该落在 career 模块的 "
+-        "repository 里，而不是路由函数里 db.add()。"
+-    ),
+-    "main:kick_user_sessions": (
+-        "管理员强制下线。★ 这段同时写 UserSession.update + ws_revocation 广播，"
+-        "是「会话安全」的写入口，P4 迁出时必须连同撤销广播一起下沉到 "
+-        "modules/auth/service.py，否则多实例失效。清掉时机：P4。"
+-    ),
+-}
++R7_KNOWN_ALLOWED: Dict[str, str] = {}
+ 
+ #: R8：允许在领域层 import 的 (模块, 符号)
+ R8_KNOWN_ALLOWED: Dict[Tuple[str, str], str] = {
+@@ -161,17 +147,7 @@ R8_KNOWN_ALLOWED: Dict[Tuple[str, str], str] = {
+ #: R1：已知的**反向依赖**（低层 -> 高层），必须逐条说明
+ #:
+ #: 键 = ``(源模块, 目标模块)``。这些是**真违规**，只是暂时清不掉。
+-R1_KNOWN_ALLOWED: Dict[Tuple[str, str], str] = {
+-    ("services.interview_agent", "main"): (
+-        "★★ FROZEN_SOURCES 指纹锁定。函数内 `from main import spark_api`（第 239 行），"
+-        "用延迟导入绕开了环，但方向确实是 services(L2) -> main(L9)。"
+-        "清掉时机：P5 迁 interview 时，把 LLM 门面改成参数注入（参照 modules/career/ports.py），"
+-        "需与指纹守卫同步解冻。"
+-    ),
+-    ("services.interview_planner", "main"): (
+-        "★★ FROZEN_SOURCES 指纹锁定，同上（第 568 行）。"
+-    ),
+-}
++R1_KNOWN_ALLOWED: Dict[Tuple[str, str], str] = {}
+ 
+ #: R6：软环数量上限（**棘轮：只许调小**）。
+ #:
+@@ -182,13 +158,18 @@ R1_KNOWN_ALLOWED: Dict[Tuple[str, str], str] = {
+ #:
+ #: 所以只钉**数量**：新增软环会让数字变大 ⇒ 红，逼人看一眼「这个环是不是必要的」。
+ #: 修掉一个环后要把这个常量改小，否则棘轮失效。
+-R6_MAX_SOFT_CYCLES = 21
++R6_MAX_SOFT_CYCLES = 1
+ 
+ #: 已迁移模块：模块名 -> (必须存在的文件, main.py 里不得再出现的实现标记, 挂载变量名)
+ #:
+ #: ★ 这是 R11 的**棘轮**：每迁完一个模块就往这里加一条。禁止清单只增不减，
+ #: 意味着「搬走的实现不许以任何形式搬回 main.py」。
+ _MIGRATED_MODULES: Dict[str, Tuple[Tuple[str, ...], Tuple[str, ...], str]] = {
++    "admin": (
++        ("__init__.py", "api.py", "service.py", "schemas.py"),
++        ("def get_user_logs(", "def add_job(", "def kick_user_sessions(", "class SparkAPI"),
++        "admin_router",
++    ),
+     "auth": (
+         ("__init__.py", "api.py", "service.py", "schemas.py"),
+         (
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\tests\\test_rag_production_route.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_rag_production_route.py"
+index 8b8f748..24da874 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\tests\\test_rag_production_route.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_rag_production_route.py"
+@@ -206,8 +206,9 @@ async def run() -> bool:
+     main.app.dependency_overrides[get_db] = override_get_db
+ 
+     spark = SpySpark()
+-    original_spark = main.spark_api
+-    main.spark_api = spark  # type: ignore[assignment]
++    from common.llm import get_llm, configure
++    original_spark = get_llm()
++    configure(spark)
+ 
+     real_builder = knowledge_rag.build_vector_retriever
+     spy = BuilderSpy()
+@@ -342,7 +343,7 @@ async def run() -> bool:
+         )
+ 
+     knowledge_rag.build_vector_retriever = real_builder  # type: ignore[assignment]
+-    main.spark_api = original_spark  # type: ignore[assignment]
++    configure(original_spark)
+     main.app.dependency_overrides.clear()
+     await engine.dispose()
+ 
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\tests\\test_ws_revocation.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_ws_revocation.py"
+index 3edceca..efe8b36 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.extraction-audit\\before\\tests\\test_ws_revocation.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_ws_revocation.py"
+@@ -571,6 +571,7 @@ def _wiring_guards() -> None:
+     text_revocation = (_BACKEND / "services" / "ws_revocation.py").read_text(encoding="utf-8")
+     text_ws = (_BACKEND / "modules" / "interview" / "ws.py").read_text(encoding="utf-8")
+     text_main = (_BACKEND / "main.py").read_text(encoding="utf-8")
++    text_admin = (_BACKEND / "modules/admin/api.py").read_text(encoding="utf-8")
+ 
+     # ★ 判 import 关系用 AST，不用子串：这两个文件的**文档里**就写着对方的名字
+     #   （解释"为什么不反向依赖"），子串判断会恒假失败。
+@@ -614,8 +615,8 @@ def _wiring_guards() -> None:
+            and "select(UserSession).where(UserSession.id == int(session_id))"
+            in inspect.getsource(ws.load_session_by_id))
+     _check("★ 管理员踢下线端点存在且要求 admin 依赖",
+-           '"/api/admin/users/{user_id}/kick"' in text_main
+-           and "Depends(get_current_admin)" in text_main)
++           '"/api/admin/users/{user_id}/kick"' in text_admin
++           and "Depends(get_current_admin)" in text_admin)
+     _check("★ ws_ticket.auth_session_id 已登记到 schema_sync（既有表加列必须补）",
+            "auth_session_id" in (_BACKEND / "utils" / "schema_sync.py").read_text(encoding="utf-8"))
+ 

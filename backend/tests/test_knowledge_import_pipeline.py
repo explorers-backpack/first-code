@@ -111,8 +111,12 @@ def _imported_modules(source: str) -> set:
 def _production_files():
     """backend 下的生产代码文件（排除 tests / __pycache__）。"""
     files = []
+    # ★ 模块化重构（第 10 轮）新增了 common/ 与 modules/<业务>/*.py。
+    #   不把它们纳入遍历，「谁 import 谁」的闭集断言就会**看不见新代码**，
+    #   于是「消费者清单精确相等」这种断言会因漏项而假绿。
     for pattern in ("*.py", "api/*.py", "services/*.py", "models/*.py",
-                    "schemas/*.py", "utils/*.py"):
+                    "schemas/*.py", "utils/*.py",
+                    "common/*.py", "modules/*/*.py"):
         for path in BACKEND_DIR.glob(pattern):
             if "__pycache__" in path.parts:
                 continue
@@ -237,6 +241,25 @@ def _payload(title="Redis 持久化手册", content="Redis 支持 RDB 与 AOF �
     return {"title": title, "content": content, "category": category, "source": source}
 
 
+class RecordingDeleteStore(SqlAlchemyVectorStore):
+    """在 ``SqlAlchemyVectorStore`` 上加一个**派生索引删除原语**（记录被删的 id）。
+
+    用途：``chroma`` 的 ANN 索引与权威行分离，删权威行之后必须同步索引，
+    否则索引里仍留着已删切片的向量。``SqlAlchemyVectorStore`` 本来**没有**
+    ``delete``（它的「索引」就是权威行本身），所以这里造一个「有 delete 的后端」
+    来验证「残留清理会不会顺手同步派生索引」这条路径。
+    """
+
+    def __init__(self, db) -> None:
+        super().__init__(db)
+        self.deleted: list = []
+
+    async def delete(self, chunk_ids):
+        ids = list(chunk_ids)
+        self.deleted.append(ids)
+        return len(ids)
+
+
 def _build_session_factory():
     engine = create_async_engine(
         "sqlite+aiosqlite:///:memory:",
@@ -287,8 +310,8 @@ async def run() -> bool:
         report = _new_report()
         _check("★ 报告键集合与顺序恒为 IMPORT_RESULT_FIELDS",
                tuple(report) == IMPORT_RESULT_FIELDS, str(tuple(report)))
-        _check("  └ 共 12 键（成功 / 跳过 / 失败同一形状）",
-               len(IMPORT_RESULT_FIELDS) == 12, str(len(IMPORT_RESULT_FIELDS)))
+        _check("  └ 共 13 键（成功 / 跳过 / 失败同一形状）",
+               len(IMPORT_RESULT_FIELDS) == 13, str(len(IMPORT_RESULT_FIELDS)))
         _check("  └ 空白报告是成功态（ok=True / status=ok / stage=done）",
                report["ok"] is True and report["status"] == STATUS_OK
                and report["stage"] == STAGE_DONE)
@@ -684,7 +707,9 @@ async def run() -> bool:
         # 上报「当前在用哪个 Embedding、是不是语义模型」——**只读状态、不组装检索器**。
         _check("★ 组装器的消费者 = 读侧(Core) + 写侧(入库 Pipeline) + 维护 + 迁移 + 状态上报",
                consumers_rag == [
-                   "main.py",
+                   # ★ 状态上报的消费方在 P4 从 main.py 迁到 common/health.py
+                   #   （`_count_knowledge_chunks` / `vector_status` 整体搬走）。
+                   "common/health.py",
                    "services/interview_core.py",
                    "services/knowledge_embedding_migration.py",
                    "services/knowledge_import_pipeline.py",
@@ -785,6 +810,115 @@ async def run() -> bool:
                f"{x_rep['embedded_chunks']}/{x_rep['saved_chunks']}")
         _check("  └ errors 仍是稳定错误码",
                x_rep["errors"] == [ERROR_EMBEDDING_FAILED], str(x_rep["errors"]))
+
+        # ------------------------------------------------------------
+        # [9] 残留切片清理（文档被改短后，过期正文不得继续被检索到）
+        # ------------------------------------------------------------
+        print("\n[9] 残留切片清理（改短文档 ⇒ 过期切片必须消失，否则仍会被检索到）")
+        shrink_title = "残留切片验证文档"
+        shrink_source = "manual://stale"
+        first = await KnowledgeImportPipeline(
+            db, chunker=CHUNKER, embedder=HashEmbeddingService(),
+            store=SqlAlchemyVectorStore(db),
+        ).import_document(
+            _payload(title=shrink_title, content=LONG_TEXT, source=shrink_source)
+        )
+        n_long = first["chunk_count"]
+        _check("首轮导入产生多片（否则本节的缩容场景不成立）", n_long >= 5, str(n_long))
+
+        # 先证明「尾部的正文**本来**是能被检索到的」——否则后面的「检索不到」是恒真的。
+        # ★ 必须按 document_id 收窄：本套件前面几节也导过 LONG_TEXT，全局检索会命中
+        #   那些**别的文档**里的「第39节」，让这条断言因错误的原因失败/通过。
+        probe = VectorKnowledgeRetriever(
+            HashEmbeddingService(), SqlAlchemyVectorStore(db),
+            top_k=5, min_score=0.05, document_id=first["document_id"],
+        )
+        before_hits = await probe.retrieve(None, "第39节", None)
+        _check("★ 对照组：缩容前「第39节」能被检索到",
+               any("第39节" in (c.content or "") for c in before_hits),
+               f"命中 {len(before_hits)} 条")
+
+        # 同名同来源改短 ⇒ 只有前 3 段
+        short_text = "".join(f"第{i}节：{PARA}" for i in range(3))
+        rec_store = RecordingDeleteStore(db)
+        second = await KnowledgeImportPipeline(
+            db, chunker=CHUNKER, embedder=HashEmbeddingService(), store=rec_store,
+        ).import_document(
+            _payload(title=shrink_title, content=short_text, source=shrink_source)
+        )
+        n_short = second["chunk_count"]
+        _check("改短后切片数变少（前提成立）", n_short < n_long, f"{n_short} vs {n_long}")
+        _check("★ removed_stale_chunks == 少掉的片数",
+               second["removed_stale_chunks"] == n_long - n_short,
+               f"{second['removed_stale_chunks']} vs {n_long - n_short}")
+        _check("  └ 报告仍是成功态", second["ok"] is True and second["errors"] == [],
+               f"{second['ok']} / {second['errors']}")
+
+        doc_rows = (
+            await db.execute(
+                select(KnowledgeChunk)
+                .where(KnowledgeChunk.document_id == second["document_id"])
+                .order_by(KnowledgeChunk.id)
+            )
+        ).scalars().all()
+        _check("★ 库里只剩新切片（行数 == 新切片数）",
+               len(doc_rows) == n_short, f"{len(doc_rows)} vs {n_short}")
+        _check("  └ chunk_index 连续 0..n-1（没有空洞、没有尾巴）",
+               sorted(r.chunk_metadata["chunk_index"] for r in doc_rows)
+               == list(range(n_short)),
+               str(sorted(r.chunk_metadata["chunk_index"] for r in doc_rows)))
+
+        after_hits = await probe.retrieve(None, "第39节", None)
+        _check("★ 缩容后「第39节」检索不到（过期正文不再进 Prompt）",
+               not any("第39节" in (c.content or "") for c in after_hits),
+               f"命中 {len(after_hits)} 条：{[c.content[:20] for c in after_hits]}")
+
+        _check("★ 派生索引也同步了（store.delete 收到被删的 chunk_id）",
+               len(rec_store.deleted) == 1 and len(rec_store.deleted[0]) == n_long - n_short,
+               str(rec_store.deleted))
+
+        # 幂等：再导一次同样的短文档 ⇒ 无事可做，且不误删
+        rec_store.deleted.clear()
+        third = await KnowledgeImportPipeline(
+            db, chunker=CHUNKER, embedder=HashEmbeddingService(), store=rec_store,
+        ).import_document(
+            _payload(title=shrink_title, content=short_text, source=shrink_source)
+        )
+        _check("★ 重复导入是成功的空操作（status=skipped / 清理 0 条）",
+               third["status"] == STATUS_SKIPPED and third["ok"] is True
+               and third["removed_stale_chunks"] == 0,
+               f"{third['status']} / {third['removed_stale_chunks']}")
+        _check("  └ 空操作时完全不碰派生索引", rec_store.deleted == [], str(rec_store.deleted))
+
+        # 保守性：本次导入中途失败 ⇒ **不清理**（避免「新内容没写完、旧内容已删」）
+        fail_title = "残留清理保守性验证"
+        ok_first = await KnowledgeImportPipeline(
+            db, chunker=CHUNKER, embedder=HashEmbeddingService(),
+            store=SqlAlchemyVectorStore(db),
+        ).import_document(
+            _payload(title=fail_title, content=LONG_TEXT, source="manual://stale-fail")
+        )
+        boom9 = FailingEmbedder(fail_at=0)
+        fail_rep = await KnowledgeImportPipeline(
+            db, chunker=CHUNKER, embedder=boom9, store=SqlAlchemyVectorStore(db),
+        ).import_document(
+            _payload(title=fail_title, content=short_text, source="manual://stale-fail")
+        )
+        still = await _count(
+            db, KnowledgeChunk
+        )  # 全表计数（下面用文档维度再算一次，避免误判别的用例留下的行）
+        doc_after_fail = (
+            await db.execute(
+                select(func.count()).select_from(KnowledgeChunk)
+                .where(KnowledgeChunk.document_id == ok_first["document_id"])
+            )
+        ).scalar_one()
+        _check("★ 中途失败 ⇒ 报告失败且 removed_stale_chunks == 0（不清理）",
+               fail_rep["ok"] is False and fail_rep["removed_stale_chunks"] == 0,
+               f"{fail_rep['ok']} / {fail_rep['removed_stale_chunks']}")
+        _check("  └ 旧切片一条没少（失败时保留原状）",
+               int(doc_after_fail) == ok_first["chunk_count"],
+               f"{doc_after_fail} vs {ok_first['chunk_count']}（全表 {still}）")
 
     await engine.dispose()
 

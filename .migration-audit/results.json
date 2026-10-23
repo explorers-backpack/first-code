@@ -1,0 +1,27 @@
+[
+  {
+    "phase": "focused",
+    "test": "test_module_boundaries.py",
+    "code": 1
+  },
+  {
+    "phase": "focused",
+    "test": "test_rag_diagnostics.py",
+    "code": 0
+  },
+  {
+    "phase": "focused",
+    "test": "test_interview_ws.py",
+    "code": 0
+  },
+  {
+    "phase": "focused",
+    "test": "test_strategy_wiring.py",
+    "code": 0
+  },
+  {
+    "phase": "full",
+    "test": "test_admin_role.py",
+    "code": 0
+  }
+]

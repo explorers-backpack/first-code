@@ -1,0 +1,200 @@
+==========================================================================
+RAG 检索评分规则验证（top_k / min_score / 排序 / 并列）
+==========================================================================
+
+--------------------------------------------------------------------------
+[1] 规则契约（签名 / 唯一性 / 接线守卫）
+--------------------------------------------------------------------------
+  [PASS] select_matches 的位置参数恰为 (records, query_vector)  -> ['records', 'query_vector', 'top_k', 'min_score', 'store_name']
+  [PASS] 其余参数（top_k / min_score / store_name）都是**仅关键字**  -> {'top_k': 'KEYWORD_ONLY', 'min_score': 'KEYWORD_ONLY', 'store_name': 'KEYWORD_ONLY'}
+  [PASS] top_k 默认值 == DEFAULT_TOP_K == 5  -> 5
+  [PASS] min_score 默认值为 None（= 不过滤）
+  [PASS] ★ SqlAlchemyVectorStore.search 的**函数体内**调用 select_matches
+  [PASS] ★ SqlAlchemyVectorStore 从 services.vector_store import select_matches
+  [PASS] ★ ChromaVectorStore.search 的**函数体内**调用 select_matches
+  [PASS] ★ ChromaVectorStore 从 services.vector_store import select_matches
+  [PASS] 守卫自检：调用检测能区分「有」与「无」（反例运行时拼出）
+  [PASS] ★ InMemoryVectorStore.search 也调用 select_matches（三个实现共用一份排序口径）
+
+--------------------------------------------------------------------------
+[2] 场景 1 · top_k 限制数量（纯函数级）
+--------------------------------------------------------------------------
+  [PASS] 夹具准备：完整排序共 6 条  -> 6
+  [PASS] top_k=1：条数 == min(top_k, 候选数) == 1  -> 1
+  [PASS] top_k=1：结果 == 完整排序的前 1 项（按位）  -> (3,)
+  [PASS] top_k=1：分数非增
+  [PASS] top_k=2：条数 == min(top_k, 候选数) == 2  -> 2
+  [PASS] top_k=2：结果 == 完整排序的前 2 项（按位）  -> (3, 6)
+  [PASS] top_k=2：分数非增
+  [PASS] top_k=3：条数 == min(top_k, 候选数) == 3  -> 3
+  [PASS] top_k=3：结果 == 完整排序的前 3 项（按位）  -> (3, 6, 5)
+  [PASS] top_k=3：分数非增
+  [PASS] top_k=4：条数 == min(top_k, 候选数) == 4  -> 4
+  [PASS] top_k=4：结果 == 完整排序的前 4 项（按位）  -> (3, 6, 5, 1)
+  [PASS] top_k=4：分数非增
+  [PASS] top_k=5：条数 == min(top_k, 候选数) == 5  -> 5
+  [PASS] top_k=5：结果 == 完整排序的前 5 项（按位）  -> (3, 6, 5, 1, 4)
+  [PASS] top_k=5：分数非增
+  [PASS] top_k=6：条数 == min(top_k, 候选数) == 6  -> 6
+  [PASS] top_k=6：结果 == 完整排序的前 6 项（按位）  -> (3, 6, 5, 1, 4, 2)
+  [PASS] top_k=6：分数非增
+  [PASS] top_k=7：条数 == min(top_k, 候选数) == 6  -> 6
+  [PASS] top_k=7：结果 == 完整排序的前 6 项（按位）  -> (3, 6, 5, 1, 4, 2)
+  [PASS] top_k=7：分数非增
+  [PASS] top_k=100：条数 == min(top_k, 候选数) == 6  -> 6
+  [PASS] top_k=100：结果 == 完整排序的前 6 项（按位）  -> (3, 6, 5, 1, 4, 2)
+  [PASS] top_k=100：分数非增
+  [PASS] 省略 top_k 时用 DEFAULT_TOP_K（== 5）  -> (3, 6, 5, 1, 4)
+  [PASS] top_k=0 ⇒ VectorStoreInputError（不静默改成 1）  -> VectorStoreInputError
+  [PASS] top_k=-1 ⇒ VectorStoreInputError（不静默改成 1）  -> VectorStoreInputError
+  [PASS] top_k=-100 ⇒ VectorStoreInputError（不静默改成 1）  -> VectorStoreInputError
+  [PASS] top_k=True ⇒ VectorStoreInputError（拒 bool / 非整数）  -> VectorStoreInputError
+  [PASS] top_k=False ⇒ VectorStoreInputError（拒 bool / 非整数）  -> VectorStoreInputError
+  [PASS] top_k=1.5 ⇒ VectorStoreInputError（拒 bool / 非整数）  -> VectorStoreInputError
+  [PASS] top_k='5' ⇒ VectorStoreInputError（拒 bool / 非整数）  -> VectorStoreInputError
+  [PASS] top_k=None ⇒ VectorStoreInputError（拒 bool / 非整数）  -> VectorStoreInputError
+  [PASS] top_k=2 & min_score=None：条数 == min(2, 过滤后 6) == 2  -> 2
+  [PASS] top_k=2 & min_score=0.0：条数 == min(2, 过滤后 5) == 2  -> 2
+  [PASS] top_k=2 & min_score=0.3：条数 == min(2, 过滤后 3) == 2  -> 2
+  [PASS] top_k=2 & min_score=0.9：条数 == min(2, 过滤后 1) == 1  -> 1
+
+--------------------------------------------------------------------------
+[3] 场景 2 · min_score 过滤低分结果（纯函数级）
+--------------------------------------------------------------------------
+  夹具分数（降序）：[1.0, 0.707107, 0.447214, 0.242536, 0.0, -0.707107]
+  [PASS] ★ 前提：本节显式 top_k=6 == 候选数，条数只受 min_score 影响  -> 6
+  [PASS] min_score=None：不过滤任何一条（6/6）  -> 6
+  [PASS] min_score=-1.0：不过滤任何一条（6/6）  -> 6
+  [PASS] min_score=-2.0：不过滤任何一条（6/6）  -> 6
+  [PASS] ★ 阈值**恰好等于**第 1 名的分数（1）⇒ 含边界保留 1 条  -> 1
+  [PASS] 阈值 = 该分数 + 1e-12 ⇒ 该条被过滤（0 条）  -> 0
+  [PASS] ★ 阈值**恰好等于**第 2 名的分数（0.70710678118654746）⇒ 含边界保留 2 条  -> 2
+  [PASS] 阈值 = 该分数 + 1e-12 ⇒ 该条被过滤（1 条）  -> 1
+  [PASS] ★ 阈值**恰好等于**第 3 名的分数（0.44721359549995793）⇒ 含边界保留 3 条  -> 3
+  [PASS] 阈值 = 该分数 + 1e-12 ⇒ 该条被过滤（2 条）  -> 2
+  [PASS] ★ 阈值**恰好等于**第 4 名的分数（0.24253562503633297）⇒ 含边界保留 4 条  -> 4
+  [PASS] 阈值 = 该分数 + 1e-12 ⇒ 该条被过滤（3 条）  -> 3
+  [PASS] ★ 阈值**恰好等于**第 5 名的分数（0）⇒ 含边界保留 5 条  -> 5
+  [PASS] 阈值 = 该分数 + 1e-12 ⇒ 该条被过滤（4 条）  -> 4
+  [PASS] ★ 阈值**恰好等于**第 6 名的分数（-0.70710678118654746）⇒ 含边界保留 6 条  -> 6
+  [PASS] 阈值 = 该分数 + 1e-12 ⇒ 该条被过滤（5 条）  -> 5
+  [PASS] 夹具含 1 条分数**恰好 0.0**（零向量）  -> 1
+  [PASS] ★ min_score=0.0 保留该条（`>=` 含边界）；min_score=1e-12 过滤掉  -> 5 / 4
+  [PASS] ★ 负分项**不被截断**（cos ∈ [-1,1]，min_score=-1.0 仍返回它）  -> [1.0, 0.707107, 0.447214, 0.242536, 0.0, -0.707107]
+  [PASS] min_score=1.000000000001：无结果（余弦上界 1.0）  -> 0
+  [PASS] min_score=1.01：无结果（余弦上界 1.0）  -> 0
+  [PASS] min_score=100.0：无结果（余弦上界 1.0）  -> 0
+  [PASS] ★ 不变量：返回的每一条都满足 `score >= min_score`
+  [PASS] ★ 不变量：min_score 升高 ⇒ 条数不增（单调）
+  [PASS] min_score=True ⇒ VectorStoreInputError  -> VectorStoreInputError
+  [PASS] min_score=False ⇒ VectorStoreInputError  -> VectorStoreInputError
+  [PASS] min_score='0.5' ⇒ VectorStoreInputError  -> VectorStoreInputError
+  [PASS] min_score=[] ⇒ VectorStoreInputError  -> VectorStoreInputError
+  [PASS] min_score={} ⇒ VectorStoreInputError  -> VectorStoreInputError
+
+--------------------------------------------------------------------------
+[4] 场景 3 · 分数排序正确（纯函数级）
+--------------------------------------------------------------------------
+  [PASS] ★ 严格非增（降序）  -> [1.0, 0.707107, 0.447214, 0.242536, 0.0, -0.707107]
+  [PASS] ★ 每条 score **逐位等于** cosine_similarity(query, record.vector)  -> []
+  [PASS] 分数落在余弦值域 [-1, 1] 内  -> [-0.707107, 1.000000]
+  [PASS] 同向向量 ⇒ score == 1.0（精确）  -> 1.0
+  [PASS] 反向向量 ⇒ score == -1.0（精确，且**不被截断为 0**）  -> -1.0
+  [PASS] ★ 打乱候选顺序后名次不变（排序以分数为主键，位置只是兜底）  -> (3, 6, 5, 1, 4, 2) vs (3, 6, 5, 1, 4, 2)
+  [PASS] 打乱候选顺序后分数序列不变
+  [PASS] ★ 交换不同分记录的位置后，名次仍由分数决定  -> (3, 6, 5, 1, 4, 2)
+
+--------------------------------------------------------------------------
+[5] 场景 4 · 并列 score 处理正确（纯函数级 · **决定性判别**）
+--------------------------------------------------------------------------
+  候选顺序 = [30, 10, 20, 40, 50]
+  实际名次 = [40, 50, 30, 10, 20]   期望 = [40, 50, 30, 10, 20]
+  [PASS] 夹具：三条 [0,1] 与查询正交 ⇒ 分数**逐位相等**（精确并列）  -> {30: 0.0, 10: 0.0, 20: 0.0}
+  [PASS] ★ 名次 == [40, 50, 30, 10, 20]（并列段按**候选顺序**，不是 id 升序）  -> [40, 50, 30, 10, 20]
+  [PASS] ★ 若按 id 升序兜底会得到 [40, 50, 10, 20, 30] —— 两者可区分  -> [40, 50, 30, 10, 20]
+  [PASS] ★ 反转候选顺序 ⇒ 并列段顺序**跟着反转**（[20, 10, 30]）  -> [40, 50, 20, 10, 30]
+  [PASS] ★ 全并列时输出顺序 == 候选顺序（稳定排序）  -> [7, 5, 9, 1, 3]
+  [PASS] top_k=3 切在并列段：结果 == 候选顺序最靠前的 3 条  -> [40, 50, 30]
+  [PASS] top_k=4 切在并列段：结果 == 候选顺序最靠前的 4 条  -> [40, 50, 30, 10]
+  [PASS] top_k=5 切在并列段：结果 == 候选顺序最靠前的 5 条  -> [40, 50, 30, 10, 20]
+  [PASS] ★ min_score == 并列分数（0.0）⇒ 三条**全部保留**（含边界）  -> [40, 50, 30, 10, 20]
+  [PASS] min_score = 并列分数 + 1e-12 ⇒ 三条**全部被过滤**  -> [40, 50]
+
+--------------------------------------------------------------------------
+[7] 边界情况（维度 / 空候选 / 查询向量校验）
+--------------------------------------------------------------------------
+  [PASS] ★ 维度不符的候选被**跳过**（3 维那条不进结果）  -> [1, 3]
+  [PASS] ★ 候选非空但**一条维度都对不上** ⇒ VectorStoreDimensionError（不是安静返回空）  -> VectorStoreDimensionError
+  [PASS] 异常信息带 store_name（便于定位是哪个后端）  -> probe：2 条候选向量的维度都不是查询向量的 2 维，无法比较——多半是在用**另一个模型**的向量查询（不同模型的
+  [PASS] 候选**真的为空** ⇒ 返回 []（不抛错，与「维度全不符」区分开）  -> []
+  [PASS] 查询向量为空字符串 ⇒ VectorStoreInputError  -> VectorStoreInputError
+  [PASS] 查询向量为空列表 ⇒ VectorStoreInputError  -> VectorStoreInputError
+  [PASS] 查询向量为含 bool ⇒ VectorStoreInputError  -> VectorStoreInputError
+  [PASS] 查询向量为含字符串 ⇒ VectorStoreInputError  -> VectorStoreInputError
+  [PASS] 查询向量为None ⇒ VectorStoreInputError  -> VectorStoreInputError
+  [PASS] 查询向量接受 tuple / 生成器等非 list 序列
+  [PASS] VectorMatch 六键齐全（chunk_id / document_id / content / metadata / model / score）  -> ['chunk_id', 'content', 'document_id', 'metadata', 'model', 'score']
+  [PASS] VectorMatch 不含向量本体（检索结果不把上千浮点带回上层）
+  [PASS] metadata 原样带出（供上游按 category / topic 使用）  -> {'category': 'technical'}
+
+--------------------------------------------------------------------------
+[5b] 场景 4 · 并列处理在**后端层**的表现
+--------------------------------------------------------------------------
+  [PASS] ★ [memory] 候选顺序 = 写入顺序（30,10,20）≠ id 升序 ⇒ 名次按候选顺序  -> [40, 50, 30, 10, 20]
+  [PASS] 并列夹具第 0 篇入库成功  -> done
+  [PASS] 并列夹具第 1 篇入库成功  -> done
+  [PASS] 并列夹具第 2 篇入库成功  -> done
+  [PASS] ★ 两个真实后端都看到 3 条同正文记录  -> {'sql': 3, 'chroma': 3}
+  [PASS] ★ [sql] 并列组内分数逐位相等  -> [0.4897673613362544, 0.4897673613362544, 0.4897673613362544]
+  [PASS] ★ [sql] 并列段按候选顺序（本环境 = chunk_id 升序）  -> [17, 18, 19]
+  [PASS] ★ [chroma] 并列组内分数逐位相等  -> [0.48976736133625465, 0.48976736133625465, 0.48976736133625465]
+  [PASS] ★ [chroma] 并列段按候选顺序（本环境 = chunk_id 升序）  -> [17, 18, 19]
+  [PASS] ★ 两个真实后端的并列组成员与顺序都一致  -> [[17, 18, 19], [17, 18, 19]]
+  [PASS] ★ 并列段之前的名次一致  -> []
+
+--------------------------------------------------------------------------
+[6] 后端层：store.search() == 用同一批候选重算 select_matches()
+--------------------------------------------------------------------------
+  [PASS] 前提：top_k=5 × oversample=4 >= 语料数 16（召回穷尽，才可与全量重算逐位比对）  -> 20 vs 16
+  [PASS] ★ [sql] top_k=5 min_score=None：chunk_id 序列 == 独立重算  -> [1, 3, 7, 14, 15] vs [1, 3, 7, 14, 15]
+  [PASS] ★ [sql] top_k=5 min_score=None：分数**逐位相等**（同一批候选、同一排序口径）  -> max|Δ|=0.000e+00
+  [PASS] ★ [chroma] top_k=5 min_score=None：chunk_id 序列 == 独立重算  -> [1, 3, 7, 14, 15] vs [1, 3, 7, 14, 15]
+  [PASS] ★ [chroma] top_k=5 min_score=None：分数**逐位相等**（同一批候选、同一排序口径）  -> max|Δ|=0.000e+00
+  [PASS] 前提：top_k=4 × oversample=4 >= 语料数 16（召回穷尽，才可与全量重算逐位比对）  -> 16 vs 16
+  [PASS] ★ [sql] top_k=4 min_score=0.0：chunk_id 序列 == 独立重算  -> [1, 3, 7, 14] vs [1, 3, 7, 14]
+  [PASS] ★ [sql] top_k=4 min_score=0.0：分数**逐位相等**（同一批候选、同一排序口径）  -> max|Δ|=0.000e+00
+  [PASS] ★ [chroma] top_k=4 min_score=0.0：chunk_id 序列 == 独立重算  -> [1, 3, 7, 14] vs [1, 3, 7, 14]
+  [PASS] ★ [chroma] top_k=4 min_score=0.0：分数**逐位相等**（同一批候选、同一排序口径）  -> max|Δ|=0.000e+00
+  [PASS] 前提：top_k=8 × oversample=4 >= 语料数 16（召回穷尽，才可与全量重算逐位比对）  -> 32 vs 16
+  [PASS] ★ [sql] top_k=8 min_score=0.05：chunk_id 序列 == 独立重算  -> [1, 3, 7, 14, 15] vs [1, 3, 7, 14, 15]
+  [PASS] ★ [sql] top_k=8 min_score=0.05：分数**逐位相等**（同一批候选、同一排序口径）  -> max|Δ|=0.000e+00
+  [PASS] ★ [chroma] top_k=8 min_score=0.05：chunk_id 序列 == 独立重算  -> [1, 3, 7, 14, 15] vs [1, 3, 7, 14, 15]
+  [PASS] ★ [chroma] top_k=8 min_score=0.05：分数**逐位相等**（同一批候选、同一排序口径）  -> max|Δ|=0.000e+00
+  [PASS] 前提：top_k=50 × oversample=4 >= 语料数 16（召回穷尽，才可与全量重算逐位比对）  -> 200 vs 16
+  [PASS] ★ [sql] top_k=50 min_score=0.2：chunk_id 序列 == 独立重算  -> [1] vs [1]
+  [PASS] ★ [sql] top_k=50 min_score=0.2：分数**逐位相等**（同一批候选、同一排序口径）  -> max|Δ|=0.000e+00
+  [PASS] ★ [chroma] top_k=50 min_score=0.2：chunk_id 序列 == 独立重算  -> [1] vs [1]
+  [PASS] ★ [chroma] top_k=50 min_score=0.2：分数**逐位相等**（同一批候选、同一排序口径）  -> max|Δ|=0.000e+00
+  [PASS] [sql] document_id=1 过滤生效且条数 <= 1  -> 1
+  [PASS] [chroma] document_id=1 过滤生效且条数 <= 1  -> 1
+  [PASS] [sql] category='technical' 过滤生效  -> 11
+  [PASS] [chroma] category='technical' 过滤生效  -> 11
+
+==========================================================================
+测试案例总览
+==========================================================================
+  [1] top_k 限制数量         select_matches / sql / chroma      条数 == min(top_k, 候选数)；结果 == 完整排序前缀
+  [2] min_score 过滤低分     select_matches / sql / chroma      `>=` 含边界；每条 score >= 阈值；阈值升高条数不增
+  [3] 分数排序正确             select_matches / sql / chroma      严格非增；score 逐位等于 cosine_similarity
+  [4] 并列 score 处理        select_matches / memory / sql / chroma 同分按**候选顺序**（≠ id 升序）；top_k 切并列段取靠前者
+  [5] 维度 / 空候选 / 入参      select_matches                     跳维度不符；全不符抛 DimensionError；空候选返回 []
+  [6] 接线一致性              sql / chroma                       search() 输出 == 用同一批候选重算 select_matches()
+
+==========================================================================
+结果
+==========================================================================
+  唯一排序规则：services/vector_store.py::select_matches()
+  后端：sql（候选顺序 = 主键升序） / chroma（候选顺序 = chunk_id 升序）
+  容差：score 数值跨后端 SCORE_TOL = 1e-06
+  断言：通过 143 项，失败 0 项
+==========================================================================

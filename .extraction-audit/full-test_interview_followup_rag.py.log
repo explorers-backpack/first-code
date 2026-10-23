@@ -1,0 +1,155 @@
+======================================================================
+AI 模拟面试 · 数字人面试 RAG 增强 / 追问链 自检
+======================================================================
+
+--------------------------------------------------------------------------
+[1] 契约：结果字段集 / 分析字段集 / 错误码 / __all__
+  [PASS] FOLLOWUP_RESULT_FIELDS 是 16 键的元组
+  [PASS]   └ 无重复键
+  [PASS]   └ 含知识正向信号 knowledge_chunks
+  [PASS] ANALYSIS_FIELDS 是 16 键的元组
+  [PASS] ★ warning 码与 interview_core **是同一个值**（不另造一套）
+  [PASS] 错误码齐全
+  [PASS] interview_followup.__all__ 里每个名字都真实存在
+  [PASS] interview_followup_agent.__all__ 里每个名字都真实存在
+  [PASS] 追问链入口在 __all__ 里
+  [PASS] 追问 Agent 入口在 __all__ 里
+
+--------------------------------------------------------------------------
+[2] analyze_answer：复用 core 评分 / 命中与未命中 / 薄弱点 / 纯函数
+  [PASS] 键集恒等于 ANALYSIS_FIELDS
+  [PASS] ★ 分数与 interview_core.score_answer **逐字段相同**（不另造评分口径）
+  [PASS] 命中采分点 = 回答里出现的（RDB / AOF）
+  [PASS] ★ 未命中采分点 = 追问的主要靶子（appendfsync）
+  [PASS] ★ focus 优先取**第一个未命中采分点**
+  [PASS] 薄弱点文案可读（含未覆盖采分点）
+  [PASS] 回答长度如实上报
+  [PASS] 过短回答被标记「缺少展开」
+  [PASS] 全部采分点都未命中时 focus 仍取第一个未命中的
+  [PASS] 无 expected_points ⇒ 无未命中项（不猜）
+  [PASS]   └ focus 回落到本题 topic
+  [PASS]   └ 无采分点也无低分维度时给「可追问更深」兜底文案
+  [PASS] ★ 不改入参（纯函数）
+  [PASS]   └ 同输入同输出（确定性）
+  [PASS] ORM 风格对象也能分析
+  [PASS] 裸字符串题干被接受
+
+--------------------------------------------------------------------------
+[3] followup_topic：优先级链（不改入参 / 确定性）
+  [PASS] analysis.focus 优先
+  [PASS] focus 为空 ⇒ focus_topics 首项
+  [PASS]   └ focus_topics 也空 ⇒ weak_topics 首项
+  [PASS]   └ 都空 ⇒ current_stage
+  [PASS]   └ 全空 ⇒ 空串（不猜）
+  [PASS] pack 缺省也能用
+  [PASS] 不改入参
+
+--------------------------------------------------------------------------
+[4] 模板分流 + 漂移守卫（followup_knowledge.txt vs followup.txt）
+  [PASS] 模板分组是新的 interview_followup（不污染 prompts/interview）
+  [PASS] ★ prompts/interview 仍**恰好** 5 个模板（未被污染）
+  [PASS] ★ prompts/interview_followup 恰好 2 个模板
+  [PASS] 原模板 followup.txt 不含知识小节
+  [PASS] 变体模板包含知识小节且仅一次
+  [PASS] ★ 去掉知识小节后与 followup.txt 逐字节相同（防止两模板分叉）
+  [PASS]   └ 行尾符也一致（CRLF 计数相等）
+  [PASS] followup.txt 声明 14 个变量
+  [PASS]   └ 变体 = 原 14 变量 + knowledge_context
+  [PASS]   └ knowledge_context 插在 candidate_answer 与 answer_analysis 之间
+  [PASS] 空知识 ⇒ 走原模板 followup
+  [PASS] 非空知识 ⇒ 走变体 followup_knowledge
+  [PASS] ★ 空知识时 Prompt 里没有「参考知识」小节（行为一致）
+  [PASS] 非空知识时知识正文进了 Prompt
+  [PASS] ★ 两个 Prompt 只差那一小节（逐字节取证）
+  [PASS] 变量集与调用点一致（严格模式未报错）
+
+--------------------------------------------------------------------------
+[5] ★★ 知识库影响问题生成（有知识 vs 无知识，同一会话 / 同一回答）
+  [PASS] 两次都成功
+  [PASS]   └ 结果字段集恒定（两次都等于契约）
+  [PASS] ★ 自检：两次 Prompt 真的不同（否则断言恒真）
+  [PASS] ★ 无知识时 Prompt 不含知识正文（负向取证）
+  [PASS] ★ 有知识时 Prompt 含知识正文（正向取证）
+  [PASS] ★★ 知识库**影响问题生成**：最终 question 随知识而变
+  [PASS]   └ 有知识那次的 topic / expected_points 也跟着变
+  [PASS] ★ knowledge_chunks 由 0 变 N（正向信号不虚报）
+  [PASS]   └ 两次都不产生 warning（空 ≠ 失败）
+  [PASS]   └ 只调用模型一次（检索不额外消耗 LLM）
+  [PASS] ★ 确定性：同输入同输出（含 Prompt 与结果）
+  [PASS] ★ 检索恰好 1 次，且入参 = (job, topic, 上下文包)
+  [PASS]   └ 第 1 位是岗位行（含 job_name）
+  [PASS]   └ 第 2 位 = 结果的 focus（检索线索与追问聚焦点同一）
+  [PASS]   └ 第 3 位是**上下文包**（简历 + 岗位 + 历史 + 知识 一起给检索器）
+
+--------------------------------------------------------------------------
+[6] 检索是可选增强：不注入就不检索 / 失败静默降级
+  [PASS] ★ 不注入检索器且 use_rag=False ⇒ 一次都不检索（默认路径）
+  [PASS] ★ 检索抛异常 ⇒ 仍 ok=True（可选增强不阻塞追问）
+  [PASS]   └ 只记一条 knowledge_retrieval_failed，不进 errors
+  [PASS]   └ knowledge_chunks 如实报 0（不虚报）
+  [PASS]   └ Prompt 里没有知识（降级为无知识）
+  [PASS]   └ 结果仍可用（question 非空）
+  [PASS] ★ use_rag=True 但组装失败 ⇒ 静默降级为「无知识」+ warning
+  [PASS]   └ 组装器恢复后 use_rag=True 会被真正调用（证明上面不是恒真）
+
+--------------------------------------------------------------------------
+[7] 错误分支：answer_required / question_required / finished / not_found / agent_failed
+  [PASS] 空回答 ⇒ answer_required
+  [PASS] 未开始（无已作答题）⇒ question_required
+  [PASS] 显式传 question 时不再要求已作答题（question_required 不是恒真）
+  [PASS] 已结束 ⇒ session_finished
+  [PASS] 非本人 ⇒ session_not_found（不泄露他人会话）
+  [PASS] 模型两次都不合法 ⇒ agent_failed，question 恒为空
+  [PASS]   └ 且失败结果仍带分析（便于前端展示「分析到了什么」）
+  [PASS]   └ 失败结果字段集仍恒定
+
+--------------------------------------------------------------------------
+[8] 上下文整合取证：简历 / 岗位 / 历史回答 / 本题 / 回答 / 分析
+  [PASS] ★ 简历正文进了 Prompt
+  [PASS] ★ 岗位职责与技能要求进了 Prompt
+  [PASS] ★ 历史回答进了 Prompt（题号 + 题干 + 回答 + 得分）
+  [PASS] ★ 本题题干进了 Prompt
+  [PASS] ★ 候选人回答原文进了 Prompt
+  [PASS] ★ 回答分析进了 Prompt（分数 / 薄弱点 / 建议追问方向）
+  [PASS]   └ based_on 是追问所针对的题目原文
+  [PASS]   └ analysis 字段集恒定（对外可用的分析结果）
+  [PASS]   └ focus 与 analysis.focus 一致且非空（检索线索 = 追问聚焦点）
+  [PASS]   └ 规则题无 expected_points 命中/未命中之分时 focus 回落本题 topic
+
+--------------------------------------------------------------------------
+[8b] 经 interview_service：归属校验 + 交付分流（avatar 通道）
+  [PASS] 经 Service 的追问结果字段集恒定
+  [PASS]   └ avatar 模式下交付**原样透传**（数字人通道不阻断、不加字段）
+  [PASS]   └ 显式 question_no 可指定追问对象
+  [PASS] ★ 会话不存在 ⇒ Service 抛 404（HTTP 语义归 Service）
+
+--------------------------------------------------------------------------
+[9] 接口稳定（interview_core 公开签名冻结）+ 隔离守卫
+  [PASS] ★ interview_core.generate_next_question 参数表未变
+  [PASS]   └ retriever / use_rag / retriever_kwargs 仍是 keyword-only
+  [PASS]   └ 三个可选开关默认值未变（None / False / None）
+  [PASS] ★ interview_core.retrieve_knowledge 参数表未变
+  [PASS]   └ 仍不收 db（检索不耦合业务库）
+  [PASS] ★ interview_core.resolve_retriever 参数表未变
+  [PASS] ★ QUESTION_RESULT_FIELDS 仍是 13 键（出题结果契约未变）
+  [PASS]   └ 追问结果契约是**另一个**契约（不与之混淆）
+  [PASS] ★ services/interview_context_pack.py 不 import 任何检索 / 向量 / Embedding 模块
+  [PASS]   └ services/interview_context_pack.py 不 import knowledge_rag（RAG 组装只经 Core）
+  [PASS]   └ services/interview_context_pack.py 不反向 import interview_service
+  [PASS] ★ services/interview_followup_agent.py 不 import 任何检索 / 向量 / Embedding 模块
+  [PASS]   └ services/interview_followup_agent.py 不 import knowledge_rag（RAG 组装只经 Core）
+  [PASS]   └ services/interview_followup_agent.py 不反向 import interview_service
+  [PASS] ★ services/interview_followup.py 不 import 任何检索 / 向量 / Embedding 模块
+  [PASS]   └ services/interview_followup.py 不 import knowledge_rag（RAG 组装只经 Core）
+  [PASS]   └ services/interview_followup.py 不反向 import interview_service
+  [PASS] ★ 追问 Agent **自己不检索**（源码里没有任何 retrieve 调用）
+  [PASS]   └ 知识只经 knowledge_context 参数进入
+  [PASS] ★ 追问链只经 interview_core 这一条接缝（不直连 Agent 之外的层）
+  [PASS] ★ 复用而非复制：Spark 失败哨兵判定是**同一个函数对象**
+  [PASS]   └ 校验与查重口径也是同一对象
+  [PASS]   └ 查重阈值同一常量
+  [PASS]   └ 失败结果形状同一函数
+
+======================================================================
+结果: 通过 118 项，失败 0 项
+======================================================================

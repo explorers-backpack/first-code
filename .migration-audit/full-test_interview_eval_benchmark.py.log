@@ -1,0 +1,316 @@
+==========================================================================
+AI 面试问题评估基准 · 自检（无 RAG vs 有 RAG 的测试条件与评价标准）
+==========================================================================
+
+--------------------------------------------------------------------------
+[1] 前置与契约（「不改 Agent / Prompt / RAG」是被验证的）
+--------------------------------------------------------------------------
+  [PASS] ★ services/interview_agent.py 指纹未变  -> 实际 cbc4b7c33ad5… 期望 cbc4b7c33ad5…
+  [PASS] ★ services/interview_core.py 指纹未变  -> 实际 2bd6f6aab04b… 期望 2bd6f6aab04b…
+  [PASS] ★ services/interview_planner.py 指纹未变  -> 实际 0da3961aac2d… 期望 0da3961aac2d…
+  [PASS] ★ services/question_validator.py 指纹未变  -> 实际 b23e6957edf3… 期望 b23e6957edf3…
+  [PASS] ★ prompts/interview/question.txt 指纹未变  -> 实际 34c522e0b6fd… 期望 34c522e0b6fd…
+  [PASS] ★ prompts/interview/question_knowledge.txt 指纹未变  -> 实际 1c141c6b9c86… 期望 1c141c6b9c86…
+  [PASS] ★ scripts/interview_knowledge.json 指纹未变  -> 实际 fe72792e8982… 期望 fe72792e8982…
+  [PASS] 守卫自检：内容变化会改变指纹
+  [PASS] 基准文件含顶层键 'name'
+  [PASS] 基准文件含顶层键 'version'
+  [PASS] 基准文件含顶层键 'purpose'
+  [PASS] 基准文件含顶层键 'scope'
+  [PASS] 基准文件含顶层键 'format'
+  [PASS] 基准文件含顶层键 'comparison'
+  [PASS] 基准文件含顶层键 'check_fields'
+  [PASS] 基准文件含顶层键 'evaluation_contract'
+  [PASS] 基准文件含顶层键 'retrieval_contract'
+  [PASS] 基准文件含顶层键 'topic_screening'
+  [PASS] 基准文件含顶层键 'scenarios'
+  [PASS] 基准文件含顶层键 'kind_vocabulary'
+  [PASS] version 是整数（改基准须同时升版本）  -> 1
+  [PASS] ★ 检查字段恰好是需求点名的 5 个（顺序一致）  -> ['question', 'question_type', 'difficulty', 'reason', 'stage']
+  [PASS] ★ 5 个字段都是 Core 返回契约的成员（不是自造字段）  -> []
+  [PASS] 每个字段都声明了 type / provenance / hard_gates / observations / ab_expectation
+  [PASS] ★ 所有 gate / metric 的 kind 都属于闭集（不会静默忽略未实现的 kind）  -> []
+  [PASS] 闭集里的 kind 至少被用到一次（无死条目）  -> []
+  [PASS] kind_vocabulary 与 KNOWN_KINDS 完全一致（说明与实际不漂移）
+  [PASS]   └ question_type.type_in_enum 声明了非空 allowed  -> {'id': 'type_in_enum', 'kind': 'enum_member', 'allowed': ['introduction', 'resume', 'technical', 'project', 'scenario', 'hr', 'closing'], 'why': '枚举来自 prompts/interview/question.txt 的字段约束；非法值本项目**不拦**，只记录'}
+  [PASS]   └ question_type.type_matches_stage 声明了 compare_to  -> {'id': 'type_matches_stage', 'kind': 'equals_declared', 'compare_to': 'context.current_stage', 'why': '模板要求「优先围绕当前阶段出题」——这是「是否按阶段出题」的直接度量'}
+  [PASS]   └ difficulty.difficulty_matches_scenario 声明了 compare_to  -> {'id': 'difficulty_matches_scenario', 'kind': 'equals_declared', 'compare_to': 'session.difficulty', 'why': '难度是本场配置的确定值；生成结果必须与之一致（模板第 4 条要求「难度必须与面试难度一致」）'}
+  [PASS]   └ difficulty.difficulty_in_enum 声明了非空 allowed  -> {'id': 'difficulty_in_enum', 'kind': 'enum_member', 'allowed': ['junior', 'mid', 'senior'], 'why': '非法值（如 god_mode）⇒ ERROR_INVALID_DIFFICULTY（invalid_difficulty），阻断'}
+  [PASS]   └ stage.stage_matches_context 声明了 compare_to  -> {'id': 'stage_matches_context', 'kind': 'equals_declared', 'compare_to': 'context.current_stage', 'why': '它是流程状态的回显；不等即说明上下文没正确送达 Core'}
+  [PASS] 说明文档存在  -> C:\Users\DELL-PC\Desktop\career-ai\docs\AI面试问题评估基准.md
+  [PASS] ★ 文档覆盖全部 5 个检查字段名  -> []
+  [PASS] ★ 文档覆盖两个臂 id  -> ['rag_off', 'rag_on']
+  [PASS] ★ 文档引用了基准文件路径
+
+--------------------------------------------------------------------------
+[2] 格式与自洽校验（纯静态，不碰数据库）
+--------------------------------------------------------------------------
+  [PASS] 场景数量为 3（三个不同岗位/阶段/难度组合）  -> 3
+  [PASS] 场景 id 唯一  -> ['s1-mysql-index-mid', 's2-spring-boot-senior', 's3-cache-consistency-senior']
+  [PASS] 语料可独立加载且 source 唯一  -> 22
+  [PASS] [s1-mysql-index-mid] 维度「岗位类型」有落点且非空  -> '后端开发工程师'
+  [PASS] [s1-mysql-index-mid] 维度「面试阶段」有落点且非空  -> 'project'
+  [PASS] [s1-mysql-index-mid] 维度「候选人信息」有落点且非空  -> '4 年后端开发经验，负责订单中台与交易链路。\n项目名称：订单中台\n主导 MySQL 索引优化与慢查询治理，核心接口 QPS 提升 3 倍。\n技术栈：Python、MySQL、Redis、Spring Boot。'
+  [PASS] [s1-mysql-index-mid] 维度「技能方向」有落点且非空  -> ['MySQL 索引', 'Spring Boot', '性能优化']
+  [PASS] [s1-mysql-index-mid] 维度「难度」有落点且非空  -> 'mid'
+  [PASS] [s1-mysql-index-mid] difficulty ∈ models.DIFFICULTIES  -> mid
+  [PASS] [s1-mysql-index-mid] interview_type ∈ models.INTERVIEW_TYPES  -> technical
+  [PASS] [s1-mysql-index-mid] current_stage ∈ models.INTERVIEW_STAGES  -> project
+  [PASS] [s1-mysql-index-mid] mock_reply 的 difficulty == 场景难度  -> mid vs mid
+  [PASS] [s1-mysql-index-mid] mock_reply 的 question_type ∈ 模板声明的枚举  -> project
+  [PASS] [s1-mysql-index-mid] mock_reply 的 question 非空且不短于 10 字  -> 63
+  [PASS] [s1-mysql-index-mid] mock_reply 的 question 与历史问题不重复
+  [PASS] [s1-mysql-index-mid] mock_reply 的 topic 非空  -> 'MySQL 索引'
+  [PASS] [s1-mysql-index-mid] expected_hit_sources 非空  -> ['handbook://mysql/index']
+  [PASS] [s1-mysql-index-mid] expected_hit_sources ⊆ 语料 source  -> []
+  [PASS] [s1-mysql-index-mid] ★ expected_excluded_sources ⊆ 语料 source（诱饵必须是真文档）  -> []
+  [PASS] [s1-mysql-index-mid] ★ 命中与诱饵不相交（声明不能自相矛盾）  -> []
+  [PASS] [s1-mysql-index-mid] top_k / min_score 类型与范围合法  -> top_k=5 min_score=0.25
+  [PASS] [s1-mysql-index-mid] ★ 声明了 min_score（不设阈值 ⇒ 「有 RAG」臂会被噪声污染）
+  [PASS] [s1-mysql-index-mid] query_topic 在筛选表里  -> MySQL 索引
+  [PASS] [s1-mysql-index-mid] ★ 且筛选表标记为 usable（否则场景不可用）  -> {'query': 'MySQL 索引', 'target_source': 'handbook://mysql/index', 'target_rank': 1, 'target_score': 0.547609, 'runner_up_score': 0.156532, 'score_gap': 0.391077, 'usable': True}
+  [PASS] [s1-mysql-index-mid] 筛选表的目标文档与场景声明一致  -> handbook://mysql/index
+  [PASS] [s2-spring-boot-senior] 维度「岗位类型」有落点且非空  -> '后端开发工程师（Java）'
+  [PASS] [s2-spring-boot-senior] 维度「面试阶段」有落点且非空  -> 'technical'
+  [PASS] [s2-spring-boot-senior] 维度「候选人信息」有落点且非空  -> '5 年后端开发经验，主导过订单中台重构。\n项目名称：订单中台\n主导 Spring Boot 自动配置与装配冲突排查，统一了多模块配置规范。\n技术栈：Java、Spring Boot、MySQL、Redis。'
+  [PASS] [s2-spring-boot-senior] 维度「技能方向」有落点且非空  -> ['Spring Boot 自动配置', 'Spring 事务', 'Java 并发']
+  [PASS] [s2-spring-boot-senior] 维度「难度」有落点且非空  -> 'senior'
+  [PASS] [s2-spring-boot-senior] difficulty ∈ models.DIFFICULTIES  -> senior
+  [PASS] [s2-spring-boot-senior] interview_type ∈ models.INTERVIEW_TYPES  -> technical
+  [PASS] [s2-spring-boot-senior] current_stage ∈ models.INTERVIEW_STAGES  -> technical
+  [PASS] [s2-spring-boot-senior] mock_reply 的 difficulty == 场景难度  -> senior vs senior
+  [PASS] [s2-spring-boot-senior] mock_reply 的 question_type ∈ 模板声明的枚举  -> technical
+  [PASS] [s2-spring-boot-senior] mock_reply 的 question 非空且不短于 10 字  -> 62
+  [PASS] [s2-spring-boot-senior] mock_reply 的 question 与历史问题不重复
+  [PASS] [s2-spring-boot-senior] mock_reply 的 topic 非空  -> 'Spring Boot 自动配置'
+  [PASS] [s2-spring-boot-senior] expected_hit_sources 非空  -> ['handbook://spring/auto-configuration']
+  [PASS] [s2-spring-boot-senior] expected_hit_sources ⊆ 语料 source  -> []
+  [PASS] [s2-spring-boot-senior] ★ expected_excluded_sources ⊆ 语料 source（诱饵必须是真文档）  -> []
+  [PASS] [s2-spring-boot-senior] ★ 命中与诱饵不相交（声明不能自相矛盾）  -> []
+  [PASS] [s2-spring-boot-senior] top_k / min_score 类型与范围合法  -> top_k=5 min_score=0.25
+  [PASS] [s2-spring-boot-senior] ★ 声明了 min_score（不设阈值 ⇒ 「有 RAG」臂会被噪声污染）
+  [PASS] [s2-spring-boot-senior] query_topic 在筛选表里  -> Spring Boot 自动配置
+  [PASS] [s2-spring-boot-senior] ★ 且筛选表标记为 usable（否则场景不可用）  -> {'query': 'Spring Boot 自动配置', 'target_source': 'handbook://spring/auto-configuration', 'target_rank': 1, 'target_score': 0.542934, 'runner_up_score': 0.138212, 'score_gap': 0.404722, 'usable': True}
+  [PASS] [s2-spring-boot-senior] 筛选表的目标文档与场景声明一致  -> handbook://spring/auto-configuration
+  [PASS] [s3-cache-consistency-senior] 维度「岗位类型」有落点且非空  -> '后端架构师'
+  [PASS] [s3-cache-consistency-senior] 维度「面试阶段」有落点且非空  -> 'scenario'
+  [PASS] [s3-cache-consistency-senior] 维度「候选人信息」有落点且非空  -> '8 年后端与架构经验，负责交易与缓存体系。\n项目名称：订单中台\n主导分布式缓存一致性方案（延迟双删 + 版本号），解决缓存与库不一致问题。\n技术栈：Java、Redis、MySQL、Kafka。'
+  [PASS] [s3-cache-consistency-senior] 维度「技能方向」有落点且非空  -> ['分布式缓存一致性', 'Redis', 'MySQL']
+  [PASS] [s3-cache-consistency-senior] 维度「难度」有落点且非空  -> 'senior'
+  [PASS] [s3-cache-consistency-senior] difficulty ∈ models.DIFFICULTIES  -> senior
+  [PASS] [s3-cache-consistency-senior] interview_type ∈ models.INTERVIEW_TYPES  -> technical
+  [PASS] [s3-cache-consistency-senior] current_stage ∈ models.INTERVIEW_STAGES  -> scenario
+  [PASS] [s3-cache-consistency-senior] mock_reply 的 difficulty == 场景难度  -> senior vs senior
+  [PASS] [s3-cache-consistency-senior] mock_reply 的 question_type ∈ 模板声明的枚举  -> scenario
+  [PASS] [s3-cache-consistency-senior] mock_reply 的 question 非空且不短于 10 字  -> 52
+  [PASS] [s3-cache-consistency-senior] mock_reply 的 question 与历史问题不重复
+  [PASS] [s3-cache-consistency-senior] mock_reply 的 topic 非空  -> '分布式缓存一致性'
+  [PASS] [s3-cache-consistency-senior] expected_hit_sources 非空  -> ['handbook://architecture/cache-consistency']
+  [PASS] [s3-cache-consistency-senior] expected_hit_sources ⊆ 语料 source  -> []
+  [PASS] [s3-cache-consistency-senior] ★ expected_excluded_sources ⊆ 语料 source（诱饵必须是真文档）  -> []
+  [PASS] [s3-cache-consistency-senior] ★ 命中与诱饵不相交（声明不能自相矛盾）  -> []
+  [PASS] [s3-cache-consistency-senior] top_k / min_score 类型与范围合法  -> top_k=5 min_score=0.4
+  [PASS] [s3-cache-consistency-senior] ★ 声明了 min_score（不设阈值 ⇒ 「有 RAG」臂会被噪声污染）
+  [PASS] [s3-cache-consistency-senior] query_topic 在筛选表里  -> 分布式缓存一致性
+  [PASS] [s3-cache-consistency-senior] ★ 且筛选表标记为 usable（否则场景不可用）  -> {'query': '分布式缓存一致性', 'target_source': 'handbook://architecture/cache-consistency', 'target_rank': 1, 'target_score': 0.423982, 'runner_up_score': 0.360771, 'score_gap': 0.063211, 'usable': True}
+  [PASS] [s3-cache-consistency-senior] 筛选表的目标文档与场景声明一致  -> handbook://architecture/cache-consistency
+  [PASS] ★ 三个场景在「难度」维度上至少有 2 种取值  -> ['mid', 'senior']
+  [PASS] ★ 三个场景在「面试阶段」维度上至少有 2 种取值  -> ['project', 'scenario', 'technical']
+  [PASS] ★ 三个场景在「岗位类型」维度上至少有 2 种取值  -> ['后端开发工程师', '后端开发工程师（Java）', '后端架构师']
+  [PASS] 筛选表覆盖全部候选 topic（12 条）  -> 12
+  [PASS] 筛选表 query 唯一
+  [PASS] ★ 每行的 usable 与其 rank / gap 自洽（判据不是手填的）  -> []
+  [PASS] ★ 筛选表里同时存在 usable=true 与 usable=false（否则没有筛选意义）  -> [False, True]
+  [PASS] 筛选表 target_source 都在语料里  -> []
+  [PASS] 恰好两个臂：rag_off / rag_on  -> ['rag_off', 'rag_on']
+  [PASS] 无 RAG 臂声明 retriever=None / use_rag=False
+  [PASS] ★ 有 RAG 臂声明**显式注入** retriever（而非 use_rag=True）
+  [PASS] ★ 并说明了「为何不用 use_rag=True」（它不传 retriever_kwargs ⇒ 钉不住参数）
+  [PASS] 两臂的期望 Prompt 模板不同（分流是处理的固有部分）
+  [PASS] ★ 声明了 LLM 非确定性及其对本基准的影响（只用 Mock 比输入条件）
+
+--------------------------------------------------------------------------
+[3] 实测 · 候选 topic 筛选表复算（22 篇语料 / 12 条 query）
+--------------------------------------------------------------------------
+  [PASS] 语料全部入库（22 篇 → 32 片）  -> 报告 22 份、切片 32
+
+  query                   rank  目标分        次高分        间隔         usable
+  Redis 持久化               1     0.186816   0.159787   0.027029   True
+  Redis 数据结构              2     0.236463   0.343155   -0.106691  False
+  MySQL 索引                1     0.547609   0.156532   0.391077   True
+  MySQL 事务隔离级别与锁          1     0.308557   0.276385   0.032172   True
+  JVM 内存结构与垃圾回收           1     0.199882   0.18294    0.016941   False
+  JVM 线上问题诊断              2     0.130327   0.171709   -0.041382  False
+  Java 并发线程池与锁            2     0.22521    0.276938   -0.051728  False
+  Kafka 消息可靠性与幂等          1     0.274023   0.266053   0.00797    False
+  Spring 事务与传播行为          1     0.375287   0.314362   0.060925   True
+  Spring Boot 自动配置        1     0.542934   0.138212   0.404722   True
+  分布式缓存一致性                1     0.423982   0.360771   0.063211   True
+  HTTP 与 HTTPS            4     0.136083   0.221088   -0.085005  False
+  [PASS] ★ 12 行筛选结果与声明**逐行一致**（rank / 目标分 / 次高分 / 间隔 / usable）  -> []
+  [PASS] ★ 存在不可用的候选（证明筛选真的在筛东西）
+
+--------------------------------------------------------------------------
+[4] 实测 · 每个场景的「有 RAG 臂」是否真的 armed
+--------------------------------------------------------------------------
+  [PASS] [s1-mysql-index-mid] 语料全部入库（22 篇 → 32 片）  -> 报告 22 份、切片 32
+  [PASS] [s1-mysql-index-mid] 场景 topic 出现在 plan.priority_topics 或 target_topics 里  -> ['MySQL 索引', 'Spring Boot', '性能优化']
+  [PASS] [s1-mysql-index-mid] ★ current_topic(plan, context) == 声明的 query_topic  -> 实际 'MySQL 索引' 期望 'MySQL 索引'
+  [PASS] [s1-mysql-index-mid] 播种的 covered_topics 确实生效（被回读出来）  -> []
+  [PASS] [s1-mysql-index-mid] ★ 检索命中集合 == expected_hit_sources（无诱饵混入）  -> ['handbook://mysql/index']
+  [PASS] [s1-mysql-index-mid] ★ 切片条数 == expected_chunk_count  -> 2
+  [PASS] [s1-mysql-index-mid] ★ 声明的诱饵 source 一条都没被检索到  -> []
+  [PASS] [s1-mysql-index-mid] 检索 query 已记录（便于观测）  -> ['MySQL 索引']
+  [PASS] [s1-mysql-index-mid] 同输入同输出（重复检索结果一致）
+  [PASS] [s2-spring-boot-senior] 语料全部入库（22 篇 → 32 片）  -> 报告 22 份、切片 32
+  [PASS] [s2-spring-boot-senior] 场景 topic 出现在 plan.priority_topics 或 target_topics 里  -> ['MySQL', 'Spring Boot 自动配置']
+  [PASS] [s2-spring-boot-senior] ★ current_topic(plan, context) == 声明的 query_topic  -> 实际 'Spring Boot 自动配置' 期望 'Spring Boot 自动配置'
+  [PASS] [s2-spring-boot-senior] 播种的 covered_topics 确实生效（被回读出来）  -> ['MySQL']
+  [PASS] [s2-spring-boot-senior] ★ 检索命中集合 == expected_hit_sources（无诱饵混入）  -> ['handbook://spring/auto-configuration']
+  [PASS] [s2-spring-boot-senior] ★ 切片条数 == expected_chunk_count  -> 2
+  [PASS] [s2-spring-boot-senior] ★ 声明的诱饵 source 一条都没被检索到  -> []
+  [PASS] [s2-spring-boot-senior] 检索 query 已记录（便于观测）  -> ['Spring Boot 自动配置']
+  [PASS] [s2-spring-boot-senior] 同输入同输出（重复检索结果一致）
+  [PASS] [s3-cache-consistency-senior] 语料全部入库（22 篇 → 32 片）  -> 报告 22 份、切片 32
+  [PASS] [s3-cache-consistency-senior] 场景 topic 出现在 plan.priority_topics 或 target_topics 里  -> ['Redis', 'MySQL', '分布式缓存一致性', '架构设计']
+  [PASS] [s3-cache-consistency-senior] ★ current_topic(plan, context) == 声明的 query_topic  -> 实际 '分布式缓存一致性' 期望 '分布式缓存一致性'
+  [PASS] [s3-cache-consistency-senior] 播种的 covered_topics 确实生效（被回读出来）  -> ['Redis', 'MySQL']
+  [PASS] [s3-cache-consistency-senior] ★ 检索命中集合 == expected_hit_sources（无诱饵混入）  -> ['handbook://architecture/cache-consistency']
+  [PASS] [s3-cache-consistency-senior] ★ 切片条数 == expected_chunk_count  -> 1
+  [PASS] [s3-cache-consistency-senior] ★ 声明的诱饵 source 一条都没被检索到  -> []
+  [PASS] [s3-cache-consistency-senior] 检索 query 已记录（便于观测）  -> ['分布式缓存一致性']
+  [PASS] [s3-cache-consistency-senior] 同输入同输出（重复检索结果一致）
+
+--------------------------------------------------------------------------
+[5] 实测 · 两臂各跑一次，条件差异恰好是知识注入
+--------------------------------------------------------------------------
+
+  ── s1-mysql-index-mid ──
+  [PASS] [s1-mysql-index-mid/rag_off] 出题成功且 errors/warnings 为空  -> ok=True errors=[] warnings=[]
+  [PASS] [s1-mysql-index-mid/rag_on] 出题成功且 errors/warnings 为空  -> ok=True errors=[] warnings=[]
+  [PASS] [s1-mysql-index-mid] ★ 无 RAG 臂注入的知识恰好是 []（空列表，非 None）  -> []
+  [PASS] [s1-mysql-index-mid] ★ 无 RAG 臂在**知识库非空**时仍不注入任何知识（证明处理变量是「是否注入」，不是「库里有没有」）  -> 库里 32 片、注入 0 条
+  [PASS] [s1-mysql-index-mid] ★ 有 RAG 臂注入的知识条数 == expected_chunk_count  -> 2
+  [PASS] [s1-mysql-index-mid] ★ 有 RAG 臂注入的知识来源 == expected_hit_sources  -> ['handbook://mysql/index']
+  [PASS] [s1-mysql-index-mid] ★ 两臂的 10 个基础变量**逐键相同**（上下文/计划未被处理影响）  -> []
+  [PASS] [s1-mysql-index-mid] 变量集合恰好 10 个（知识不在基础变量里）  -> ('resume_summary', 'job_title', 'job_description', 'interview_type', 'difficulty', 'interview_plan', 'current_stage', 'asked_questions', 'covered_topics', 'weak_topics')
+  [PASS] [s1-mysql-index-mid] ★ 无 RAG 臂 Prompt **不含**参考知识小节
+  [PASS] [s1-mysql-index-mid] ★ 有 RAG 臂 Prompt **含**参考知识小节
+  [PASS] [s1-mysql-index-mid] ★ 有 RAG 臂 Prompt 含注入知识的正文（逐字节）
+  [PASS] [s1-mysql-index-mid] ★ 删掉知识小节后两臂 Prompt **逐字节相同**（⇒ 差异可归因于知识注入）  -> 有知识 3099 字符 / 无知识 2426 字符
+  [PASS] [s1-mysql-index-mid] 两臂 Prompt 都无未渲染占位符
+  [PASS] [s1-mysql-index-mid] 两臂都只调用模型一次（每题一次 LLM 调用）  -> off=1 on=1
+  [PASS] [s1-mysql-index-mid] ★ 两臂的 stage 与 difficulty 相同（输入条件一致）  -> project/mid vs project/mid
+  [PASS] [s1-mysql-index-mid] stage == 场景声明的 current_stage（硬闸门）  -> project
+  [PASS] [s1-mysql-index-mid] difficulty == 场景声明的难度（硬闸门）  -> mid
+    观察指标示例：question 长度 off=63 on=63；question 与知识的最长公共子串=3 字
+  [PASS] [s1-mysql-index-mid] 观察指标自检：知识原文当问题 ⇒ 最长公共子串 == 知识长度（度量敏感、非恒 0）  -> 598 vs 知识长度 598
+
+  ── s2-spring-boot-senior ──
+  [PASS] [s2-spring-boot-senior/rag_off] 出题成功且 errors/warnings 为空  -> ok=True errors=[] warnings=[]
+  [PASS] [s2-spring-boot-senior/rag_on] 出题成功且 errors/warnings 为空  -> ok=True errors=[] warnings=[]
+  [PASS] [s2-spring-boot-senior] ★ 无 RAG 臂注入的知识恰好是 []（空列表，非 None）  -> []
+  [PASS] [s2-spring-boot-senior] ★ 无 RAG 臂在**知识库非空**时仍不注入任何知识（证明处理变量是「是否注入」，不是「库里有没有」）  -> 库里 32 片、注入 0 条
+  [PASS] [s2-spring-boot-senior] ★ 有 RAG 臂注入的知识条数 == expected_chunk_count  -> 2
+  [PASS] [s2-spring-boot-senior] ★ 有 RAG 臂注入的知识来源 == expected_hit_sources  -> ['handbook://spring/auto-configuration']
+  [PASS] [s2-spring-boot-senior] ★ 两臂的 10 个基础变量**逐键相同**（上下文/计划未被处理影响）  -> []
+  [PASS] [s2-spring-boot-senior] 变量集合恰好 10 个（知识不在基础变量里）  -> ('resume_summary', 'job_title', 'job_description', 'interview_type', 'difficulty', 'interview_plan', 'current_stage', 'asked_questions', 'covered_topics', 'weak_topics')
+  [PASS] [s2-spring-boot-senior] ★ 无 RAG 臂 Prompt **不含**参考知识小节
+  [PASS] [s2-spring-boot-senior] ★ 有 RAG 臂 Prompt **含**参考知识小节
+  [PASS] [s2-spring-boot-senior] ★ 有 RAG 臂 Prompt 含注入知识的正文（逐字节）
+  [PASS] [s2-spring-boot-senior] ★ 删掉知识小节后两臂 Prompt **逐字节相同**（⇒ 差异可归因于知识注入）  -> 有知识 3452 字符 / 无知识 2457 字符
+  [PASS] [s2-spring-boot-senior] 两臂 Prompt 都无未渲染占位符
+  [PASS] [s2-spring-boot-senior] 两臂都只调用模型一次（每题一次 LLM 调用）  -> off=1 on=1
+  [PASS] [s2-spring-boot-senior] ★ 两臂的 stage 与 difficulty 相同（输入条件一致）  -> technical/senior vs technical/senior
+  [PASS] [s2-spring-boot-senior] stage == 场景声明的 current_stage（硬闸门）  -> technical
+  [PASS] [s2-spring-boot-senior] difficulty == 场景声明的难度（硬闸门）  -> senior
+    观察指标示例：question 长度 off=62 on=62；question 与知识的最长公共子串=12 字
+  [PASS] [s2-spring-boot-senior] 观察指标自检：知识原文当问题 ⇒ 最长公共子串 == 知识长度（度量敏感、非恒 0）  -> 906 vs 知识长度 906
+
+  ── s3-cache-consistency-senior ──
+  [PASS] [s3-cache-consistency-senior/rag_off] 出题成功且 errors/warnings 为空  -> ok=True errors=[] warnings=[]
+  [PASS] [s3-cache-consistency-senior/rag_on] 出题成功且 errors/warnings 为空  -> ok=True errors=[] warnings=[]
+  [PASS] [s3-cache-consistency-senior] ★ 无 RAG 臂注入的知识恰好是 []（空列表，非 None）  -> []
+  [PASS] [s3-cache-consistency-senior] ★ 无 RAG 臂在**知识库非空**时仍不注入任何知识（证明处理变量是「是否注入」，不是「库里有没有」）  -> 库里 32 片、注入 0 条
+  [PASS] [s3-cache-consistency-senior] ★ 有 RAG 臂注入的知识条数 == expected_chunk_count  -> 1
+  [PASS] [s3-cache-consistency-senior] ★ 有 RAG 臂注入的知识来源 == expected_hit_sources  -> ['handbook://architecture/cache-consistency']
+  [PASS] [s3-cache-consistency-senior] ★ 两臂的 10 个基础变量**逐键相同**（上下文/计划未被处理影响）  -> []
+  [PASS] [s3-cache-consistency-senior] 变量集合恰好 10 个（知识不在基础变量里）  -> ('resume_summary', 'job_title', 'job_description', 'interview_type', 'difficulty', 'interview_plan', 'current_stage', 'asked_questions', 'covered_topics', 'weak_topics')
+  [PASS] [s3-cache-consistency-senior] ★ 无 RAG 臂 Prompt **不含**参考知识小节
+  [PASS] [s3-cache-consistency-senior] ★ 有 RAG 臂 Prompt **含**参考知识小节
+  [PASS] [s3-cache-consistency-senior] ★ 有 RAG 臂 Prompt 含注入知识的正文（逐字节）
+  [PASS] [s3-cache-consistency-senior] ★ 删掉知识小节后两臂 Prompt **逐字节相同**（⇒ 差异可归因于知识注入）  -> 有知识 3071 字符 / 无知识 2449 字符
+  [PASS] [s3-cache-consistency-senior] 两臂 Prompt 都无未渲染占位符
+  [PASS] [s3-cache-consistency-senior] 两臂都只调用模型一次（每题一次 LLM 调用）  -> off=1 on=1
+  [PASS] [s3-cache-consistency-senior] ★ 两臂的 stage 与 difficulty 相同（输入条件一致）  -> scenario/senior vs scenario/senior
+  [PASS] [s3-cache-consistency-senior] stage == 场景声明的 current_stage（硬闸门）  -> scenario
+  [PASS] [s3-cache-consistency-senior] difficulty == 场景声明的难度（硬闸门）  -> senior
+    观察指标示例：question 长度 off=52 on=52；question 与知识的最长公共子串=6 字
+  [PASS] [s3-cache-consistency-senior] 观察指标自检：知识原文当问题 ⇒ 最长公共子串 == 知识长度（度量敏感、非恒 0）  -> 449 vs 知识长度 449
+
+--------------------------------------------------------------------------
+[6] 实测 · 五个检查字段的来源与闸门（provenance 探针）
+--------------------------------------------------------------------------
+  [PASS] [s1-mysql-index-mid] ★ stage **不是**模型输出：塞入 stage='closing' 也不生效  -> stage='project'（场景声明 'project'）
+  [PASS]   └ 未知键 stage 在结构归一时被丢弃（只留 6 个业务字段）  -> ['difficulty', 'error', 'expected_points', 'ok', 'question', 'question_type', 'reason', 'topic']
+  [PASS] ★ question_type 不做枚举校验：非法值**原样透传**且流程成功  -> ok=True question_type='not_a_real_type'
+  [PASS]   └ 因此基准把 question_type 的 hard_gates 留空（声明与实现一致）  -> []
+  [PASS] ★ difficulty 非法值 ⇒ 流程失败（ok=False）  -> ok=False errors=['agent_failed']
+  [PASS] ★ 且**先由 Agent 内联规则拦下**（触发一次修复后仍不通过 ⇒ agent_failed）  -> errors=['agent_failed'] calls=2
+  [PASS] ★ Validator 直接调用时给出 invalid_difficulty（架构化演进的第二道）  -> ['invalid_difficulty']
+  [PASS] ★ question 为空 ⇒ 流程失败（ok=False），且**绝不伪造问题**  -> ok=False question=''
+  [PASS] ★ Validator 直接调用时给出 question_empty  -> ['question_empty']
+  [PASS] ★ reason 缺失 ⇒ **不阻断**，流程成功且 reason 为 ""  -> ok=True reason=''
+  [PASS] ★ 成功结果字段集恒定为 QUESTION_RESULT_FIELDS（13 键）  -> ('ok', 'question_no', 'question', 'question_type', 'topic', 'difficulty', 'expected_points', 'reason', 'stage', 'warnings', 'errors', 'error', 'knowledge_chunks')
+
+--------------------------------------------------------------------------
+[7] 条件冻结（条件漂移会立刻失败，而不是比出「假差异」）
+--------------------------------------------------------------------------
+  [PASS] [s1-mysql-index-mid] ★ 数据库加载路径产出的 plan == 纯函数路径 + 仅追加 job_id/resume_id（键序一致、正文逐键相同）  -> DB ('interview_type', 'difficulty', 'duration', 'total_questions', 'stages', 'target_topics', 'priority_topics', 'resume_focus_points', 'source', 'job_id', 'resume_id') / 纯函数 ('interview_type', 'difficulty', 'duration', 'total_questions', 'stages', 'target_topics', 'priority_topics', 'resume_focus_points', 'source')
+  [PASS] [s1-mysql-index-mid] 追加的两个键取**会话行**的外键（非默认值、非 None）  -> job_id=1 resume_id=1
+  [PASS] [s1-mysql-index-mid] 计划确实由**会话行**的配置驱动（difficulty / interview_type / total_questions）  -> technical/mid/5/rule
+  [PASS] [s1-mysql-index-mid] ★ frozen_conditions_sha256 与实测一致  -> 实际 90c37596c78c5b6d1bb2d48b5eccc407290b031272621f70dd08ad10603e1d2b / 声明 90c37596c78c5b6d1bb2d48b5eccc407290b031272621f70dd08ad10603e1d2b
+  [PASS] [s2-spring-boot-senior] ★ 数据库加载路径产出的 plan == 纯函数路径 + 仅追加 job_id/resume_id（键序一致、正文逐键相同）  -> DB ('interview_type', 'difficulty', 'duration', 'total_questions', 'stages', 'target_topics', 'priority_topics', 'resume_focus_points', 'source', 'job_id', 'resume_id') / 纯函数 ('interview_type', 'difficulty', 'duration', 'total_questions', 'stages', 'target_topics', 'priority_topics', 'resume_focus_points', 'source')
+  [PASS] [s2-spring-boot-senior] 追加的两个键取**会话行**的外键（非默认值、非 None）  -> job_id=1 resume_id=1
+  [PASS] [s2-spring-boot-senior] 计划确实由**会话行**的配置驱动（difficulty / interview_type / total_questions）  -> technical/senior/5/rule
+  [PASS] [s2-spring-boot-senior] ★ frozen_conditions_sha256 与实测一致  -> 实际 992eebab2e317c1fdcc523dffc52e026f9917761eb1ef8ac4d240443f2929bf1 / 声明 992eebab2e317c1fdcc523dffc52e026f9917761eb1ef8ac4d240443f2929bf1
+  [PASS] [s3-cache-consistency-senior] ★ 数据库加载路径产出的 plan == 纯函数路径 + 仅追加 job_id/resume_id（键序一致、正文逐键相同）  -> DB ('interview_type', 'difficulty', 'duration', 'total_questions', 'stages', 'target_topics', 'priority_topics', 'resume_focus_points', 'source', 'job_id', 'resume_id') / 纯函数 ('interview_type', 'difficulty', 'duration', 'total_questions', 'stages', 'target_topics', 'priority_topics', 'resume_focus_points', 'source')
+  [PASS] [s3-cache-consistency-senior] 追加的两个键取**会话行**的外键（非默认值、非 None）  -> job_id=1 resume_id=1
+  [PASS] [s3-cache-consistency-senior] 计划确实由**会话行**的配置驱动（difficulty / interview_type / total_questions）  -> technical/senior/5/rule
+  [PASS] [s3-cache-consistency-senior] ★ frozen_conditions_sha256 与实测一致  -> 实际 691ff887a5b6a491d5afbf2c9bc8dc840a113fdcac493490c218274e04806fbd / 声明 691ff887a5b6a491d5afbf2c9bc8dc840a113fdcac493490c218274e04806fbd
+
+==========================================================================
+AI 面试问题评估基准 · 总览
+==========================================================================
+  基准文件：backend\scripts\interview_eval_benchmark.json
+  说明文档：docs\AI面试问题评估基准.md
+  版本：v1　场景数：3
+
+  两个臂（唯一变量 = 是否注入检索到的知识）：
+    rag_off 无 RAG   模板=prompts/interview/question.txt
+    rag_on  有 RAG   模板=prompts/interview/question_knowledge.txt
+
+  固定面试场景：
+    id                          岗位类型                  阶段         难度      技能方向
+    s1-mysql-index-mid          后端开发工程师               project    mid     MySQL 索引/Spring Boot/性能优化
+    s2-spring-boot-senior       后端开发工程师（Java）         technical  senior  Spring Boot 自动配置/Spring 事务/Java 并发
+    s3-cache-consistency-senior 后端架构师                 scenario   senior  分布式缓存一致性/Redis/MySQL
+
+  输出检查字段（5 个）：
+    question        硬闸门 2 个　观察指标 3 个
+    question_type   硬闸门 0 个　观察指标 2 个
+    difficulty      硬闸门 2 个　观察指标 0 个
+    reason          硬闸门 0 个　观察指标 2 个
+    stage           硬闸门 1 个　观察指标 0 个
+
+  候选 topic 筛选（默认 embedder 是词面哈希 ⇒ 必须实测）：
+    可用 6/12；不可用的原因是「目标文档不是 rank 1」或「与次高分间隔 ≤ 0.02」
+
+==========================================================================
+结果
+==========================================================================
+  本套件只验证「基准本身成立」：格式 / 自洽 / 筛选表 / armed / 两臂条件 / 字段来源
+  **未**执行两臂的生成质量对比（本轮只建立测试数据与评价标准）
+  保护文件指纹：7 个（4 业务模块 + 2 Prompt 模板 + 1 语料文件）
+  断言：通过 226 项，失败 0 项
+==========================================================================

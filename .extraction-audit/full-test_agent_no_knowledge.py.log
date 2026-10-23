@@ -1,0 +1,166 @@
+==========================================================================
+RAG 无结果时 InterviewAgent 是否正常运行
+==========================================================================
+
+--------------------------------------------------------------------------
+[1] 前置与契约（「不要修改」是被验证的）
+--------------------------------------------------------------------------
+  [PASS] ★ services/interview_core.py 源码指纹未变  -> 实际 2bd6f6aab04b… 期望 2bd6f6aab04b…
+  [PASS] ★ services/question_validator.py 源码指纹未变  -> 实际 b23e6957edf3… 期望 b23e6957edf3…
+  [PASS] 守卫自检：内容变化会改变指纹
+  [PASS] 守卫自检：无知识判据能区分「有参考知识」与「没有」
+  [PASS] Core 定义了稳定的 knowledge_retrieval_failed 警告码  -> knowledge_retrieval_failed
+  [PASS] ★ 该警告码**不在** errors 错误码集合里（warning 与 error 分开）
+  [PASS] 结果字段集恒定为 QUESTION_RESULT_FIELDS（13 键，成功失败同形状）  -> 13
+
+--------------------------------------------------------------------------
+[2] 场景 1 · Retriever 返回空结果
+--------------------------------------------------------------------------
+  [PASS] 默认 KnowledgeRetriever() 的 retrieve 恒返回 []
+  [PASS]   └ 返回的是 list 而不是 None（调用方无需判空分支）
+  [PASS]   └ 任意入参形状都返回 []（None / 空串 / 对象）
+  [PASS] 恒空检索器 ⇒ _gather_knowledge 返回 []
+  [PASS] ★ 返回类型是 list（不是 None）  -> list
+  [PASS] ★ 检索器被正常调用（拿到 job / topic / context）
+  [PASS]   └ 传下去的 topic == plan.priority_topics[0]  -> Redis 持久化
+  [PASS] ★ 检索不到**不产生 warning**（不是故障）  -> []
+  [PASS] 真实检索器面对**空向量库** ⇒ 0 条  -> 0
+  [PASS]   └ 检索器仍记录了 query（说明走完了正常流程，不是短路）  -> ['Redis 持久化']
+  [PASS] build_query(None, '', {}) == ''（无线索可查）  -> ''
+  [PASS] ★ 空查询 ⇒ 检索器**短路**返回 []（不查库）
+  [PASS] ★ 短路时 embedder **一次都没被调用**（不发起无意义的向量化 IO）  -> 0
+  [PASS]   └ 但仍记录 query（便于观测「确实没线索」）  -> ['']
+  [PASS] ★ resolve_retriever(db, None, use_rag=False) ⇒ (None, [])（不注入就不会悄悄打开 RAG）  -> None / []
+  [PASS]   └ 缺省不产生 warning
+
+--------------------------------------------------------------------------
+[3] 场景 2 · VectorStore 无匹配知识
+--------------------------------------------------------------------------
+  [PASS] ★ 空 store 的 search 直接返回 []（不是异常）  -> 0
+  [PASS]   └ 空 store 的 count() == 0  -> 0
+  [PASS] 固定文档入库成功（库里确实有 1 条知识）  -> status=ok chunks=1
+  · 词面不匹配的 query 实测得分 = 0.17149858514250882（HashEmbeddingService 是**词面哈希**，score 与语义相关性不成正比——它只是「同一模型下可比较」，不是「越大越相关」）
+  [PASS] ★ 无 min_score 时，词面不匹配的知识**仍会被返回**（store 只按相似度排序，不做相关性判断）  -> score=0.17149858514250882
+  [PASS]   └ 该得分明显低于 0.5 ⇒ 用 0.5 当阈值才有区分度  -> score=0.17149858514250882
+  [PASS]   └ 说明「检索到东西」≠「检索到相关知识」，阈值才是分界线
+  [PASS] ★ min_score=0.5 把不匹配的那条滤掉 ⇒ 0 条  -> 0
+  [PASS] category='company'（库里只有 technical）⇒ 0 条
+  [PASS] document_id=999999（不存在）⇒ 0 条
+  [PASS] model 不匹配（库里是 hash-local）⇒ 0 条
+
+--------------------------------------------------------------------------
+[4] knowledge_context 为空的确切形状
+--------------------------------------------------------------------------
+  [PASS] ★ [默认空实现] knowledge_context == []（空列表）  -> []
+  [PASS]   └ 是 list，不是 None
+  [PASS]   └ 不是 [''] / 不是含空串的列表（无伪造占位）
+  [PASS]   └ warnings == []
+  [PASS] ★ [自定义恒空] knowledge_context == []（空列表）  -> []
+  [PASS]   └ 是 list，不是 None
+  [PASS]   └ 不是 [''] / 不是含空串的列表（无伪造占位）
+  [PASS]   └ warnings == []
+  [PASS] normalize_knowledge_context(None) == []
+  [PASS] normalize_knowledge_context(空列表) == []
+  [PASS] normalize_knowledge_context(空元组) == []
+  [PASS] normalize_knowledge_context(空字符串) == []
+  [PASS] normalize_knowledge_context(全空元素列表) == []
+  [PASS] ★ 真实空库 ⇒ knowledge_context == [] 且无 warning  -> [] / []
+  [PASS] ★ 空知识 ⇒ 模板名是 question（不是 question_knowledge）  -> question
+  [PASS] ★ 空知识 Prompt **不含**任何知识痕迹（含无「（无）」占位）
+  [PASS]   └ 也不含 knowledge_context 变量名
+
+--------------------------------------------------------------------------
+[5] Agent 流程继续（核心）
+--------------------------------------------------------------------------
+  [PASS] ★ [不注入检索器] 仍能出题成功（ok=True）  -> errors=[] error=None
+  [PASS]   └ errors == []  -> []
+  [PASS]   └ warnings == []（无知识不是故障）  -> []
+  [PASS]   └ ★ knowledge_chunks == 0（无知识 ⇒ 正向信号必须为 0）  -> 0
+  [PASS]   └ 仍调用模型恰好一次  -> 1
+  [PASS]   └ 返回字段集恒定（13 键）
+  [PASS]   └ 题目字段正常（question / topic / difficulty）  -> q='请说明 Redis 持久化的两种' topic=Redis 持久化
+  [PASS]   └ Prompt 无知识痕迹
+  [PASS]   └ Prompt 无未渲染占位符
+  [PASS] ★ [注入空实现] 仍能出题成功（ok=True）  -> errors=[] error=None
+  [PASS]   └ errors == []  -> []
+  [PASS]   └ warnings == []（无知识不是故障）  -> []
+  [PASS]   └ ★ knowledge_chunks == 0（无知识 ⇒ 正向信号必须为 0）  -> 0
+  [PASS]   └ 仍调用模型恰好一次  -> 1
+  [PASS]   └ 返回字段集恒定（13 键）
+  [PASS]   └ 题目字段正常（question / topic / difficulty）  -> q='请说明 Redis 持久化的两种' topic=Redis 持久化
+  [PASS]   └ Prompt 无知识痕迹
+  [PASS]   └ Prompt 无未渲染占位符
+  [PASS] ★ [注入恒空检索器] 仍能出题成功（ok=True）  -> errors=[] error=None
+  [PASS]   └ errors == []  -> []
+  [PASS]   └ warnings == []（无知识不是故障）  -> []
+  [PASS]   └ ★ knowledge_chunks == 0（无知识 ⇒ 正向信号必须为 0）  -> 0
+  [PASS]   └ 仍调用模型恰好一次  -> 1
+  [PASS]   └ 返回字段集恒定（13 键）
+  [PASS]   └ 题目字段正常（question / topic / difficulty）  -> q='请说明 Redis 持久化的两种' topic=Redis 持久化
+  [PASS]   └ Prompt 无知识痕迹
+  [PASS]   └ Prompt 无未渲染占位符
+  [PASS] ★ [显式 use_rag=False] 仍能出题成功（ok=True）  -> errors=[] error=None
+  [PASS]   └ errors == []  -> []
+  [PASS]   └ warnings == []（无知识不是故障）  -> []
+  [PASS]   └ ★ knowledge_chunks == 0（无知识 ⇒ 正向信号必须为 0）  -> 0
+  [PASS]   └ 仍调用模型恰好一次  -> 1
+  [PASS]   └ 返回字段集恒定（13 键）
+  [PASS]   └ 题目字段正常（question / topic / difficulty）  -> q='请说明 Redis 持久化的两种' topic=Redis 持久化
+  [PASS]   └ Prompt 无知识痕迹
+  [PASS]   └ Prompt 无未渲染占位符
+  [PASS] ★ 四种「无知识」写法产出的 Prompt **逐字节相同**  -> 去重后 1 种 / 长度 [1673]
+  [PASS] ★ 与「Agent 直接不传 knowledge_context」的 Prompt 逐字节相同（= 无知识时行为与引入知识能力前完全一致）  -> 长度 1673 vs 1673
+  [PASS] ★ 无知识时非法 JSON 仍能修复成功  -> None
+  [PASS]   └ 共调用 2 次（首次 + 1 次修复）  -> 2
+  [PASS]   └ 两次 Prompt 都无知识痕迹
+  [PASS]   └ 修复后仍无 knowledge_retrieval_failed 警告  -> []
+  [PASS] 模型服务故障 ⇒ ok=False 且错误码是 agent_failed（与知识无关）  -> ok=False errors=['agent_failed']
+  [PASS]   └ 失败时 question 恒为空串（绝不放行伪造问题）  -> ''
+  [PASS]   └ 失败结果字段集仍恒定（13 键）
+  [PASS] ★ Validator 在无知识路径上照常校验通过  -> []
+  [PASS]   └ 产出规范化的 6 键问题  -> ['difficulty', 'expected_points', 'question', 'question_type', 'reason', 'topic']
+  [PASS]   └ 空 question 的候选被拒（Validator 不是恒通过）  -> ['question_empty', 'topic_empty']
+
+--------------------------------------------------------------------------
+[6] 三种「没有知识」的成因分开（errors / warnings / 静默）
+--------------------------------------------------------------------------
+  [PASS] [检索抛异常（服务故障）] 出题**仍然成功**（ok=True）  -> errors=[]
+  [PASS]   └ errors == []（没有知识不是错误）  -> []
+  [PASS]   └ ★ 只记 warning knowledge_retrieval_failed  -> ['knowledge_retrieval_failed']
+  [PASS] [检索正常但没结果] 出题**仍然成功**（ok=True）  -> errors=[]
+  [PASS]   └ errors == []（没有知识不是错误）  -> []
+  [PASS]   └ ★ 无任何 warning（静默降级）  -> []
+  [PASS] [不注入检索器（默认）] 出题**仍然成功**（ok=True）  -> errors=[]
+  [PASS]   └ errors == []（没有知识不是错误）  -> []
+  [PASS]   └ ★ 无任何 warning（静默降级）  -> []
+  [PASS] ★ 三种成因的 Prompt 逐字节相同（都回落原模板）  -> [1673]
+  [PASS]   └ 三份 Prompt 都无知识痕迹
+  [PASS] 对照组前置：真实检索器确实取到了知识  -> 1
+  [PASS] 对照组：有知识时出题成功且 warning 为空  -> []
+  [PASS] ★ 对照组：有知识的 Prompt **含**参考知识小节（判据不是恒真）
+  [PASS] ★ 对照组：有知识的 Prompt 与无知识时**不同**
+  [PASS] 前置：min_score=0.5 确实把该条滤空（否则下面的比较无意义）
+  [PASS] 有库但阈值滤空 ⇒ 出题成功且无 warning  -> ok=True warnings=[]
+  [PASS]   └ Prompt 回落原模板（无知识痕迹）
+  [PASS] ★ 且与「完全空库」的 Prompt 逐字节相同  -> 长度 1673 vs 1673
+
+==========================================================================
+测试场景总览
+==========================================================================
+  [1] Retriever 返回空结果          默认空实现 / 自定义恒空 / 真实空库 / 空查询短路
+  [2] VectorStore 无匹配知识        空表 / min_score 滤空 / category / document_id / model
+  [3] knowledge_context 形状     恰好 []（非 None、非 ['']）
+  [4] Agent 流程继续               出题成功 / 调模型一次 / 原模板 / 无知识痕迹
+  [5] Prompt 逐字节一致             四种「无知识」写法 == 不注入检索器
+  [6] 降级成因分开                   抛异常→warning；没结果/不注入→静默
+
+==========================================================================
+当前降级行为
+==========================================================================
+  检索失败（抛异常）  → knowledge_context=[] + warnings=[knowledge_retrieval_failed]
+  检索无结果（[]）    → knowledge_context=[] + warnings=[]（静默）
+  不注入 / use_rag=False → knowledge_context=[] + warnings=[]（默认安全态）
+  三种情形：ok=True、errors=[]、Prompt 回落 question.txt、与不注入时逐字节相同
+  失败不伪造：question 恒为 ''；知识问题绝不进 errors
+  断言：通过 117 项，失败 0 项
+==========================================================================

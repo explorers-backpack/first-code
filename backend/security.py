@@ -19,7 +19,7 @@ import bcrypt
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models import UserSession
+from models import User, UserSession
 
 
 def _env_int(name: str, default: int) -> int:
@@ -119,6 +119,36 @@ async def load_valid_session(
     if row is None or not session_is_valid(row):
         return None
     return row
+
+
+async def load_session_by_id(
+    db: AsyncSession, session_id: int
+) -> Optional[UserSession]:
+    """按主键查会话（**不做**有效性判定，由调用方决定口径）。
+
+    ★ 存在的理由：实时通道（WS）的连接存续期间要复核「是否已被踢下线」，
+    而它手上只有 ``ws_ticket.auth_session_id``（ticket 一次性，消费后没有可复核
+    的东西）。这段查询原先内联在路由层，属于「路由层写 SQL」——按 R7 下沉到这里，
+    路由层只做协议编解码。
+    """
+    if session_id is None:
+        return None
+    result = await db.execute(
+        select(UserSession).where(UserSession.id == int(session_id))
+    )
+    return result.scalar_one_or_none()
+
+
+async def user_exists(db: AsyncSession, user_id: int) -> bool:
+    """用户是否仍存在（只查主键，不取整行）。
+
+    ★ 与 :func:`load_session_by_id` 同批下沉：``user_session`` 那条路径不可用时，
+    实时通道退化为「用户仍存在」这一弱口径，它同样不该由路由层直接跑查询。
+    ★ 查的是 ``user`` 表而不是 ``user_session``：语义是「用户还在」，
+    没有任何会话的用户必须仍然判 True（改口径会让老连接被误断）。
+    """
+    result = await db.execute(select(User.id).where(User.id == int(user_id)))
+    return result.scalar_one_or_none() is not None
 
 
 async def create_user_session(db: AsyncSession, user) -> UserSession:

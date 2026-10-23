@@ -19,7 +19,7 @@
 [4] ``notes`` 只是提示，**不改变** status（「无法核对」不等于「有问题」，更不等于「没问题」）
 [5] ``derive_thresholds``：从真实标定产物推导可行区间；结构不符 → ``DerivationError``
 [6] ``within`` 的边界语义：**下界开、上界闭**（与 ``score >= min_score`` 一致）
-[7] ``main.threshold_status()``：固定 6 键；真实产物 + 钉扎环境 ⇒ 报「模型已变」（守卫真的在干活）
+[7] ``health.threshold_status()``：固定 6 键；真实产物 + 钉扎环境 ⇒ 报「模型已变」（守卫真的在干活）
 [8] ``GET /api/health`` 回带 ``threshold``；``status`` / ``service`` / ``embedding`` / ``vector`` 向后兼容
 [9] 启动日志：ok / stale / unknown 三种文案
 [10] AST 守卫：溯源模块**顶层不 import 任何项目模块**（零依赖），且不含
@@ -55,6 +55,7 @@ os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 
 import main  # noqa: E402
+from common import health  # noqa: E402
 from services import rag_threshold_provenance as prov  # noqa: E402
 
 #: ``threshold_status()`` 的固定键集。**改它就要同步改这里**（契约）。
@@ -293,9 +294,9 @@ async def run() -> bool:
                prov.within(0.7000000001, 0.70, 0.80) is True
                and prov.within(0.70, 0.70, 0.80) is False)
 
-        # ---------------- [7] main.threshold_status ----------------
-        print("\n[7] main.threshold_status()：形状 + 真实产物下的判定")
-        real = main.threshold_status()
+        # ---------------- [7] health.threshold_status ----------------
+        print("\n[7] health.threshold_status()：形状 + 真实产物下的判定")
+        real = health.threshold_status()
         _check("键集恰好 6 键", set(real) == STATUS_KEYS, str(sorted(real)))
         _check("error is None", real["error"] is None, repr(real["error"]))
         _check("★ 真实产物 + 钉扎（hash-local）⇒ **stale**（守卫在干活：模型确实变了）",
@@ -323,7 +324,7 @@ async def run() -> bool:
             "corpus": {"file": str(corpus), "sha256": prov.corpus_fingerprint(corpus)},
             "params": params,
         })
-        ok = main.threshold_status(matching)
+        ok = health.threshold_status(matching)
         _check("★ 与当前环境匹配的产物 ⇒ status == ok",
                ok["status"] == prov.STATUS_OK, f"{ok['status']} {ok['reasons']}")
         _check("  └ current.params 与配置逐键相等",
@@ -331,14 +332,14 @@ async def run() -> bool:
                str((ok.get("current") or {}).get("params")))
 
         os.environ["RAG_MIN_SCORE"] = "0.95"
-        bad_param = main.threshold_status(matching)
+        bad_param = health.threshold_status(matching)
         _check("★ 改 .env 阈值 ⇒ 立刻 stale（溯源能抓到配置漂移）",
                bad_param["status"] == prov.STATUS_STALE
                and any("min_score" in x for x in bad_param["reasons"]),
                str(bad_param["reasons"]))
         _restore_env(saved)
 
-        missing = main.threshold_status(tmp / "nope.json")
+        missing = health.threshold_status(tmp / "nope.json")
         _check("★ 产物缺失 ⇒ unknown + error is None（不 500）",
                missing["status"] == prov.STATUS_UNKNOWN and missing["error"] is None,
                str(missing))
@@ -360,8 +361,8 @@ async def run() -> bool:
                    set(body.get("threshold") or {}) == STATUS_KEYS,
                    str(sorted((body.get("threshold") or {}).keys())))
             _check("threshold 与 threshold_status() 同源（逐键相等）",
-                   body.get("threshold") == main.threshold_status(),
-                   f"{body.get('threshold')} vs {main.threshold_status()}")
+                   body.get("threshold") == health.threshold_status(),
+                   f"{body.get('threshold')} vs {health.threshold_status()}")
 
         # ---------------- [9] 启动日志 ----------------
         print("\n[9] 启动日志（ok / stale / unknown 三态都要能看出来）")
@@ -371,7 +372,7 @@ async def run() -> bool:
         os.environ["RAG_MIN_SCORE_RATIO"] = "0.99"
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            main._report_threshold_status(matching)
+            health._report_threshold_status(matching)
         text = buf.getvalue()
         _check("ok ⇒ 含「核对通过」且无 WARN",
                "核对通过" in text and "WARN" not in text, repr(text))
@@ -379,7 +380,7 @@ async def run() -> bool:
         _restore_env(saved)
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            main._report_threshold_status()
+            health._report_threshold_status()
         text = buf.getvalue()
         _check("★ stale ⇒ 含 WARN 且列出理由", "WARN" in text and "过期" in text, repr(text))
         _check("  └ 给出可执行的补救步骤（重跑标定 + 一键写回）",
@@ -387,7 +388,7 @@ async def run() -> bool:
 
         buf = io.StringIO()
         with contextlib.redirect_stdout(buf):
-            main._report_threshold_status(tmp / "nope.json")
+            health._report_threshold_status(tmp / "nope.json")
         text = buf.getvalue()
         _check("★ unknown ⇒ 含 WARN 且**明确说「无法判定」**（不说成通过）",
                "WARN" in text and "无法判定" in text, repr(text))

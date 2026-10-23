@@ -1,0 +1,105 @@
+========================================================================
+RAG 检索阈值溯源 / 过期检测 / 一键重标定自检
+========================================================================
+
+[1] load_provenance / corpus_fingerprint 的宽容语义
+  [PASS] 缺失文件 → None（不抛）
+  [PASS] JSON 坏了 → None（不抛）
+  [PASS] 顶层不是对象 → None（不抛）
+  [PASS] corpus_fingerprint 缺文件 → None
+  [PASS] corpus_fingerprint(None) → None
+
+[2] 语料指纹口径（CRLF 规范化 ⇒ 跨平台一致）
+  [PASS] ★ CRLF 与 LF 内容相同 ⇒ 指纹相同（跨平台不误报）
+  [PASS] ★ 内容变了 ⇒ 指纹变了
+  [PASS]   └ 且是 64 位十六进制（sha256）
+
+[3] check_provenance：ok / stale / unknown
+  [PASS] 键集恰好 5 键
+  [PASS] ★ 完全一致 ⇒ status == ok
+  [PASS] 无产物 ⇒ unknown（**不是** ok）
+  [PASS]   └ 且给出可执行建议（指向重标定脚本）
+  [PASS] ★ 换模型 ⇒ stale 且理由点明模型
+  [PASS] ★ 换维度 ⇒ stale
+  [PASS] ★ 语料变了 ⇒ stale
+  [PASS] ★ 参数被手工改过 ⇒ stale
+  [PASS] ★ 参数被**删掉**（未配置）⇒ stale
+
+[4] notes 只是提示，**不改变** status
+  [PASS] ★ 语料读不到 ⇒ 仍是 ok + 一条 note（不是 stale，也不是静默通过）
+  [PASS] ★ 当前 Embedding 无法确定 ⇒ ok + note（跳过模型核对）
+  [PASS] ★ 反例：真过期时 status 必须变 stale（note 机制没把 stale 吞掉）
+
+[5] derive_thresholds：从标定产物推导可行区间
+  [PASS] ★ min_score 下界 = 未覆盖主题最高 top1
+  [PASS] ★ min_score 上界 = 已覆盖主题最低 top1
+  [PASS] ★ 推荐值 = 窗口中点（全精度）
+  [PASS] ★ α 区间取自 combined_alpha
+  [PASS] ★ α 推荐值 = 区间中点
+  [PASS] 结构不符（空对象）⇒ DerivationError
+  [PASS] 结构不符（无 topics）⇒ DerivationError
+  [PASS] 结构不符（无 combined_alpha）⇒ DerivationError
+  [PASS] ★ 只有未覆盖主题 ⇒ 绝对下限**不可推**（推荐值为 None，不猜）
+
+[6] within：下界**开**、上界**闭**
+  [PASS] ★ 等于下界 ⇒ 不在区间内（放进来会注入未覆盖主题）
+  [PASS] ★ 等于上界 ⇒ 在区间内（仍能保住已覆盖主题）
+  [PASS] 区间内 ⇒ True
+  [PASS] 区间外 ⇒ False
+  [PASS] 非数值 ⇒ False（不抛）
+  [PASS] ★ 判定用**全精度**：0.7000000001 仍然 <= 下界之外
+
+[7] health.threshold_status()：形状 + 真实产物下的判定
+  [PASS] 键集恰好 6 键
+  [PASS] error is None
+  [PASS] ★ 真实产物 + 钉扎（hash-local）⇒ **stale**（守卫在干活：模型确实变了）
+  [PASS]   └ expected 快照里记的是真实产物里的模型
+  [PASS]   └ current 快照里是钉扎后的模型
+  [PASS] ★ 与当前环境匹配的产物 ⇒ status == ok
+  [PASS]   └ current.params 与配置逐键相等
+  [PASS] ★ 改 .env 阈值 ⇒ 立刻 stale（溯源能抓到配置漂移）
+  [PASS] ★ 产物缺失 ⇒ unknown + error is None（不 500）
+
+[8] GET /api/health 回带 threshold（且向后兼容）
+  [PASS] 状态码 200
+  [PASS] ★ 既有键 status 未变
+  [PASS] ★ 既有键 service 未变
+  [PASS] ★ 既有键 embedding 仍在
+  [PASS] ★ 既有键 vector 仍在
+  [PASS] ★ 新增键 threshold 存在
+  [PASS] threshold 键集为 6 键
+  [PASS] threshold 与 threshold_status() 同源（逐键相等）
+
+[9] 启动日志（ok / stale / unknown 三态都要能看出来）
+  [PASS] ok ⇒ 含「核对通过」且无 WARN
+  [PASS] ★ stale ⇒ 含 WARN 且列出理由
+  [PASS]   └ 给出可执行的补救步骤（重跑标定 + 一键写回）
+  [PASS] ★ unknown ⇒ 含 WARN 且**明确说「无法判定」**（不说成通过）
+
+[10] 源码守卫：溯源模块零项目依赖 + 不撞 token 守卫
+  [PASS] ★ 顶层不 import 任何项目模块（连 knowledge_rag 都不 import）
+  [PASS] 顶层只 import 标准库
+  [PASS] ★ 不含带引号的 RAG_TOP_K（否则 test_rag_retriever_config 的闭集守卫会红）
+  [PASS] ★ 不含带引号的 RAG_MIN_SCORE（否则 test_rag_retriever_config 的闭集守卫会红）
+  [PASS] ★ 不含带引号的 RAG_MIN_SCORE_RATIO（否则 test_rag_retriever_config 的闭集守卫会红）
+  [PASS] 守卫自检：写入带引号 token 时判据确实会命中
+
+[11] 一键重标定：.env 读写与「保留 / 替换」决策
+  [PASS] 读得到键值
+  [PASS] ★ 不匹配注释行（注释里的同名键不算配置）
+  [PASS] 键不存在 → None
+  [PASS] 替换已存在的行
+  [PASS]   └ 只动目标行（其它行原样）
+  [PASS]   └ 只替换**第一处**（注释行没被碰）
+  [PASS] 不存在的键 ⇒ 追加
+  [PASS] 值相同时报告「无变化」
+  [PASS] ★ 现有值在区间内 ⇒ **保留**（本工具不改健康的配置）
+  [PASS] ★ 现有值越界 ⇒ 采用推荐值（6 位小数）
+  [PASS] 未配置 + 有推荐值 ⇒ set
+  [PASS] ★ 区间推不出来 ⇒ 保留现有值并提示人工复核（不猜）
+  [PASS] 边界：等于上界 ⇒ 保留
+  [PASS] 边界：等于下界 ⇒ 越界（替换）
+
+========================================================================
+通过 76 / 76
+========================================================================

@@ -1,0 +1,56 @@
+====================================================================
+生产路径 RAG 接线自检（缺口①：/next-question + use_rag）
+====================================================================
+
+[1] 路由与鉴权
+  [PASS] 路由存在且为 POST
+  [PASS] 无 token 返回 401
+
+[2] 默认（use_rag 缺省 ⇒ 默认开启，组装器被调用）
+  [PASS] 状态码 200
+  [PASS] ok=true
+  [PASS] ★ 组装器被调用 1 次（缺省即开启 RAG）
+  [PASS]   └ 不给检索参数就不传参数（默认值由组装器决定）
+  [PASS] 结果字段集恒定（13 键）
+
+[3] use_rag=true（不给检索参数）
+  [PASS] 状态码 200
+  [PASS] 组装器被调用 1 次
+  [PASS] 不给参数就不传参数
+  [PASS] ok=true
+
+[4] use_rag=true + top_k / min_score
+  [PASS] 状态码 200
+  [PASS] top_k / min_score 原样透传
+  [PASS] 只给 top_k 时只传 top_k
+
+[5] use_rag=false + 检索参数
+  [PASS] 状态码 200
+  [PASS] 组装器未被调用（参数不生效）
+
+[6] 端到端：库里有知识 + use_rag=true
+  [PASS] 知识导入成功
+  [PASS] 状态码 200
+  [PASS] ok=true
+  [PASS] 知识检索未降级（无 knowledge_retrieval_failed）
+  [PASS] Agent 收到的 Prompt 含知识小节（RAG 真的接上了）
+
+[7] 对照：同一份库 + 显式 use_rag=false
+  [PASS] Prompt 不含知识小节
+  [PASS] 对照臂 ok=true
+
+[8] 会话不存在 / 非本人
+  [PASS] 会话不存在返回 404
+  [PASS] 404 提示可读
+
+[9] 契约与源码守卫
+  [PASS] NextQuestionRequest.use_rag 默认 True（默认开启检索）
+  [PASS] NextQuestionRequest 默认实例 use_rag=True
+  [PASS] ★ 库层默认仍保守：Service 的 use_rag 默认 False（默认开启只落在 HTTP 契约层，内部直接调用不会隐式检索）
+  [PASS] 路由确实调用了 generate_next_question
+  [PASS] use_rag 由请求驱动（payload.use_rag）
+  [PASS] 路由未硬编码 use_rag=True（默认值只落在 schema，仍由请求驱动）
+
+====================================================================
+结果: 通过 31 项，失败 0 项
+====================================================================

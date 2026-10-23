@@ -17,7 +17,7 @@
 
 安全约定
 --------
-- 密码使用**项目现有哈希机制** ``main._hash_password``（sha256），与注册/登录完全一致
+- 密码使用**项目现有哈希机制** ``modules.auth.service._hash_password``（sha256），与注册/登录完全一致
 - ``role`` 由本脚本固定为 ``admin``，**不接受任何外部输入**
 - 默认密码 ``admin123`` 仅用于本地开发；生产环境请用 ``ADMIN_PASSWORD`` 环境变量
   （或 ``--password``，但命令行会留在 shell 历史中，故推荐环境变量）
@@ -41,6 +41,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from sqlalchemy import select  # noqa: E402
 
 import main  # noqa: E402
+# ★ 口令助手随认证模块迁到 modules/auth/service.py（原 main._hash_password）
+from modules.auth import service as auth_service  # noqa: E402
 
 DEFAULT_EMAIL = "admin@career.ai"
 DEFAULT_USERNAME = "admin"
@@ -97,7 +99,7 @@ async def run(args) -> int:
             user = main.User(
                 username=username,
                 email=email,
-                password_hash=main._hash_password(password),
+                password_hash=auth_service._hash_password(password),
                 role=ADMIN_ROLE,
             )
             session.add(user)
@@ -112,7 +114,7 @@ async def run(args) -> int:
         existing = by_email
         print(f"\n[已存在] id={existing.id} username={existing.username!r} "
               f"email={existing.email!r} role={existing.role!r}")
-        password_matches = existing.password_hash == main._hash_password(password)
+        password_matches = existing.password_hash == auth_service._hash_password(password)
         print(f"       密码与给定值一致: {password_matches}")
 
         if existing.role == ADMIN_ROLE:
@@ -129,7 +131,7 @@ async def run(args) -> int:
             if args.dry_run:
                 print("       DRY RUN：未写库（本应重置密码）。")
                 return 0
-            existing.password_hash = main._hash_password(password)
+            existing.password_hash = auth_service._hash_password(password)
             await session.commit()
             print("       [OK] 已按显式 --reset-password 重置密码。")
             print("              已有会话 token 仍然有效；如需强制失效请另行清理 user_session。")

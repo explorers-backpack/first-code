@@ -1,0 +1,77 @@
+====================================================================
+AI 模拟面试 · 交互模式（interview_mode）自检
+====================================================================
+
+[1] 枚举与模型列
+  [PASS] INTERVIEW_MODES 恰为 text / avatar
+  [PASS] 默认交互模式为 text（向后兼容既有会话）
+  [PASS] InterviewSession 存在 interview_mode 列
+  [PASS]   └ 非空（NOT NULL）
+  [PASS]   └ 长度 20（VARCHAR(20)）
+  [PASS]   └ 有 server_default（既有库 ALTER 时历史行有值）
+  [PASS]   └ 模型层 default 为 text
+  [PASS]   └ 未加索引（模式不做检索维度）
+
+[2] 请求契约（SessionCreateRequest）
+  [PASS] 缺省时 mode == text
+  [PASS] {"mode": "text"} 通过
+  [PASS] {"mode": "avatar"} 通过
+  [PASS] {"interview_mode": "avatar"} 亦可（列名别名）
+  [PASS] mode 字段名对外就是 mode（非 interview_mode）
+  [PASS] 非法 mode 被 Pydantic 拒绝（422）
+  [PASS] 大小写敏感：TEXT 被拒
+  [PASS] 空字符串被拒
+  [PASS] 出参契约含 interview_mode 字段
+  [PASS]   └ 出参缺省为 text
+
+[3] Service 落库（create_session → interview_session.interview_mode）
+  [PASS] text 会话回传 interview_mode=text
+  [PASS] avatar 会话回传 interview_mode=avatar
+  [PASS] 未指定时落库为 text（默认值）
+  [PASS] DB 中 text 会话 interview_mode == 'text'
+  [PASS] DB 中 avatar 会话 interview_mode == 'avatar'
+  [PASS] DB 中缺省会话 interview_mode == 'text'
+  [PASS] 非法 mode 直调 service 返回 400
+  [PASS] 既有 interview_type 校验仍在（非法 → 400）
+
+[4] 只选择交互方式：不影响出题 / 状态机
+  [PASS] text 与 avatar 的第一题完全相同
+  [PASS]   └ 题号 / 类型 / 知识点 / 难度一致
+  [PASS]   └ 期望要点一致
+  [PASS] 整场题目计划逐题一致（模式不参与出题）
+  [PASS] 状态机推进一致（均为 ongoing / 第 1 题）
+  [PASS] build_question_plan 输出与模式无关
+
+[5] HTTP 全链路（POST /create 与 GET /{id}）
+  [PASS] POST /create mode=text → 200
+  [PASS]   └ 出参带 interview_mode=text
+  [PASS] POST /create mode=avatar → 200
+  [PASS]   └ 出参带 interview_mode=avatar
+  [PASS] POST /create 不传 mode → 默认 text
+  [PASS] POST /create 用 interview_mode 键名亦可
+  [PASS] POST /create 非法 mode → 422
+  [PASS] GET /{id} 回传 interview_mode=text
+  [PASS] GET /{id} 回传 interview_mode=avatar
+  [PASS] avatar 会话可正常 start（模式不阻塞流程）
+  [PASS] avatar 会话可正常取题
+  [PASS] POST /answer 回传 interview_mode=avatar
+  [PASS]   └ 作答流程不受模式影响（仍返回下一题）
+  [PASS] POST /end 回传 interview_mode=avatar
+  [PASS]   └ 报告已生成
+  [PASS] 结束后再查询仍为 avatar（已持久化，非内存态）
+  [PASS]   └ 会话状态为 finished
+
+[6] 交互模式已纳入 schema 同步清单（utils/schema_sync.py）
+  [PASS] DESIRED_COLUMNS 登记了 interview_session.interview_mode
+  [PASS]   └ 与模型列口径一致（VARCHAR(20) / NOT NULL / DEFAULT 'text'）
+  [PASS]   └ 启动补列入口可调用
+  [PASS] main.py 的 lifespan 接入的正是该实现（同一对象）
+
+[7] 向后兼容
+  [PASS] _session_to_dict 在未 flush 的对象上也不返回 None
+  [PASS] 既有出参字段全部保留
+  [PASS] interview_core 未被本次改动触及（不引用 interview_mode）
+
+====================================================================
+结果: 通过 56 项，失败 0 项
+====================================================================

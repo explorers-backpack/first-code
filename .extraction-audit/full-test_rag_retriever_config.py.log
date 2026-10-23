@@ -1,0 +1,143 @@
+[提示] 已从进程环境移除 ['RAG_TOP_K', 'RAG_MIN_SCORE', 'RAG_MIN_SCORE_RATIO']（本套件自行注入，避免干扰）
+
+--------------------------------------------------------------------------
+[1] 解析语义（不配 = {} = 行为不变；env= 真的替代 os.environ）
+--------------------------------------------------------------------------
+  [PASS] 不设任何变量 → {}（默认行为逐字节不变）  -> {}
+  [PASS] 空串 / 纯空白 → {}（不产生任何键；与 VECTOR_STORE 同一约定）
+  [PASS] 只设 RAG_TOP_K → {'top_k': 8}
+  [PASS] 只设 RAG_MIN_SCORE → {'min_score': 0.25}
+  [PASS] 两者都设 → 两个键都在
+  [PASS] 返回值只含已知键（不夹带任何其它东西）
+  [PASS] 只设 RAG_MIN_SCORE_RATIO → {'min_score_ratio': 0.9947}
+  [PASS] RAG_MIN_SCORE_RATIO 空串 / 纯空白 → 不产生键（等价「不设」）
+  [PASS] 三个都设 → 三个键都在
+  [PASS]   └ 键集合恰为 {top_k, min_score, min_score_ratio}
+  [PASS] min_score_ratio 保留全精度（0.994748 不被舍入）
+  [PASS] min_score_ratio 接受上边界 1（含等号）
+  [PASS] ★ min_score_ratio 与 min_score 是**两把尺子**（0 在余弦域合法、在比例域非法）
+  [PASS] 值两侧空白被 strip（' 8 ' → 8）
+  [PASS] 允许一个前导 +（'+8' → 8）
+  [PASS] min_score 保留全精度（0.267 不被舍入）
+  [PASS] min_score 接受域内边界 0 / -1 / 1
+  [PASS] ★ 显式 env={} ⇒ 完全**不读** os.environ（进程里有值也是 {}）  -> {}
+  [PASS]   └ 而 env=None ⇒ 读 os.environ（拿到 99 / 0.9）  -> {'top_k': 99, 'min_score': 0.9}
+  [PASS]   └ 局部 env 覆盖进程环境（只给 RAG_TOP_K 时 min_score 不出现）
+
+--------------------------------------------------------------------------
+[2] 非法值必须报错（RetrieverConfigError ⊂ ValueError；不静默退回默认）
+--------------------------------------------------------------------------
+  [PASS] 守卫自检：合法值**不**报错（证明下面的循环不是在恒真地通过）
+  [PASS] ★ RAG_TOP_K='0' ⇒ RetrieverConfigError  -> RAG_TOP_K 必须 >= 1，收到 0
+  [PASS] ★ RAG_TOP_K='-1' ⇒ RetrieverConfigError  -> RAG_TOP_K 必须是十进制正整数，收到 '-1'
+  [PASS] ★ RAG_TOP_K='1.5' ⇒ RetrieverConfigError  -> RAG_TOP_K 必须是十进制正整数，收到 '1.5'
+  [PASS] ★ RAG_TOP_K='1_0' ⇒ RetrieverConfigError  -> RAG_TOP_K 必须是十进制正整数，收到 '1_0'
+  [PASS] ★ RAG_TOP_K='x' ⇒ RetrieverConfigError  -> RAG_TOP_K 必须是十进制正整数，收到 'x'
+  [PASS] ★ RAG_TOP_K='++8' ⇒ RetrieverConfigError  -> RAG_TOP_K 必须是十进制正整数，收到 '++8'
+  [PASS] ★ RAG_TOP_K='8.0' ⇒ RetrieverConfigError  -> RAG_TOP_K 必须是十进制正整数，收到 '8.0'
+  [PASS] ★ RAG_TOP_K='²' ⇒ RetrieverConfigError  -> RAG_TOP_K 必须是十进制正整数，收到 '²'
+  [PASS] ★ RAG_TOP_K='٨_٨' ⇒ RetrieverConfigError  -> RAG_TOP_K 必须是十进制正整数，收到 '٨_٨'
+  [PASS] ★ RAG_MIN_SCORE='high' ⇒ RetrieverConfigError  -> RAG_MIN_SCORE 必须是数值（余弦相似度下限），收到 'high'
+  [PASS] ★ RAG_MIN_SCORE='nan' ⇒ RetrieverConfigError  -> RAG_MIN_SCORE 必须是有限数值，收到 'nan'
+  [PASS] ★ RAG_MIN_SCORE='inf' ⇒ RetrieverConfigError  -> RAG_MIN_SCORE 必须是有限数值，收到 'inf'
+  [PASS] ★ RAG_MIN_SCORE='-inf' ⇒ RetrieverConfigError  -> RAG_MIN_SCORE 必须是有限数值，收到 '-inf'
+  [PASS] ★ RAG_MIN_SCORE='25' ⇒ RetrieverConfigError  -> RAG_MIN_SCORE=25.0 超出余弦相似度取值域 [-1.0, 1.0]；若想「不过滤」请**不要设置**本变量
+  [PASS] ★ RAG_MIN_SCORE='-1.5' ⇒ RetrieverConfigError  -> RAG_MIN_SCORE=-1.5 超出余弦相似度取值域 [-1.0, 1.0]；若想「不过滤」请**不要设置**本变量
+  [PASS] ★ RAG_MIN_SCORE='1.5' ⇒ RetrieverConfigError  -> RAG_MIN_SCORE=1.5 超出余弦相似度取值域 [-1.0, 1.0]；若想「不过滤」请**不要设置**本变量
+  [PASS] ★ RAG_MIN_SCORE='1_0' ⇒ RetrieverConfigError  -> RAG_MIN_SCORE 不接受下划线写法，收到 '1_0'
+  [PASS] 守卫自检：RAG_MIN_SCORE_RATIO=0.9947 合法、**不**报错
+  [PASS] ★ RAG_MIN_SCORE_RATIO='high' ⇒ RetrieverConfigError  -> RAG_MIN_SCORE_RATIO 必须是数值（相对阈值 α），收到 'high'
+  [PASS] ★ RAG_MIN_SCORE_RATIO='nan' ⇒ RetrieverConfigError  -> RAG_MIN_SCORE_RATIO 必须是有限数值，收到 'nan'
+  [PASS] ★ RAG_MIN_SCORE_RATIO='inf' ⇒ RetrieverConfigError  -> RAG_MIN_SCORE_RATIO 必须是有限数值，收到 'inf'
+  [PASS] ★ RAG_MIN_SCORE_RATIO='-inf' ⇒ RetrieverConfigError  -> RAG_MIN_SCORE_RATIO 必须是有限数值，收到 '-inf'
+  [PASS] ★ RAG_MIN_SCORE_RATIO='0' ⇒ RetrieverConfigError  -> RAG_MIN_SCORE_RATIO=0.0 超出比例取值域 (0, 1]；请写小数（如 0.9947），不要写百分数
+  [PASS] ★ RAG_MIN_SCORE_RATIO='-1' ⇒ RetrieverConfigError  -> RAG_MIN_SCORE_RATIO=-1.0 超出比例取值域 (0, 1]；请写小数（如 0.9947），不要写百分数
+  [PASS] ★ RAG_MIN_SCORE_RATIO='1.5' ⇒ RetrieverConfigError  -> RAG_MIN_SCORE_RATIO=1.5 超出比例取值域 (0, 1]；请写小数（如 0.9947），不要写百分数
+  [PASS] ★ RAG_MIN_SCORE_RATIO='99.5' ⇒ RetrieverConfigError  -> RAG_MIN_SCORE_RATIO=99.5 超出比例取值域 (0, 1]；请写小数（如 0.9947），不要写百分数
+  [PASS] ★ RAG_MIN_SCORE_RATIO='1_0' ⇒ RetrieverConfigError  -> RAG_MIN_SCORE_RATIO 不接受下划线写法，收到 '1_0'
+  [PASS]   └ 百分数写法的提示会点出「请写小数」
+  [PASS] RetrieverConfigError 是 ValueError 子类（调用方可以只 catch ValueError）
+  [PASS] ★ 报错信息里带上了变量名与收到的值（可排查）
+  [PASS]   └ 越界值 25 的提示会点出「想不过滤就别设本变量」
+
+--------------------------------------------------------------------------
+[3] 组装层（不配 ⇒ 逐字段等价；配了 ⇒ 真的生效；显式传参优先）
+--------------------------------------------------------------------------
+  [PASS] ★ 不配环境变量 ⇒ 与直接构造检索器**逐字段等价**（默认行为不变）  -> (5, None, None, None, True, 'hash-local', 'SqlAlchemyVectorStore') vs (5, None, None, None, True, 'hash-local', 'SqlAlchemyVectorStore')
+  [PASS]   └ 默认口径 = top_k 取默认值、min_score is None（与任务 69 实测一致）  -> top_k=5 min_score=None
+  [PASS]   └ 返回的仍是 VectorKnowledgeRetriever（接口未变）
+  [PASS]   └ 传入 **{} 与不传等价（空映射不改变任何东西）
+  [PASS]   └ 显式 model= 仍只进向量库（未被配置注入影响）
+  [PASS] RAG_TOP_K=8 ⇒ retriever.top_k == 8（其余取默认）  -> top_k=8 min_score=None
+  [PASS] ★ RAG_MIN_SCORE=0.25 ⇒ retriever.min_score == 0.25（本任务的核心）  -> top_k=5 min_score=0.25
+  [PASS] 两者都设 ⇒ 两个都生效  -> (8, 0.25, None, None, True, 'hash-local', 'SqlAlchemyVectorStore')
+  [PASS] ★ 显式 min_score=None 覆盖环境变量 0.25（显式传参优先）
+  [PASS]   └ 显式 min_score=0.5 覆盖环境变量 0.25
+  [PASS]   └ 显式 top_k=3 覆盖环境变量 8
+  [PASS] ★ 是**合并**不是整体替换：显式三项 + 未提及的 min_score 仍来自环境变量  -> (3, 0.25, 'technical', None, False, 'hash-local', 'SqlAlchemyVectorStore')
+  [PASS] ★ 非法环境变量 ⇒ 组装器抛 RetrieverConfigError  -> RAG_MIN_SCORE=25.0 超出余弦相似度取值域 [-1.0, 1.0]；若想「不过滤」请**不要设置**本变量
+  [PASS]   └ 非法值不留下任何状态（改成合法值即恢复正常）
+
+--------------------------------------------------------------------------
+[4] 端到端（interview_core.resolve_retriever(use_rag=True) 带上配置）
+--------------------------------------------------------------------------
+  [PASS] 不配 ⇒ 默认口径（min_score is None、无 warning）  -> min_score=None warns=[]
+  [PASS] ★ 配了 RAG_MIN_SCORE ⇒ **生产组装路径**上 min_score 真的生效  -> min_score=0.25 warns=[]
+  [PASS]   └ 显式 retriever_kwargs 仍**优先于**环境变量（R1 透传链不受影响）  -> min_score=None
+  [PASS]   └ 空映射 retriever_kwargs={} 与 None 等价（环境变量照样生效）  -> min_score=0.25
+  [PASS] ★ RAG_TOP_K=8 同样在生产路径上生效  -> top_k=8
+  [PASS] ★ 非法配置 ⇒ 与既有 RAG 失败语义一致：静默降级「无知识」+ warning  -> r=None warns=['knowledge_retrieval_failed']
+  [PASS] ★ 注入 retriever ⇒ 完全不读环境变量（非法值也不会降级/报错）
+  [PASS] ★ use_rag=False ⇒ 仍返回 None（配置不会悄悄打开 RAG）
+
+--------------------------------------------------------------------------
+[5] 不越层 / 接口冻结（AST + 签名守卫）
+--------------------------------------------------------------------------
+  [PASS] ★ knowledge_rag 顶层 import 恰好是允许集合（无 sqlalchemy / models / database）  -> ['__future__', 'collections.abc', 'math', 'os', 'typing']
+  [PASS]   └ 顶层确实没有 services.* （协作者一律函数内延迟导入）
+  [PASS] ★ RAG_TOP_K / RAG_MIN_SCORE / RAG_MIN_SCORE_RATIO 在生产代码里**只**被 knowledge_rag.py 读  -> ['knowledge_rag.py']
+  [PASS]   └ 守卫自检：扫描器能发现「有」（非空命中 ⇒ 不是在恒真地通过）  -> ['RAG_TOP_K', 'RAG_MIN_SCORE', 'RAG_MIN_SCORE_RATIO']
+  [PASS]   └ 检索器 / 向量层 / 面试层都不读它们（配置只在组装层收口）  -> ['knowledge_rag.py']
+  [PASS] ★ VectorStore 抽象方法集未变  -> ['add', 'count', 'search']
+  [PASS] ★ VectorStore.search 参数表未变（含 keyword-only 的 5 个）  -> ['self', 'query_vector', 'top_k', 'model', 'document_id', 'category', 'min_score']
+  [PASS]   └ min_score 仍是 keyword-only、默认 None
+  [PASS] ★ VectorKnowledgeRetriever.__init__ 参数表 = 冻结表（任务 81 只在**末尾**追加 min_score_ratio）  -> ['self', 'embedder', 'store', 'top_k', 'min_score', 'category', 'document_id', 'model', 'dedup', 'min_score_ratio']
+  [PASS]   └ 既有 9 个参数的**顺序与默认值**一个未变（老调用方零影响）
+  [PASS]   └ top_k / min_score 仍是 keyword-only、默认 5 / None
+  [PASS]   └ min_score_ratio 也是 keyword-only、默认 None（不配 ⇒ 行为逐字节不变）
+  [PASS] 取到 build_vector_retriever 的 AST 节点
+  [PASS] ★ 组装器构造检索器时**没有硬编码任何关键字参数**（除 **merged 解包）  -> keywords=[None] positional=2
+  [PASS]   └ 守卫自检：同一工具对「硬编码 min_score」的调用返回 ['min_score']（能区分有/无）  -> ['min_score']
+  [PASS] ★ 组装器体内**不自己过滤/截断**结果（过滤仍由 VectorStore 承担）  -> ['VectorKnowledgeRetriever', 'build_vector_store', 'default_embedder', 'resolve_retriever_defaults']
+  [PASS]   └ 配置注入点唯一（体内恰好调用一次 resolve_retriever_defaults）  -> 1
+  [PASS]   └ 且体内没有对检索结果的删除类调用（del / pop / remove）
+
+--------------------------------------------------------------------------
+[6] 相对阈值 α：score >= α × top1（与 min_score 是 AND）
+--------------------------------------------------------------------------
+  [PASS] 不配 α ⇒ min_score_ratio is None（默认关闭）  -> None
+  [PASS]   └ 不配 α ⇒ 结果原样返回（4 条全在，行为逐字节不变）  -> [0.8, 0.79, 0.7, 0.6]
+  [PASS] ★ α=0.98、top1=0.80 ⇒ 阈值 0.784 ⇒ 保留 0.80 / 0.79（2 条）  -> [0.8, 0.79]
+  [PASS] ★ α=0.99 ⇒ 阈值 0.792 ⇒ 只留 top1 自己（1 条）  -> [0.8]
+  [PASS] α=1.0（上边界）⇒ 只留 top1，且不报错  -> [0.8]
+  [PASS] ★ 边界含等号：α×top1 == 0.7992 时 0.7992 也保留（用 >= 而非 >）  -> [0.8]
+  [PASS] ★ min_score=0.795 且 α=0.98 ⇒ 两个条件都生效（只剩 0.80）  -> [0.8]
+  [PASS]   └ α **没有**把绝对下限挤掉：store 实际收到 min_score=0.795  -> [0.795]
+  [PASS] 空结果 + α ⇒ 返回 []（不报错、不除零）  -> []
+  [PASS] 单条 + α ⇒ 恒保留（top1 自己必然满足 α×top1 <= top1）  -> [0.7]
+  [PASS] ★ min_score_ratio=0 ⇒ RetrieverConfigError  -> min_score_ratio 必须在 (0, 1] 内，收到 0（> 1 会把最佳命中自己都滤掉 ⇒ 恒返回空；0 或
+  [PASS] ★ min_score_ratio=0.0 ⇒ RetrieverConfigError  -> min_score_ratio 必须在 (0, 1] 内，收到 0.0（> 1 会把最佳命中自己都滤掉 ⇒ 恒返回空；0
+  [PASS] ★ min_score_ratio=-0.5 ⇒ RetrieverConfigError  -> min_score_ratio 必须在 (0, 1] 内，收到 -0.5（> 1 会把最佳命中自己都滤掉 ⇒ 恒返回空；
+  [PASS] ★ min_score_ratio=1.5 ⇒ RetrieverConfigError  -> min_score_ratio 必须在 (0, 1] 内，收到 1.5（> 1 会把最佳命中自己都滤掉 ⇒ 恒返回空；0
+  [PASS] ★ min_score_ratio=99.5 ⇒ RetrieverConfigError  -> min_score_ratio 必须在 (0, 1] 内，收到 99.5（> 1 会把最佳命中自己都滤掉 ⇒ 恒返回空；
+  [PASS] ★ min_score_ratio=nan ⇒ RetrieverConfigError  -> min_score_ratio 必须是有限数值，收到 nan
+  [PASS] ★ min_score_ratio=inf ⇒ RetrieverConfigError  -> min_score_ratio 必须是有限数值，收到 inf
+  [PASS] ★ min_score_ratio=True ⇒ RetrieverConfigError  -> min_score_ratio 必须是数值（比例），收到 bool: True
+  [PASS] ★ min_score_ratio='0.9' ⇒ RetrieverConfigError  -> min_score_ratio 必须是数值（比例），收到 str: '0.9'
+  [PASS]   └ 守卫自检：合法 α=0.9947 构造成功（证明上面的循环不是在恒真地通过）
+  [PASS] ★ RAG_MIN_SCORE_RATIO=0.9947 ⇒ 组装出的检索器 min_score_ratio == 0.9947
+  [PASS]   └ 显式传参优先于环境变量
+
+==========================================================================
+结果: 通过 114 项，失败 0 项
+==========================================================================

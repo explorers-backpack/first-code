@@ -11,7 +11,7 @@
 --------
 - 纯函数：不依赖 FastAPI、数据库、LLM，给定相同输入恒返回相同结果。
 - 返回结构（与历史实现**完全一致**，前端 ``job.keyword_match.*`` 与
-  ``main.clean_jobs_to_text`` 均依赖该契约）::
+  ``modules.career.service.clean_jobs_to_text`` 均依赖该契约）::
 
       {
           "match_rate":     float,      # 命中率百分比，保留 1 位小数
@@ -107,7 +107,7 @@ def keyword_match(user_skills: List[str], job_skills_str: str) -> Dict:
 def match_job(user_skills: List[str], job: dict) -> Dict:
     """对单个岗位 dict 做技能匹配，返回「岗位摘要 + 匹配结果」。
 
-    该结构即 ``main.py: filter_jobs_by_keywords`` 内联拼装的结构，
+    该结构即 ``modules.career.service.filter_jobs_by_keywords`` 拼装的结构，
     抽出为独立函数以便复用与单测（不改变其字段含义）。
 
     :param user_skills: 用户技能列表

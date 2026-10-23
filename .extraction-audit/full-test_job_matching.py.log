@@ -1,0 +1,97 @@
+====================================================================
+岗位技能匹配（keyword_match 合并）· 自检
+====================================================================
+
+[1] 正常技能匹配（单技能全命中）
+  [PASS] 命中率 100.0（实际 100.0）
+  [PASS] matched == ['python']（实际 ['python']）
+  [PASS] missing 为空（实际 []）
+  [PASS] total_required == 1 且 matched_count == 1
+
+[2] 多技能匹配（6 项要求命中 3 项）
+  [PASS] 命中率 50.0（实际 50.0）
+  [PASS] matched 三项（实际 ['python', 'mysql', 'redis']）
+  [PASS] missing 三项（实际 ['java', 'go', 'kafka']）
+  [PASS] total_required == 6（实际 6）
+  [PASS] matched_count == 3（实际 3）
+  [PASS] matched_count + len(missing) == total_required
+
+[3] 完全匹配（技能集合与要求逐项一致）
+  [PASS] 命中率 100.0（实际 100.0）
+  [PASS] missing 为空
+  [PASS] matched 顺序与岗位串一致（实际 ['python', 'mysql', 'redis']）
+
+[4] 部分匹配（2 项要求命中 1 项）
+  [PASS] 命中率 50.0（实际 50.0）
+  [PASS] matched == ['python']（实际 ['python']）
+  [PASS] missing == ['java']（实际 ['java']）
+
+[5] 大小写不同（两侧均归一化为小写）
+  [PASS] 大小写混合仍全命中（实际 100.0）
+  [PASS] 输出统一小写（实际 ['python', 'mysql']）
+  [PASS] 单侧大写亦可命中
+  [PASS] 岗位侧大写亦可命中
+
+[6] 技能不存在（0 命中）
+  [PASS] 命中率 0（实际 0.0）
+  [PASS] matched 为空
+  [PASS] missing 为全部要求（实际 ['python', 'java']）
+  [PASS] total_required == 2（实际 2）
+  [PASS] matched_count == 0（实际 0）
+
+[7] 空字符串 / 空列表
+  [PASS] 岗位技能为空串 -> 零值结果
+  [PASS] 用户技能为空列表 -> 零值结果
+  [PASS] 两侧均为空 -> 零值结果
+  [PASS] 岗位技能为空串 + 用户技能为空 -> 零值结果
+
+[8] None 入参（不得抛异常）
+  [PASS] job_skills_str=None -> 零值结果
+  [PASS] user_skills=None -> 零值结果
+  [PASS] 两侧均为 None -> 零值结果
+
+[9] 空格与分隔符容错
+  [PASS] 两侧空格被剥离（实际 ['python']）
+  [PASS] 未命中项亦去空格（实际 ['mysql']）
+  [PASS] 命中率 50.0（实际 50.0）
+  [PASS] 仅空白分隔符 -> 保留历史 100% 行为（实际 100.0）
+  [PASS] 尾随逗号 -> 保留历史行为（total=2）
+
+[10] 特殊字符与双向子串规则
+  [PASS] C++ / Node.js 正常匹配（实际 100.0）
+  [PASS] 用户技能为岗位技能子串 -> 命中（双向子串规则）
+  [PASS] 岗位技能为用户技能子串 -> 命中（历史行为，java ⊆ javascript）
+
+[11] 返回契约与确定性
+  [PASS] 键集合恰为 5 项（实际 ['match_rate', 'matched', 'matched_count', 'missing', 'total_required']）
+  [PASS] match_rate 为数值
+  [PASS] matched / missing 均为 list
+  [PASS] 同输入两次调用结果逐字节一致
+  [PASS] 返回值不共享可变对象
+
+[12] split_job_skills 拆分行为
+  [PASS] 常规拆分（实际 ['python', 'mysql']）
+  [PASS] 空串 -> []
+  [PASS] None -> []
+  [PASS] 不过滤空串（实际 ['python', '', '']）
+
+[13] match_job 岗位摘要包装
+  [PASS] job_id 透传（实际 1）
+  [PASS] job_name 透传（实际 后端开发工程师）
+  [PASS] city / salary 透传
+  [PASS] keyword_match 为嵌套结果
+  [PASS] 字段集合与 filter_jobs_by_keywords 内联结构一致
+  [PASS] 岗位无 skills 字段 -> 零值匹配
+  [PASS] job=None -> 不抛异常且零值匹配
+
+[14] 集成：career 服务引用唯一实现，且匹配/排序/阈值行为不变
+  [PASS] career_service.keyword_match 即 services.job_matching.keyword_match
+  [PASS] keyword_match 的 __module__ 是 services.job_matching（实际 services.job_matching）
+  [PASS] 低于阈值(30)的前端岗位被过滤（实际 [3, 1]）
+  [PASS] 按命中率降序（实际 [66.7, 50.0]）
+  [PASS] 结果项结构完整
+  [PASS] clean_jobs_to_text 正常渲染
+
+====================================================================
+结果: 14/14 组通过
+====================================================================

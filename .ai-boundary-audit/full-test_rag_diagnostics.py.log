@@ -1,0 +1,98 @@
+======================================================================
+RAG 结果四态诊断 · 自检
+======================================================================
+
+[1] 四态判定（每一种都给出手算期望值）
+  [PASS] use_rag=False, chunks=0 ⇒ off
+  [PASS] use_rag=False, chunks=3 ⇒ 仍是 off（未启用就不该有知识）
+  [PASS] use_rag=True, chunks=0, 带失败码 ⇒ failed
+  [PASS] use_rag=True, chunks=0, 无告警 ⇒ empty（正常零命中）
+  [PASS] use_rag=True, chunks=3, 无告警 ⇒ injected
+  [PASS] 无关键告警码 ⇒ 不影响状态（仍 injected）
+  [PASS] 失败码混在其它告警里也能认出来
+
+[2] ★ 判据优先级（写反就会把故障说成「零命中」）
+  [PASS] ★ chunks=0 + 失败码 ⇒ failed（不是 empty）
+  [PASS] ★ chunks=5 + 失败码 ⇒ 仍判 failed（不因条数好看就放行）
+  [PASS] 无失败码时 chunks 0→1 跨过 empty/injected 边界
+
+[3] degraded / alert：只有 failed 才算降级、才告警
+  [PASS] off: degraded/alert == False
+  [PASS] failed: degraded/alert == True
+  [PASS] empty: degraded/alert == False
+  [PASS] injected: degraded/alert == False
+  [PASS] ★ 零命中不是降级（empty ⇒ degraded=False）
+  [PASS] injected 时 failure_code 为空串
+  [PASS] failed 时 failure_code 回填命中码
+
+[4] 入参严格性（非法入参**必须抛**，不许静默当成 off）
+  [PASS] use_rag=0 ⇒ RagDiagnosisError
+  [PASS] use_rag=1 ⇒ RagDiagnosisError
+  [PASS] use_rag='false' ⇒ RagDiagnosisError
+  [PASS] use_rag='true' ⇒ RagDiagnosisError
+  [PASS] use_rag=None ⇒ RagDiagnosisError
+  [PASS] use_rag=[] ⇒ RagDiagnosisError
+  [PASS] use_rag=0.0 ⇒ RagDiagnosisError
+  [PASS] ★ 'false' 不会被当成 True（显式拒绝，而不是 bool() 转换）
+  [PASS] knowledge_chunks=True ⇒ RagDiagnosisError
+  [PASS] knowledge_chunks=False ⇒ RagDiagnosisError
+  [PASS] knowledge_chunks=-1 ⇒ RagDiagnosisError
+  [PASS] knowledge_chunks=1.5 ⇒ RagDiagnosisError
+  [PASS] knowledge_chunks='3' ⇒ RagDiagnosisError
+  [PASS] knowledge_chunks=None ⇒ RagDiagnosisError
+  [PASS] ★ True 不会被当成 chunks=1（bool 是 int 子类，项目老坑）
+
+[5] 键集恒定 / 状态闭集
+  [PASS] 键集合与顺序恒为 DIAGNOSIS_FIELDS
+  [PASS] 共 7 键
+  [PASS] 四态闭集恰好 4 个
+  [PASS] 四种状态都能被产生出来（没有死状态）
+  [PASS] 每个状态都有非空 reason
+
+[6] 纯函数 / 描述文案（同一输入同一输出）
+  [PASS] 不改入参 warnings
+  [PASS] 两次调用结果逐键相同
+  [PASS] 描述含 state / degraded / chunks / code
+  [PASS] 同一 diagnosis 两次描述逐字节相同
+  [PASS] 无失败码时 code 渲染成 -
+
+[7] 守卫：本模块**不 import 任何项目模块**（否则会打破消费者闭集）
+  [PASS] 顶层 import 只有 __future__ / typing
+  [PASS] 函数体内也没有任何 import（纯函数模块）
+
+[8] ★ 运行期取证：_observe_rag 在失败时真的打 WARNING
+  [PASS] ★ failed ⇒ 打出 1 条 WARNING
+  [PASS]   └ 结构化字段 rag_state=failed
+  [PASS]   └ rag_degraded=True / rag_chunks=0 / 失败码回填
+  [PASS]   └ 文案含 session_id（可定位到具体会话）
+  [PASS] injected ⇒ 只 DEBUG（不是 WARNING）
+  [PASS] empty ⇒ INFO
+  [PASS] off ⇒ DEBUG
+  [PASS] ★ 观测本身失败也不抛异常（可观测性不得反过来打挂面试）
+  [PASS]   └ 但会留一条 ERROR 日志（我们自己的入参约定不一致）
+
+[9] ★ 端点级取证：/next-question 与 /follow-up 都调用了 _observe_rag
+  [PASS] next_question 调用了 _observe_rag
+  [PASS] follow_up 调用了 _observe_rag
+  [PASS]   └ next_question 透传的是 payload.use_rag（不是写死的常量）
+  [PASS]   └ follow_up 透传的是 payload.use_rag（不是写死的常量）
+  [PASS] ★ 运行期：端点把 use_rag=True 交给了 service
+  [PASS] ★ 运行期：端点真的打出了 failed 告警
+  [PASS] ★ 响应体**未**被观测逻辑改动（仍 0 条知识）
+  [PASS] ★ 运行期：显式 use_rag=False 也如实透传
+  [PASS]   └ 关闭时状态判成 off（不是 failed）
+  [PASS] ★ 运行期：追问端点也观测（use_rag=True）
+
+[10] 守卫自检：判定必须能区分，否则等于没做
+  [PASS] ★ 四种输入给出四个**互不相同**的状态
+  [PASS] ★ empty 不告警、failed 告警（两者必须不同）
+
+[11] ★ 范围守卫：知识库单租户现状 vs 「只加了归属列」的半成品
+  [PASS] 知识库仍是单租户（无归属列）⇒ 检索不需要范围参数（现状自洽）
+  [PASS]   └ 且 API 层确实没有伪装成「已隔离」（retriever_kwargs 不含 scope 键）
+  [PASS] 写操作仍然只有 admin 能触发（单租户成立的前提）
+  [PASS] ★ 检索器本身支持范围收窄（引入多租户时不必改冻结文件）
+
+======================================================================
+结果: 全部通过
+======================================================================

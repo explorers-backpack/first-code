@@ -387,11 +387,13 @@ AI 模拟面试（四层分层 + 生成策略层）
   或**改正文**（切点漂移）都必须重算，否则会留下指向旧内容的向量。
   全部跳过时 ``status="skipped"`` 且 ``ok=True``（**成功的空操作**，不是失败）。
   **失败不抛异常，返回同形状报告**：``ok/status/stage/document_id/chunk_count/
-  saved_chunks/embedded_chunks/skipped_chunks/reused_document/failed_index/
-  errors/error``（12 键恒定，``IMPORT_RESULT_FIELDS``）。``stage`` 指出失败在哪一步
+  saved_chunks/embedded_chunks/skipped_chunks/removed_stale_chunks/reused_document/
+  failed_index/errors/error``（13 键恒定，``IMPORT_RESULT_FIELDS``）。``stage`` 指出失败在哪一步
   （``document``/``chunk``/``embedding``/``persist``/``vector``），``failed_index``
   指出第几片，``errors`` 是稳定错误码（``chunk_empty``/``embedding_failed``/
-  ``persist_failed``/``vector_failed``），已完成计数**保留**，于是重跑能续做。
+  ``persist_failed``/``vector_failed``/``stale_persist_failed``/``stale_index_failed``），
+  已完成计数**保留**，于是重跑能续做。``removed_stale_chunks`` 是文档被改短时
+  清理掉的残留切片行数（过期正文否则仍可被检索到）。
   **唯一抛异常的是入参契约**（空标题 / 空正文 / 非法 ``category``）——那不是
   「中途失败」而是「还没开始」，由 ``knowledge_document_service.create_document``
   抛 ``HTTPException(400)``（校验口径与消息复用同一处，本模块不重写）。

@@ -1,0 +1,77 @@
+======================================================================
+AI 模拟面试 · 状态机与 current_question_no 语义自检
+======================================================================
+
+[A] created 状态：可 start，不可 answer，不可 end
+  [PASS] [1] created 初始 current_question_no=0
+  [PASS] [1] created 初始 status=created
+  [PASS] [2] created 不能 answer（400）
+  [PASS] [2] 被拒后题号未被推进（仍为 0）
+  [PASS] [3] created 不能 end（400）
+  [PASS] [3] 被拒后状态仍为 created
+  [PASS] [1] created 可以 start
+  [PASS] [1] start 后 current_question_no=1
+
+[B] ongoing 状态：可 answer（第 1 题 / 第 N 题）
+  [PASS] [4] ongoing 可以 answer
+  [PASS] [10] 回答第 1 题后题号推进为 2
+  [PASS] [11] 回答第 N-1 题后题号=N
+  [PASS] [11] 可以回答最后一题（第 N 题）
+  [PASS] [11] 答完第 N 题后题号=N+1
+  [PASS] [11] all_answered 为 True
+  [PASS] [11] 不再返回下一题
+
+[C] current_question_no=N+1：不能继续回答
+  [PASS] [12] N+1 时提交答案被拒（400）
+  [PASS] [12] 被拒后题号未被继续推进（仍为 N+1）
+  [PASS] [12] 取题接口 all_answered=True 且无题目
+
+[D] ongoing 可以 end -> finished
+  [PASS] [5] ongoing 可以 end
+  [PASS] [5] end 生成报告
+
+[E] finished 状态：不可 start / answer / 再次修改
+  [PASS] [6] finished 不能 start（400）
+  [PASS] [7] finished 不能 answer（400）
+  [PASS] [8] finished 再次 end 幂等返回既有报告
+  [PASS] [8][14] finished 的 status/题号/ended_at/题量均未被改动
+  [PASS] [14] finished 后取题接口不再推进（无题目可答）
+
+[E2] 提前 end（答 2/8 即结束）后：不再呈现待答题目（check 14）
+  [PASS] [14] 提前 end 后状态为 finished
+  [PASS] [14] 提前 end 后题号仍未越过 N（=3）
+  [PASS] [14] finished 后 question_no 为 None
+  [PASS] [14] finished 后不再返回题目内容
+  [PASS] [14] finished 后 all_answered=True
+  [PASS] [14] finished 后提示查看报告
+  [PASS] [14] finished 后仍不能 answer（400）
+  [PASS] [14] 被拒后题号未被推进（仍为 3）
+
+[F] current_question_no=0：即使状态为 ongoing 也不能提交答案
+  [PASS] [9] no=0 提交答案被拒（400）
+  [PASS] [9] 被拒后题号仍为 0（未跳跃）
+
+[G] 重复提交同一道题：题号不得跳跃
+  [PASS] [13] 第 1 题作答后题号=2
+  [PASS] [13] 对已作答题目重复提交被拒（400）
+  [PASS] [13] 重复提交后题号未跳跃（仍为 1）
+  [PASS] [13] 重复提交未新增作答（题号未推进即可证明）
+  [PASS] [13] 连续提交题号严格 +1 递增（2,3）
+
+[H] start：一次性生成全部题目，重复 start 被拒且不改变题目
+  [PASS] [15] start 后题目数=N（5）
+  [PASS] [15] 重复 start 被拒（400）
+  [PASS] [15] 重复 start 未新增题目
+  [PASS] [15] 重复 start 未替换题目内容
+  [PASS] [15] 出题确定性：同配置两会话题目一致
+
+[I] 题号与实际题目数量一致（含 1..20 × 3 种类型的全组合）
+  [PASS] [16] 题型分配长度恒等于 total（1..20 × 3 类型 = 60 组）
+  [PASS] [16] 60 组全部通过
+  [PASS] [16] 端到端：题量=total_questions 且题号严格 1..N（total=1..10）
+  [PASS] [16] 题号序列为 1,2,3,4,5（N+1）
+  [PASS] [16] 全程题号始终落在 [0, N+1] 且严格 +1
+
+======================================================================
+结果: 通过 50 项，失败 0 项
+======================================================================

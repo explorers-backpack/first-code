@@ -1,0 +1,68 @@
+====================================================================
+默认 Embedding 运行状态上报自检（embedding_status / /api/health）
+====================================================================
+
+[1] 形状契约（固定 4 键）
+  [PASS] 键集恰好为 4 键
+  [PASS] 成功时 error is None
+  [PASS] semantic_enabled 是**真 bool**（不是 0 / 不是字符串）
+  [PASS] dimension 是 int（或 None）
+
+[2] 未配置档 ⇒ 离线哈希占位（**这就是以前完全静默的情形**）
+  [PASS] provider == hash-local
+  [PASS] dimension == 256
+  [PASS] ★ semantic_enabled is False
+  [PASS] error is None（未配置**不是**配置错误）
+
+[3] 真实 provider 档（假凭据）⇒ semantic=True，且构造期零网络
+  [PASS] provider == text-embedding-3-small
+  [PASS] ★ semantic_enabled is True
+  [PASS] error is None
+  [PASS] ★ 假凭据也能构造成功 ⇒ 构造期**没有**发网络请求（真发请求会 401）
+  [PASS] 未配置 EMBEDDING_DIMENSION 时 dimension == 0（= 不校验，按上游返回）
+
+[4] 配置非法档 ⇒ 错误可见、但**不抛异常**
+  [PASS] ★ 不抛异常（健康检查永远不该 500）
+  [PASS] error 非空
+  [PASS] provider is None
+  [PASS] semantic_enabled is None（未知，不伪装成 False）
+  [PASS] 键集仍为 4 键
+  [PASS] 错误里带得出具体原因
+
+[5] GET /api/health 回带 embedding（且向后兼容）
+  [PASS] 状态码 200
+  [PASS] ★ 既有键 status 未变
+  [PASS] ★ 既有键 service 未变
+  [PASS] ★ 新增键 embedding 存在
+  [PASS] embedding 是 dict
+  [PASS] embedding 键集为 4 键
+  [PASS] embedding 与 embedding_status() 同源（逐键相等）
+  [PASS] 钉扎环境下报 hash-local / semantic=False
+
+[6] 启动日志（非语义必须告警）
+  [PASS] 非语义 ⇒ 日志含 WARN
+  [PASS] 非语义 ⇒ 日志含 provider 名
+  [PASS] 非语义 ⇒ 日志点明「无语义/离线占位」
+  [PASS] 语义 ⇒ 日志无 WARN
+  [PASS] 语义 ⇒ 日志含 semantic=True
+
+[7] 源码守卫（AST）：main.py 顶层不 import services.knowledge_rag
+  [PASS] ★ 顶层**不**出现 services.knowledge_rag（必须函数内延迟导入）
+  [PASS] 顶层不出现 services.embedding_provider
+  [PASS] 守卫自检：顶层 import 时判据确实会命中
+
+[8] 哈希时代的旧标定产物仍带 superseded_by 标记
+  [PASS] scripts/rag_min_score_calibration.json 存在
+  [PASS] scripts/rag_min_score_calibration.json 带 superseded_by
+  [PASS] scripts/rag_min_score_calibration.json status 已标记
+  [PASS] scripts/rag_min_score_calibration.json 说明了「哈希分数不可比」
+  [PASS] scripts/rag_min_score_calibration.json 给出了当前生产取值
+  [PASS] scripts/rag_top_k_calibration.json 存在
+  [PASS] scripts/rag_top_k_calibration.json 带 superseded_by
+  [PASS] scripts/rag_top_k_calibration.json status 已标记
+  [PASS] scripts/rag_top_k_calibration.json 说明了「哈希分数不可比」
+  [PASS] scripts/rag_top_k_calibration.json 给出了当前生产取值
+
+====================================================================
+通过 45 / 45
+====================================================================

@@ -780,7 +780,7 @@ async def run() -> bool:
 
     for rel in ("services/avatar_interview.py", "services/interview_service.py",
                 "services/avatar_provider.py", "services/avatar_provider_iflytek.py",
-                "services/interview_core.py", "api/interview.py", "main.py"):
+                "services/interview_core.py", "modules/interview/api.py", "main.py"):
         mods = _all_imports((_BACKEND / rel).read_text(encoding="utf-8"))
         _check(f"{rel} 不反向 import 编排层",
                "services.interview_orchestrator" not in mods,

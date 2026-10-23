@@ -1,0 +1,377 @@
+======================================================================
+AI 模拟面试 · QuestionValidator 基础字段校验自检
+======================================================================
+
+[1] 依赖约束
+  [PASS] 导入后 fastapi 未进入 sys.modules
+  [PASS] 导入后 sqlalchemy 未进入 sys.modules
+  [PASS] 导入后 pydantic 未进入 sys.modules
+  [PASS] 导入后 main（Spark 宿主）未进入 sys.modules
+  [PASS] 导入后 database 未进入 sys.modules
+  [PASS] 导入后 interview_agent 未被牵连
+  [PASS] 导入后 interview_planner 未被牵连
+  [PASS] 源码只 import 标准库（零第三方依赖）
+  [PASS] 源码未 import fastapi
+  [PASS] 源码未 import sqlalchemy
+  [PASS] 源码未 import pydantic
+  [PASS] 源码未 import main
+  [PASS] 源码未 import models
+  [PASS] 源码未 import database
+  [PASS] 源码未以代码形式引用 Request
+  [PASS] 源码未以代码形式引用 HTTPException
+  [PASS] 源码未以代码形式引用 AsyncSession
+  [PASS] 源码未以代码形式引用 Session
+  [PASS] 源码未以代码形式引用 SparkAPI
+  [PASS] 源码未以代码形式引用 spark_api
+  [PASS] 源码未以代码形式引用 engine
+  [PASS] 源码未以代码形式引用 select
+
+[2] 无数据库配置时仍可导入
+  [PASS] 子进程无 DATABASE_URL 时导入成功
+  [PASS] 子进程输出确认模块名
+
+[3] ValidationResult 结构
+  [PASS] 是独立定义的类型（dataclass）
+  [PASS] 字段为 valid / errors / warnings / normalized_question
+  [PASS] 默认 valid=True
+  [PASS] 默认 errors=[]
+  [PASS] 默认 warnings=[]
+  [PASS] 默认 normalized_question={}
+  [PASS] 错误列表互不共享（default_factory）
+  [PASS] to_dict 键集与约定一致
+  [PASS] to_dict 可 JSON 序列化
+  [PASS] add_error 追加错误码
+  [PASS] add_error 自动置 valid=False（结果类型的不变量）
+  [PASS] 空错误码被拒
+  [PASS] add_warning 不影响 valid
+  [PASS] to_dict 返回副本，不暴露内部引用
+
+[4] ValidationError 异常类型
+  [PASS] ValidationError 继承 QuestionValidatorError
+  [PASS] QuestionValidatorError 继承 Exception
+  [PASS] ValidationError 同时继承 ValueError
+  [PASS] 可用基类捕获
+  [PASS] 与 pydantic.ValidationError 是不同类
+  [PASS] 不继承 pydantic.ValidationError
+  [PASS] 异常语义已在 docstring 固定（区分「不合法」与「无法校验」）
+
+[5] QuestionValidator 接口
+  [PASS] 可无参构造
+  [PASS] validate 参数顺序为 self / question_data / context / plan
+  [PASS] context 与 plan 可省略（默认 None）
+  [PASS] validate 是普通实例方法（非 static/classmethod）
+  [PASS] 只传 question_data 即可调用
+  [PASS] 传 question_data + context 可调用
+  [PASS] 三参数位置调用符合给定签名
+  [PASS] 支持关键字调用
+  [PASS] 返回的是 ValidationResult 实例（而非裸 dict）
+
+[6] question 校验
+  [PASS] [用例1] question 正常 → valid=True
+  [PASS] [用例1] question 正常 → errors=[]
+  [PASS] [用例1] question 正常 → warnings 为空
+  [PASS] [用例1] question 正常 → 产出六字段 normalized_question
+  [PASS] [用例2] question 为空字符串 → valid=False
+  [PASS] [用例2] question 为空字符串 → errors=[question_empty]
+  [PASS] [用例2] question 纯空白 → 视为空
+  [PASS] [用例2] question 为换行制表符 → 视为空
+  [PASS] question 键缺失 → question_empty
+  [PASS] question 为 None → question_empty
+  [PASS] question 为非字符串（数字）→ question_empty
+  [PASS] question 为非字符串（布尔）→ question_empty
+  [PASS] question 为非字符串（列表）→ question_empty
+  [PASS] question 为非字符串（字典）→ question_empty
+  [PASS] question 前后有空白但非空 → 通过（本阶段不做 strip 写回）
+  [PASS] question 为超长文本 → 通过（长度不校验）
+  [PASS] question 为多行文本 → 通过
+
+[7] topic 校验
+  [PASS] [用例3] topic 为空字符串 → valid=False
+  [PASS] [用例3] topic 为空字符串 → errors=[topic_empty]
+  [PASS] [用例3] topic 纯空白 → 视为空
+  [PASS] topic 键缺失 → topic_empty
+  [PASS] topic 为 None → topic_empty
+  [PASS] topic 为非字符串（数字）→ topic_empty
+  [PASS] topic 为非字符串（列表）→ topic_empty
+  [PASS] topic 为非字符串（字典）→ topic_empty
+  [PASS] topic 前后有空白但非空 → 通过
+
+[8] question 与 topic 同时为空
+  [PASS] [用例4] 两者同时为空 → valid=False
+  [PASS] [用例4] 两者同时为空 → 登记两条错误码
+  [PASS] [用例4] 规则不短路（不是只报第一条）
+  [PASS] [用例4] 错误码顺序稳定（question 在前）
+  [PASS] 空 dict → 两条错误码
+  [PASS] 两键都缺失 → 两条错误码（difficulty 合法，不额外报错）
+  [PASS] 两键都为 None → 两条错误码
+  [PASS] 仅 question 为空 → 只报 question_empty
+  [PASS] 仅 topic 为空 → 只报 topic_empty
+  [PASS] 两者都有值 → 无错误
+  [PASS] 非 Mapping 入参（None）→ 两条错误码且不抛异常
+  [PASS] 非 Mapping 入参（字符串）→ 两条错误码
+  [PASS] 非 Mapping 入参（列表）→ 两条错误码
+
+[9] 取值合法性边界（本阶段仅 difficulty 受校验）
+  [PASS] difficulty 缺失（且无 plan）→ 不影响 valid（缺失不算非法）
+  [PASS] difficulty 取值合法 → 不影响 valid
+  [PASS] question_type 非法取值 → 不影响 valid
+  [PASS] expected_points 非数组 → 不影响 valid
+  [PASS] reason 缺失 → 不影响 valid
+  [PASS] reason 为非字符串 → 不影响 valid
+  [PASS] 额外未知字段被忽略 → 不影响 valid
+  [PASS] 只提供 question 与 topic 即通过（其余字段自动补全，不报错）
+  [PASS] 「不校验取值」不等于「不处理」：question_type 非法取值仍被标准化进六字段结构
+
+[10] 错误码契约
+  [PASS] ERROR_QUESTION_EMPTY == 'question_empty'
+  [PASS] ERROR_TOPIC_EMPTY == 'topic_empty'
+  [PASS] ERROR_INVALID_DIFFICULTY == 'invalid_difficulty'
+  [PASS] 错误码 'question_empty' 为机器可读蛇形（纯小写 ASCII + 下划线）
+  [PASS] 错误码 'question_empty' 不含空格或中文
+  [PASS] 错误码 'topic_empty' 为机器可读蛇形（纯小写 ASCII + 下划线）
+  [PASS] 错误码 'topic_empty' 不含空格或中文
+  [PASS] 错误码 'invalid_difficulty' 为机器可读蛇形（纯小写 ASCII + 下划线）
+  [PASS] 错误码 'invalid_difficulty' 不含空格或中文
+  [PASS] 三个错误码互不相同
+  [PASS] 错误码常量名出现在 __all__ 中（对外契约可见）
+  [PASS] __all__ 中的错误码常量名可解析为预期错误码值
+  [PASS] __all__ 导出 18 个公开名
+  [PASS] 标准化契约常量名出现在 __all__ 中
+  [PASS] difficulty 规则函数与允许集均对外可见
+  [PASS] 重复检测规则函数与阈值均对外可见
+  [PASS] 错误码列表无重复
+  [PASS] valid 与 errors 的不变量：errors 非空 ⇒ valid=False
+  [PASS] errors 元素均为字符串
+
+[11] 无副作用
+  [PASS] 不篡改 question_data 入参
+  [PASS] 不篡改 context 入参
+  [PASS] 不篡改 plan 入参
+  [PASS] 可重复调用且结果一致
+  [PASS] 两次调用的 errors 不是同一列表对象
+  [PASS] 不同实例行为一致
+  [PASS] context 只被用于读 asked_questions（其它字段不参与校验）
+  [PASS] plan 仅在 difficulty 缺失时被读取（已提供时不看 plan）
+
+[12] 标准化契约
+  [PASS] 模块导出 NORMALIZED_FIELDS 常量
+  [PASS] NORMALIZED_FIELDS 为约定的六字段且顺序固定
+  [PASS] NORMALIZED_FIELDS 无重复
+  [PASS] 校验通过 → normalized_question 非空
+  [PASS] 键与顺序与 NORMALIZED_FIELDS 完全一致
+  [PASS] 恰好六个键
+  [PASS] question 逐字保留
+  [PASS] topic 逐字保留
+  [PASS] question_type 逐字保留
+  [PASS] difficulty 逐字保留
+  [PASS] expected_points 逐字保留
+  [PASS] reason 逐字保留
+  [PASS] 字段齐全 → 不产生 warning（正常补全路径不告警）
+  [PASS] 字段齐全且合法时 normalized_question 与原数据等值
+  [PASS] 文本不做 strip 改写（空白原样保留）
+
+[13] 字段补全规则
+  [PASS] [用例1] 校验通过
+  [PASS] [用例1] difficulty 缺失 → 用 plan.difficulty 补全为 'senior'
+  [PASS] [用例1] 缺失补全属正常路径，不产生 warning
+  [PASS] [用例1] 补全结果与题目示例完全一致（六字段）
+  [PASS] [用例1] 'senior' 属于本模块允许集（与全项目标准一致）
+  [PASS] difficulty 缺失且 未传 plan → 补 ''
+  [PASS] difficulty 缺失且 plan 无 difficulty 键 → 补 ''
+  [PASS] difficulty 缺失且 plan 为普通对象 → 补 ''
+  [PASS] difficulty 缺失且 plan.difficulty 为空串 → 补 ''
+  [PASS] difficulty 缺失且 plan.difficulty 非字符串 → 补 ''
+  [PASS] plan 为 ORM 风格对象时也能读到 difficulty（属性访问）
+  [PASS] difficulty 已提供且合法 → 原样保留
+  [PASS] difficulty 已提供且非空 → 优先于 plan.difficulty
+  [PASS] difficulty 为空串 + plan 有值 → 用 plan 补全
+  [PASS] difficulty 纯空白 + plan 有值 → 用 plan 补全
+  [PASS] difficulty 为 None + plan 有值 → 用 plan 补全
+  [PASS] difficulty 存在但为空 → 产生非阻断 warning
+  [PASS] difficulty 存在但为空 → 补全成功仍 valid=True
+  [PASS] difficulty 为 None → 视为「未提供」，不告警（与键缺失同等待遇）
+  [PASS] difficulty 非字符串（数字）→ 补全并告警
+  [PASS] difficulty 不可用且 plan 也无 → 置空并告警
+  [PASS] [用例2] expected_points 缺失 → 补 []
+  [PASS] [用例2] 补出的值为 list 类型
+  [PASS] [用例2] 缺失补全不告警
+  [PASS] expected_points 为空数组 → 保持 []
+  [PASS] expected_points 为 None → 补 [] 且不告警
+  [PASS] expected_points 非数组（字符串）→ 补 [] 并告警
+  [PASS] expected_points 非数组（字典）→ 补 [] 并告警
+  [PASS] expected_points 数组含非字符串元素 → 只保留字符串
+  [PASS] expected_points 含非字符串元素 → 告警
+  [PASS] expected_points 元素顺序保持不变
+  [PASS] expected_points 全为非字符串 → 补 [] 并告警
+  [PASS] [用例3] reason 缺失 → 补 ''
+  [PASS] [用例3] reason 为空串 → 保持 ''
+  [PASS] [用例3] reason 为 None → 补 '' 且不告警
+  [PASS] [用例3] reason 为非字符串（数字）→ 补 '' 并告警
+  [PASS] reason 已提供 → 逐字保留
+  [PASS] [用例4] question_type 缺失 → 补 ''
+  [PASS] [用例4] question_type 为空串 → 保持 ''
+  [PASS] [用例4] question_type 为 None → 补 '' 且不告警
+  [PASS] [用例4] question_type 非字符串（列表）→ 补 '' 并告警
+  [PASS] [用例4] question_type 非法枚举值 → 原样保留（本阶段不做枚举校验）
+  [PASS] 四个字段同时缺失 → 一次性补全，全部走默认值
+
+[14] difficulty 合法性校验
+  [PASS] 允许集为 junior / mid / senior
+  [PASS] 允许集为闭集（恰好 3 个）且无重复
+  [PASS] [用例2] difficulty='junior' 合法 → valid=True
+  [PASS] [用例2] difficulty='junior' 原样写入 normalized_question
+  [PASS] [用例2] difficulty='mid' 合法 → valid=True
+  [PASS] [用例2] difficulty='mid' 原样写入 normalized_question
+  [PASS] [用例2] difficulty='senior' 合法 → valid=True
+  [PASS] [用例2] difficulty='senior' 原样写入 normalized_question
+  [PASS] [用例3] difficulty='god_mode' 非法 → valid=False
+  [PASS] [用例3] difficulty='god_mode' → errors=[invalid_difficulty]
+  [PASS] [用例3] difficulty='god_mode' → normalized_question 为空
+  [PASS] [用例3] difficulty='expert' 非法 → valid=False
+  [PASS] [用例3] difficulty='expert' → errors=[invalid_difficulty]
+  [PASS] [用例3] difficulty='expert' → normalized_question 为空
+  [PASS] [用例3] difficulty='hard' 非法 → valid=False
+  [PASS] [用例3] difficulty='hard' → errors=[invalid_difficulty]
+  [PASS] [用例3] difficulty='hard' → normalized_question 为空
+  [PASS] [用例3] difficulty='SENIOR' 非法 → valid=False
+  [PASS] [用例3] difficulty='SENIOR' → errors=[invalid_difficulty]
+  [PASS] [用例3] difficulty='SENIOR' → normalized_question 为空
+  [PASS] [用例3] difficulty=' senior ' 非法 → valid=False
+  [PASS] [用例3] difficulty=' senior ' → errors=[invalid_difficulty]
+  [PASS] [用例3] difficulty=' senior ' → normalized_question 为空
+  [PASS] [用例3] difficulty='sen' 非法 → valid=False
+  [PASS] [用例3] difficulty='sen' → errors=[invalid_difficulty]
+  [PASS] [用例3] difficulty='sen' → normalized_question 为空
+  [PASS] [用例3] difficulty='beginner' 非法 → valid=False
+  [PASS] [用例3] difficulty='beginner' → errors=[invalid_difficulty]
+  [PASS] [用例3] difficulty='beginner' → normalized_question 为空
+  [PASS] [用例3] difficulty='intermediate' 非法 → valid=False
+  [PASS] [用例3] difficulty='intermediate' → errors=[invalid_difficulty]
+  [PASS] [用例3] difficulty='intermediate' → normalized_question 为空
+  [PASS] [用例3] difficulty='advanced' 非法 → valid=False
+  [PASS] [用例3] difficulty='advanced' → errors=[invalid_difficulty]
+  [PASS] [用例3] difficulty='advanced' → normalized_question 为空
+  [PASS] [用例3] difficulty='Beginner' 非法 → valid=False
+  [PASS] [用例3] difficulty='Beginner' → errors=[invalid_difficulty]
+  [PASS] [用例3] difficulty='Beginner' → normalized_question 为空
+  [PASS] [用例3] difficulty 非法记的是 error 而非 warning
+  [PASS] [用例3] 旧词汇 beginner/intermediate/advanced 一律被拒（无别名映射）
+  [PASS] 项目标准词汇 junior/mid/senior 全部合法（词汇表已统一）
+  [PASS] [用例1] 缺失 → plan.difficulty 补全，valid=True
+  [PASS] [用例1] 输出 difficulty='senior'
+  [PASS] [用例1] 补全后仍校验合法性：plan.difficulty 非法 → invalid_difficulty
+  [PASS] [用例1] 缺失且 plan 也无 → 视为「未知」，不记 invalid_difficulty
+  [PASS] difficulty 为非字符串（数字）→ 回落 plan，合法则通过
+  [PASS] difficulty 非字符串且 plan 也无 → 视为未知，不记 invalid_difficulty
+  [PASS] resolve_difficulty 优先取 question_data
+  [PASS] resolve_difficulty 缺失时回落 plan
+  [PASS] resolve_difficulty 都缺失 → ''
+  [PASS] resolve_difficulty 支持 ORM 风格 plan
+  [PASS] resolve_difficulty 非 Mapping 入参 → 回落 plan
+  [PASS] resolve_difficulty 不修改入参
+  [PASS] resolve_difficulty 不修改 plan
+  [PASS] is_valid_difficulty 接受允许集内全部取值
+  [PASS] is_valid_difficulty 拒绝集合外取值
+  [PASS] is_valid_difficulty 拒绝空值 / None / 非字符串
+  [PASS] is_valid_difficulty 为精确相等比较（不做 trim）
+  [PASS] is_valid_difficulty 支持自定义允许集
+  [PASS] is_valid_difficulty 是纯函数（重复调用结果一致）
+  [PASS] difficulty 非法不掩盖 question/topic 的错误码（规则不短路）
+  [PASS] difficulty 合法时错误码列表不受影响
+  [PASS] difficulty 校验不改动其他字段的补全结果
+  [PASS] normalized_question 的 difficulty 与 resolve_difficulty 结果一致
+  [PASS] QuestionValidator 仍只暴露 validate 一个公开方法（职责单一）
+
+[15] 问题重复检测
+  [PASS] ERROR_DUPLICATE_QUESTION == 'duplicate_question'
+  [PASS] 相似度阈值常量为 0.85（与 interview_agent 一致）
+  [PASS] 包含兜底最短长度常量为 8
+  [PASS] 归一化去空格
+  [PASS] 归一化去全角空格
+  [PASS] 归一化去中英文标点
+  [PASS] 归一化转小写
+  [PASS] 归一化后「Redis 为什么快？」与「redis为什么快」完全相同
+  [PASS] 归一化非字符串 → ''
+  [PASS] 归一化幂等
+  [PASS] 相似度：完全相同（含书写差异）→ 1.0
+  [PASS] 相似度：无关问题 → 接近 0
+  [PASS] 相似度：包含关系 → 1.0（较短一方 ≥ 8 字）
+  [PASS] 相似度：短串包含不触发兜底（< 8 字）
+  [PASS] 相似度：任一为空 → 0.0
+  [PASS] 相似度对称
+  [PASS] 相似度落在 0-1 区间
+  [PASS] [用例1] 与历史完全相同 → valid=False
+  [PASS] [用例1] → errors=[duplicate_question]
+  [PASS] [用例1] → normalized_question 为空
+  [PASS] [用例1] → 不产生 warning（完全相同记 error 而非 warning）
+  [PASS] [用例1] 归一化后相同即算完全相同（空格/标点/大小写差异不影响判定）
+  [PASS] [用例2] 与历史无关 → valid=True
+  [PASS] [用例2] → 无 error 也无 warning
+  [PASS] [用例2] → 正常产出六字段
+  [PASS] 无历史（None / 空列表 / 缺字段 / 非列表）→ 不报重复
+  [PASS] [用例3] 高度相似 → valid=True（不拒绝）
+  [PASS] [用例3] → errors 为空
+  [PASS] [用例3] → 恰好产生一条 warning
+  [PASS] [用例3] warning 含相似度与命中的历史问题
+  [PASS] [用例3] 高度相似仍产出六字段
+  [PASS] 包含关系（同一问题 + 附加从句）归入 warning 而非拒绝
+  [PASS] 阈值可调：调高到 0.99 后相似问题不再告警
+  [PASS] 阈值边界：恰好等于阈值算相似
+  [PASS] 支持对象形态（{"question_no": .., "question": ..}）
+  [PASS] 混合形态（字符串 + 对象）都能识别
+  [PASS] 历史中的空项 / 非字符串项被跳过
+  [PASS] ORM 风格 context 也能读到 asked_questions
+  [PASS] find_asked_question_match：完全相同 → EXACT
+  [PASS] find_asked_question_match：相似 → SIMILAR
+  [PASS] find_asked_question_match：无关 → NONE
+  [PASS] find_asked_question_match：空问题 → NONE（交给 question_empty 处理）
+  [PASS] 命中时返回历史原文与相似度
+  [PASS] EXACT 优先于 SIMILAR（即使相似项先出现）
+  [PASS] 多条相似取相似度最高者
+  [PASS] find_asked_question_match 不修改入参
+  [PASS] AskedQuestionMatch 是具名元组（字段 kind / matched / score）
+  [PASS] AskedQuestionMatch 的三个 kind 常量
+  [PASS] 重复检测不短路：与 topic 错误同时登记
+  [PASS] question 为空时不报 duplicate_question（避免重复报错）
+  [PASS] 重复检测不影响其它字段的补全
+  [PASS] 重复检测具备确定性
+
+[16] 标准化的纯函数性
+  [PASS] 标准化不修改 question_data 入参
+  [PASS] 标准化不修改 plan 入参
+  [PASS] 两次调用的 normalized_question 不是同一 dict
+  [PASS] 两次调用的 expected_points 不是同一 list
+  [PASS] normalized_question 的列表不是入参列表的别名
+  [PASS] 篡改返回值不影响入参
+  [PASS] 篡改返回值不影响后续调用
+  [PASS] 同输入同输出（确定性）
+  [PASS] warning 也具备确定性
+  [PASS] 不同实例产出相同结果
+  [PASS] 校验不通过 → normalized_question 保持 {}（不产出半补全数据）
+  [PASS] 校验不通过 → 即使其余字段齐全也不补全
+  [PASS] 校验不通过 → 不产生 warning（未进入补全阶段）
+  [PASS] 校验不通过 → 仍登记错误码
+
+[17] 待实现边界
+  [PASS] 未集成 Interview Agent（rule-4）：未 import 任何业务模块
+  [PASS] 后续实现计划仅剩 1 条 TODO（rule-1 / rule-2 / rule-3 已完成）
+  [PASS] rule-2 已从 TODO 中移除（重复检测已实现）
+  [PASS] 与 interview_agent 相似度算法暂时重复已在 docstring 说明（待 rule-4 统一）
+  [PASS] docstring 明确声明不使用 embedding / 向量数据库 / RAG
+  [PASS] docstring 已说明本阶段四项能力
+  [PASS] docstring 已登记标准化契约（六字段 / warning 规则）
+  [PASS] docstring 已登记 difficulty 处理流程（三种情况）
+  [PASS] docstring 已登记重复检测策略（完全相同拒绝 / 高度相似告警）
+  [PASS] docstring 已登记词汇表统一结论（与 models.DIFFICULTIES 同源同值）
+  [PASS] docstring 不再残留词汇表分歧告警
+  [PASS] 源码未 import models（允许集在模块内独立声明）
+  [PASS] 源码未 import interview_agent（相似度算法独立实现，避免成环）
+
+[18] 词汇表一致性守卫
+  [PASS] 子进程同时导入 models 与 validator 成功
+  [PASS] ALLOWED_DIFFICULTIES == models.DIFFICULTIES（词汇表同源同值）
+  [PASS] 子进程回显的取值就是 junior/mid/senior
+
+======================================================================
+结果: 通过 334 项，失败 0 项
+======================================================================

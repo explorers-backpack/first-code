@@ -142,6 +142,23 @@ PINNED = {
     #   两个状态（开 / 关）由 ``tests/test_ws_revocation.py`` 显式覆盖，
     #   并在那里**实测**撤销生效延迟，所以钉住不会造成覆盖缺口。
     "INTERVIEW_WS_REVOCATION_WATCH": "0",
+    # ------------------------------------------------------------------
+    # AI 接入层（modules.ai）——**回归套件必须与真实密钥彻底解耦**
+    # ------------------------------------------------------------------
+    # ★★ 必须钉成 "offline"（**非空串**）。空串 = 未配置 = 按凭据**自动判定**，
+    #    而本机 ``.env`` 里带着真实 ``SPARK_*`` ⇒ 自动判定会落到 ``production``
+    #    ⇒ 任何没打桩的 ``spark_api.chat_async`` 调用都会**真打星火**（单次 8~19s、
+    #    耗配额、结果依赖网络）。钉成 offline 后 AI 调用一律**立即失败**，
+    #    走各自的降级路径，套件既不联网也不依赖密钥。
+    #    三种模式（mock / offline / production）与"生产不得静默回退"都由
+    #    ``tests/test_ai_layer.py`` 显式覆盖，所以钉住不会造成覆盖缺口。
+    "AI_RUN_MODE": "offline",
+    # 空串 = 未配置 = 默认值（spark / 90s / 1 次 / 0.5s 退避）。
+    # 钉住是为了防「本地调大 AI_LLM_MAX_ATTEMPTS 后忘了改回」把失败路径拖成 N 倍等待。
+    "AI_LLM_PROVIDER": "",
+    "AI_LLM_TIMEOUT": "",
+    "AI_LLM_MAX_ATTEMPTS": "",
+    "AI_LLM_BACKOFF_BASE": "",
 }
 
 

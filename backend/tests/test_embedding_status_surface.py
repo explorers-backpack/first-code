@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""默认 Embedding **运行状态上报**自检（``main.embedding_status`` / ``GET /api/health``）
+"""默认 Embedding **运行状态上报**自检（``health.embedding_status`` / ``GET /api/health``）
 
 无需 pytest，直接运行：
     python backend/tests/test_embedding_status_surface.py
@@ -48,6 +48,7 @@ import regression_env  # noqa: E402,F401  （必须在项目模块之前）
 from httpx import ASGITransport, AsyncClient  # noqa: E402
 
 import main  # noqa: E402
+from common import health  # noqa: E402
 
 #: ``embedding_status()`` 的固定键集。**改它就要同步改这里**（契约）。
 STATUS_KEYS = {"provider", "dimension", "semantic_enabled", "error"}
@@ -131,7 +132,7 @@ async def run() -> bool:
     # ---------------- [1] 形状契约 ----------------
     print("\n[1] 形状契约（固定 4 键）")
     _clear_all_embedding_env()
-    status = main.embedding_status()
+    status = health.embedding_status()
     _check("键集恰好为 4 键", set(status) == STATUS_KEYS, str(sorted(status)))
     _check("成功时 error is None", status["error"] is None, repr(status["error"]))
     _check(
@@ -148,7 +149,7 @@ async def run() -> bool:
     # ---------------- [2] 未配置档：静默降级的那一档 ----------------
     print("\n[2] 未配置档 ⇒ 离线哈希占位（**这就是以前完全静默的情形**）")
     _clear_all_embedding_env()
-    status = main.embedding_status()
+    status = health.embedding_status()
     _check("provider == hash-local", status["provider"] == "hash-local", repr(status["provider"]))
     _check("dimension == 256", status["dimension"] == 256, repr(status["dimension"]))
     _check("★ semantic_enabled is False", status["semantic_enabled"] is False, repr(status["semantic_enabled"]))
@@ -160,7 +161,7 @@ async def run() -> bool:
     os.environ["EMBEDDING_PROVIDER"] = "openai"
     os.environ["EMBEDDING_API_KEY"] = "sk-fake-for-offline-test"
     os.environ["EMBEDDING_MODEL"] = "text-embedding-3-small"
-    status = main.embedding_status()
+    status = health.embedding_status()
     _check("provider == text-embedding-3-small", status["provider"] == "text-embedding-3-small", repr(status["provider"]))
     _check("★ semantic_enabled is True", status["semantic_enabled"] is True, repr(status["semantic_enabled"]))
     _check("error is None", status["error"] is None, repr(status["error"]))
@@ -181,7 +182,7 @@ async def run() -> bool:
     os.environ["EMBEDDING_PROVIDER"] = "openai"
     os.environ["EMBEDDING_API_KEY"] = ""
     try:
-        status = main.embedding_status()
+        status = health.embedding_status()
         raised = None
     except Exception as exc:  # noqa: BLE001
         status, raised = {}, exc
@@ -211,8 +212,8 @@ async def run() -> bool:
         )
         _check(
             "embedding 与 embedding_status() 同源（逐键相等）",
-            body.get("embedding") == main.embedding_status(),
-            f"{body.get('embedding')} vs {main.embedding_status()}",
+            body.get("embedding") == health.embedding_status(),
+            f"{body.get('embedding')} vs {health.embedding_status()}",
         )
         _check(
             "钉扎环境下报 hash-local / semantic=False",
@@ -226,7 +227,7 @@ async def run() -> bool:
     _clear_all_embedding_env()
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        main._report_embedding_status()
+        health._report_embedding_status()
     text = buf.getvalue()
     _check("非语义 ⇒ 日志含 WARN", "WARN" in text, repr(text))
     _check("非语义 ⇒ 日志含 provider 名", "hash-local" in text, repr(text))
@@ -237,7 +238,7 @@ async def run() -> bool:
     os.environ["EMBEDDING_API_KEY"] = "sk-fake-for-offline-test"
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        main._report_embedding_status()
+        health._report_embedding_status()
     text = buf.getvalue()
     _check("语义 ⇒ 日志无 WARN", "WARN" not in text, repr(text))
     _check("语义 ⇒ 日志含 semantic=True", "semantic=True" in text, repr(text))

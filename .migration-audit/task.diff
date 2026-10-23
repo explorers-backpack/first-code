@@ -1,0 +1,409 @@
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_avatar_loop.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_avatar_loop.py"
+index b10e11e..7b9770b 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_avatar_loop.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_avatar_loop.py"
+@@ -780,7 +780,7 @@ async def run() -> bool:
+ 
+     for rel in ("services/avatar_interview.py", "services/interview_service.py",
+                 "services/avatar_provider.py", "services/avatar_provider_iflytek.py",
+-                "services/interview_core.py", "api/interview.py", "main.py"):
++                "services/interview_core.py", "modules/interview/api.py", "main.py"):
+         mods = _all_imports((_BACKEND / rel).read_text(encoding="utf-8"))
+         _check(f"{rel} 不反向 import 编排层",
+                "services.interview_orchestrator" not in mods,
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_interview_core.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_interview_core.py"
+index ac52b64..3ea101a 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_interview_core.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_interview_core.py"
+@@ -61,7 +61,7 @@ from services import (  # noqa: E402
+ _PASSED = 0
+ _FAILED = 0
+ 
+-# 分层契约：Service 对外必须保留的生命周期函数（api/interview.py 与既有测试都在用）
++# 分层契约：Service 对外必须保留的生命周期函数（modules/interview/api.py 与既有测试都在用）
+ LIFECYCLE_API = (
+     "create_session",
+     "start_session",
+@@ -317,7 +317,7 @@ async def run() -> bool:
+         not any(hasattr(interview_core, n) for n in ("router", "get_current_user", "get_db")),
+     )
+ 
+-    api_src = (BACKEND_DIR / "api" / "interview.py").read_text(encoding="utf-8")
++    api_src = (BACKEND_DIR / "modules" / "interview" / "api.py").read_text(encoding="utf-8")
+     api_imports = _imported_modules(api_src)
+     _check("路由层只依赖 Service，不直接 import Core",
+            "services.interview_core" not in api_imports, str(sorted(api_imports)))
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_interview_orchestrator.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_interview_orchestrator.py"
+index aa49937..fb25def 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_interview_orchestrator.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_interview_orchestrator.py"
+@@ -636,7 +636,7 @@ async def run() -> bool:
+     # ★ 反向依赖：下层**不得** import 编排层（否则「可选编排」变成「必经路径」）
+     for rel in ("services/interview_core.py", "services/interview_service.py",
+                 "services/avatar_interview.py", "services/avatar_provider.py",
+-                "services/avatar_provider_iflytek.py", "api/interview.py", "main.py"):
++                "services/avatar_provider_iflytek.py", "modules/interview/api.py", "main.py"):
+         mods = _all_imports((_BACKEND / rel).read_text(encoding="utf-8"))
+         _check(f"{rel} 不反向 import 编排层",
+                "services.interview_orchestrator" not in mods, str(sorted(mods)))
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_interview_production.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_interview_production.py"
+index 334d65d..380bc38 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_interview_production.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_interview_production.py"
+@@ -28,7 +28,7 @@
+ [11] **真实 ASGI / WebSocket 栈上的行为取证**：空闲超时**真的**会以 ``4408`` 关连接；
+      连接数超限**真的**会以 ``4409`` 拒绝
+ 
+-★ 为什么 [11] 必须真连：``api/interview_ws.py`` 的既有自检用的是**真栈**，而
++★ 为什么 [11] 必须真连：``modules/interview/ws.py`` 的既有自检用的是**真栈**，而
+ 「接线对不对」这件事——``asyncio.wait_for`` 有没有真的包住 ``receive_json``、
+ 闸门有没有真的在鉴权之后调用——**只有在真连一次时才会暴露**（本项目已复发多次）。
+ 
+@@ -74,7 +74,7 @@ import main  # noqa: E402
+ #   就变成「在 dict/Response 上找方法」⇒ AttributeError。
+ from common import health as health_report  # noqa: E402
+ import models  # noqa: E402,F401
+-from api import interview_ws as ws  # noqa: E402
++from modules.interview import ws as ws  # noqa: E402
+ from database import Base, get_db  # noqa: E402
+ from models import Job, User, UserSession  # noqa: E402
+ from services import interview_production as prod  # noqa: E402
+@@ -648,15 +648,15 @@ def run() -> bool:  # noqa: C901 - 自检脚本，顺序即文档
+ 
+     # ★ 既有断言「编排层消费者收口为唯一闭集」必须仍然成立（生产化模块没打破它）
+     consumers = []
+-    for path in sorted((_BACKEND / "services").glob("*.py")) + sorted((_BACKEND / "api").glob("*.py")):
++    for path in sorted((_BACKEND / "services").glob("*.py")) + sorted((_BACKEND / "api").glob("*.py")) + sorted((_BACKEND / "modules").rglob("*.py")):
+         if _ORCH_MODULE in _all_imports(path.read_text(encoding="utf-8")):
+             consumers.append(path.relative_to(_BACKEND).as_posix())
+     if _ORCH_MODULE in _all_imports(_read("main.py")):
+         consumers.append("main.py")
+     _check("★★ 编排层消费者仍是唯一闭集（新增模块未打破「可选层」性质）",
+-           consumers == ["api/interview_ws.py"], str(consumers))
++           consumers == ["modules/interview/ws.py"], str(consumers))
+ 
+-    ws_src = _read("api/interview_ws.py")
++    ws_src = _read("modules/interview/ws.py")
+     _check("实时通道已接线：注册会话淘汰回调", "register_evict_hook" in ws_src)
+     _check("实时通道已接线：空闲超时用 asyncio.wait_for 包住 receive_json",
+            "asyncio.wait_for" in ws_src and "receive_json()" in ws_src)
+@@ -667,9 +667,9 @@ def run() -> bool:  # noqa: C901 - 自检脚本，顺序即文档
+     _check("实时通道已接线：每会话互斥", "try_enter" in ws_src and "mutex.exit" in ws_src)
+     _check("实时通道已接线：指标计数", "METRICS.incr" in ws_src)
+     _check("实时通道已接线：结构化日志", "log_event" in ws_src)
+-    _check("★ api/interview.py **仍未被改**（文字面试 HTTP 契约一行未动）",
+-           "WebSocket" not in _read("api/interview.py")
+-           and "interview_ws" not in _read("api/interview.py"))
++    _check("★ modules/interview/api.py **仍未被改**（文字面试 HTTP 契约一行未动）",
++           "WebSocket" not in _read("modules/interview/api.py")
++           and "interview_ws" not in _read("modules/interview/api.py"))
+ 
+     svc_dir = _BACKEND / "services"
+     offenders = sorted(
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_interview_ws.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_interview_ws.py"
+index 0ae7938..6c411a9 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_interview_ws.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_interview_ws.py"
+@@ -22,8 +22,8 @@
+ [6]  错误分支：未知消息 → ``bad_message``；顺序不对 → ``state_error``（**状态不被污染**）；
+      ``ping`` → ``pong``；``snapshot`` → 三连推
+ [7]  文字面试**完全不受影响**：HTTP 文字流程照常；WS 路由与既有 HTTP 路由互不干扰
+-[8]  边界守卫（AST）：**只有** ``api/interview_ws.py`` import 编排层（守住「可选层」性质）；
+-     本模块不 import provider；``api/interview.py`` 未被改动
++[8]  边界守卫（AST）：**只有** ``modules/interview/ws.py`` import 编排层（守住「可选层」性质）；
++     本模块不 import provider；``modules/interview/api.py`` 未被改动
+ 
+ 数据库使用**临时文件** SQLite（``NullPool``，跨事件循环安全），不触碰本机 MySQL。
+ ``AVATAR_PROVIDER`` 由 ``regression_env`` 钉成空串 ⇒ 数字人走 **Mock**，零联网。
+@@ -56,7 +56,7 @@ from starlette.websockets import WebSocketDisconnect  # noqa: E402
+ 
+ import main  # noqa: E402
+ import models  # noqa: E402,F401
+-from api import interview_ws as ws  # noqa: E402
++from modules.interview import ws as ws  # noqa: E402
+ from database import Base, get_db  # noqa: E402
+ from models import Job, User, UserSession  # noqa: E402
+ from services import avatar_interview, interview_orchestrator as orch  # noqa: E402
+@@ -628,7 +628,7 @@ def run() -> bool:  # noqa: C901 - 自检脚本，顺序即文档
+     # [8] 边界守卫（AST）
+     # ------------------------------------------------------------
+     print("\n[8] 边界守卫（AST：分层单向 / 不碰 provider）")
+-    ws_src = (_BACKEND / "api" / "interview_ws.py").read_text(encoding="utf-8")
++    ws_src = (_BACKEND / "modules" / "interview" / "ws.py").read_text(encoding="utf-8")
+     ws_imports = _all_imports(ws_src)
+     _check("实时通道确实 import 编排层（它就是为这条时间线服务的）",
+            "services.interview_orchestrator" in ws_imports, str(sorted(ws_imports)))
+@@ -647,20 +647,20 @@ def run() -> bool:  # noqa: C901 - 自检脚本，顺序即文档
+                    for tok in ("embedding", "vector", "chroma", "knowledge")),
+            str(sorted(ws_imports)))
+ 
+-    # ★ 守住编排层的「可选」性质：全项目**只有** api/interview_ws.py 引入它
++    # ★ 守住编排层的「可选」性质：全项目**只有** modules/interview/ws.py 引入它
+     consumers = []
+-    for path in sorted((_BACKEND / "services").glob("*.py")) + sorted((_BACKEND / "api").glob("*.py")):
++    for path in sorted((_BACKEND / "services").glob("*.py")) + sorted((_BACKEND / "api").glob("*.py")) + sorted((_BACKEND / "modules").rglob("*.py")):
+         if "services.interview_orchestrator" in _all_imports(path.read_text(encoding="utf-8")):
+             consumers.append(path.relative_to(_BACKEND).as_posix())
+     if "services.interview_orchestrator" in _all_imports(
+         (_BACKEND / "main.py").read_text(encoding="utf-8")
+     ):
+         consumers.append("main.py")
+-    _check("★★ 编排层消费者**收口为唯一闭集**：只有 api/interview_ws.py",
+-           consumers == ["api/interview_ws.py"], str(consumers))
++    _check("★★ 编排层消费者**收口为唯一闭集**：只有 modules/interview/ws.py",
++           consumers == ["modules/interview/ws.py"], str(consumers))
+ 
+-    api_src = (_BACKEND / "api" / "interview.py").read_text(encoding="utf-8")
+-    _check("★ api/interview.py **未改**（文字面试的 HTTP 契约一行未动）",
++    api_src = (_BACKEND / "modules" / "interview" / "api.py").read_text(encoding="utf-8")
++    _check("★ modules/interview/api.py **未改**（文字面试的 HTTP 契约一行未动）",
+            "interview_orchestrator" not in api_src and "interview_ws" not in api_src
+            and "WebSocket" not in api_src)
+ 
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_module_boundaries.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_module_boundaries.py"
+index 42b7eb8..c224843 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_module_boundaries.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_module_boundaries.py"
+@@ -71,7 +71,7 @@ EXCLUDED_DIRS = {"tests", "scripts", "__pycache__", "instance", "prompts"}
+ ROOT_MODULES = {"main", "database", "deps", "security"}
+ 
+ #: 顶层包（其下模块一律视为内部依赖）
+-TOP_PACKAGES = {"api", "services", "schemas", "models", "utils", "modules"}
++TOP_PACKAGES = {"api", "services", "schemas", "models", "utils", "modules", "common"}
+ 
+ #: 层号（越大越靠上）。``main`` 与 ``modules.X``（业务模块门面）是装配层，豁免 R1。
+ _LAYER = {
+@@ -124,13 +124,6 @@ _APP_METHODS = {"get", "post", "put", "patch", "delete", "head", "options", "web
+ #: R7：允许在路由层出现 SQL 的位置
+ #: 键 = 模块名（``api.x``）或 ``main:<函数名>``（``main.py`` 里 ``@app.*`` 装饰的函数）
+ R7_KNOWN_ALLOWED: Dict[str, str] = {
+-    "api.interview_ws": (
+-        "WS 握手阶段要用 ticket 反查 UserSession / User，而 ticket 消费必须在 "
+-        "accept() 之前完成（先 accept 再校验会短暂放行未鉴权连接）。这段"
+-        "「协议层鉴权」目前只能内联在 ws 端点里。"
+-        "清掉时机：P5 抽 modules/interview/api_ws.py 时，把查库下沉到 "
+-        "ws_ticket_store.consume(ticket, session_id) 的返回值里。"
+-    ),
+     "main:get_user_logs": (
+         "管理员审计日志。main.py 的 admin 段还没迁出（P4）。"
+         "清掉时机：P4 把 /api/admin/* 拆成 modules/admin/api.py + service.py。"
+@@ -189,7 +182,7 @@ R1_KNOWN_ALLOWED: Dict[Tuple[str, str], str] = {
+ #:
+ #: 所以只钉**数量**：新增软环会让数字变大 ⇒ 红，逼人看一眼「这个环是不是必要的」。
+ #: 修掉一个环后要把这个常量改小，否则棘轮失效。
+-R6_MAX_SOFT_CYCLES = 23
++R6_MAX_SOFT_CYCLES = 21
+ 
+ #: 已迁移模块：模块名 -> (必须存在的文件, main.py 里不得再出现的实现标记, 挂载变量名)
+ #:
+@@ -353,7 +346,7 @@ def _layer_of(name: str) -> int:
+             if len(parts) == 2 and parts[1] in _CAPABILITY_PACKAGES:
+                 return 2
+             return _ASSEMBLY_LAYER
+-        return {"schemas": 0, "service": 2, "api": 3}.get(parts[2], 2)
++        return {"schemas": 0, "service": 2, "api": 3, "ws": 3}.get(parts[2], 2)
+     return _LAYER.get(head, 0)
+ 
+ 
+@@ -370,7 +363,7 @@ def _is_router(name: str) -> bool:
+     if name == "api" or name.startswith("api."):
+         return True
+     parts = name.split(".")
+-    return len(parts) == 3 and parts[0] == "modules" and parts[2] == "api"
++    return len(parts) == 3 and parts[0] == "modules" and parts[2] in {"api", "ws"}
+ 
+ 
+ def _same_module_package(a: str, b: str) -> bool:
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_rag_diagnostics.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_rag_diagnostics.py"
+index 196453d..e0c6d15 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_rag_diagnostics.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_rag_diagnostics.py"
+@@ -1,6 +1,6 @@
+ # -*- coding: utf-8 -*-
+ """RAG 结果四态诊断 + 范围守卫 · 自检
+-（``services/rag_diagnostics.py`` + ``api/interview.py`` 告警接线）
++（``services/rag_diagnostics.py`` + ``modules/interview/api.py`` 告警接线）
+ 
+ 要防的那件事
+ ------------
+@@ -308,9 +308,9 @@ def _capture_into(logger: logging.Logger):
+ def check_api_alerts() -> bool:
+     _section("[8] ★ 运行期取证：_observe_rag 在失败时真的打 WARNING")
+     ok = True
+-    from api import interview as api_interview
++    from modules.interview import api as api_interview
+ 
+-    logger = logging.getLogger("api.interview")
++    logger = logging.getLogger("modules.interview.api")
+     handler, old_level = _capture_into(logger)
+     try:
+         # ---- 检索失败：必须 WARNING ----
+@@ -379,7 +379,7 @@ def check_api_alerts() -> bool:
+ def check_endpoints_wired() -> bool:
+     _section("[9] ★ 端点级取证：/next-question 与 /follow-up 都调用了 _observe_rag")
+     ok = True
+-    path = _BACKEND / "api" / "interview.py"
++    path = _BACKEND / "modules" / "interview" / "api.py"
+     tree = ast.parse(path.read_text(encoding="utf-8"))
+ 
+     def _calls_observe(func_name: str) -> bool:
+@@ -417,7 +417,7 @@ def check_endpoints_wired() -> bool:
+ 
+ def _run_endpoint_probe() -> bool:
+     """真调端点（service 打桩），断言观测函数收到的 use_rag 与响应体。"""
+-    from api import interview as api_interview
++    from modules.interview import api as api_interview
+     from schemas.interview import FollowUpRequest, NextQuestionRequest
+ 
+     async def _probe() -> List[bool]:
+@@ -434,7 +434,7 @@ def _run_endpoint_probe() -> bool:
+             return {"ok": True, "knowledge_chunks": 0,
+                     "warnings": [_FAILED_CODE], "errors": [], "error": None}
+ 
+-        logger = logging.getLogger("api.interview")
++        logger = logging.getLogger("modules.interview.api")
+         handler, old_level = _capture_into(logger)
+         original_next = api_interview.interview_service.generate_next_question
+         original_follow = api_interview.interview_service.generate_followup
+@@ -561,7 +561,7 @@ def check_scope_tripwire() -> bool:
+     )
+ 
+     # 检索链路是否带范围：看 API 层给 service 的 retriever_kwargs 里有没有 scope 键
+-    api_tree = ast.parse((_BACKEND / "api" / "interview.py").read_text(encoding="utf-8"))
++    api_tree = ast.parse((_BACKEND / "modules" / "interview" / "api.py").read_text(encoding="utf-8"))
+     scope_keys: List[str] = []
+     for node in ast.walk(api_tree):
+         if isinstance(node, ast.Assign):
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_rag_production_route.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_rag_production_route.py"
+index e5cf214..8b8f748 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_rag_production_route.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_rag_production_route.py"
+@@ -365,7 +365,7 @@ async def run() -> bool:
+         ).parameters["use_rag"].default is False,
+     )
+ 
+-    api_path = pathlib.Path(__file__).resolve().parents[1] / "api" / "interview.py"
++    api_path = pathlib.Path(__file__).resolve().parents[1] / "modules" / "interview" / "api.py"
+     source = api_path.read_text(encoding="utf-8")
+     kwargs = _kwargs_of_call(source, "generate_next_question")
+     _check("路由确实调用了 generate_next_question", kwargs is not None, str(kwargs))
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_rag_retriever_config.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_rag_retriever_config.py"
+index 474099d..c0bc0bb 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_rag_retriever_config.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_rag_retriever_config.py"
+@@ -10,7 +10,7 @@
+ 
+ - ``interview_core.resolve_retriever(db, None, use_rag=True)`` 调
+   ``build_vector_retriever(db)`` 时**一个参数都不给**；
+-- ``api/interview.py`` 的 7 个路由**没有任何一处**调用 ``generate_next_question``
++- ``modules/interview/api.py`` 的 7 个路由**没有任何一处**调用 ``generate_next_question``
+   （``start_session`` 走纯规则 ``build_question_plan``）。
+ 
+ ⇒ 「配了阈值」与「阈值生效」仍是两件事：默认口径恒为
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_strategy_wiring.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_strategy_wiring.py"
+index dc3d017..0de0e96 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_strategy_wiring.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_strategy_wiring.py"
+@@ -397,7 +397,7 @@ async def run() -> bool:
+         # ------------------------------------------------------------
+         print("\n[6] 接线取证（AST / 源码）")
+ 
+-        ws_src = (BACKEND_DIR / "api" / "interview_ws.py").read_text(encoding="utf-8")
++        ws_src = (BACKEND_DIR / "modules" / "interview" / "ws.py").read_text(encoding="utf-8")
+         _check("[6.1] WS 的 start 处理走策略化入口",
+                "await orch.start_questions(" in ws_src)
+         _check("  └ 不再调用旧的 orch.start(（避免两条路径并存）",
+@@ -429,9 +429,9 @@ async def run() -> bool:
+                "build_question_plan" in start_src)
+         _check("  └ start_session 不认识出题策略（源码不含策略层模块名）",
+                "question_generator" not in start_src)
+-        _check("[7.2] HTTP 契约层（api/interview.py）不出现策略化入口",
++        _check("[7.2] HTTP 契约层（modules/interview/api.py）不出现策略化入口",
+                "start_questions" not in (
+-                   (BACKEND_DIR / "api" / "interview.py").read_text(encoding="utf-8")))
++                   (BACKEND_DIR / "modules" / "interview" / "api.py").read_text(encoding="utf-8")))
+         _check("[7.3] 策略层不反向依赖 Service（不 import interview_service）",
+                "services.interview_service" not in _all_imports(
+                    inspect.getsource(qg)))
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_ws_revocation.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_ws_revocation.py"
+index 3b46a0e..3edceca 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_ws_revocation.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_ws_revocation.py"
+@@ -35,6 +35,7 @@
+ 
+ import asyncio
+ import ast
++import inspect
+ import os
+ import pathlib
+ import shutil
+@@ -68,7 +69,7 @@ from starlette.websockets import WebSocketDisconnect  # noqa: E402
+ 
+ import main  # noqa: E402
+ import models  # noqa: E402,F401
+-from api import interview_ws as ws  # noqa: E402
++from modules.interview import ws as ws  # noqa: E402
+ from database import Base  # noqa: E402
+ from models import InterviewSession, User, UserSession, WsRevocation  # noqa: E402
+ from services import ws_revocation  # noqa: E402
+@@ -568,20 +569,20 @@ def _wiring_guards() -> None:
+     print("\n[9] 接线守卫：轮询器 / 回调 / 依赖方向")
+     text_watcher = (_BACKEND / "services" / "ws_revocation_watcher.py").read_text(encoding="utf-8")
+     text_revocation = (_BACKEND / "services" / "ws_revocation.py").read_text(encoding="utf-8")
+-    text_ws = (_BACKEND / "api" / "interview_ws.py").read_text(encoding="utf-8")
++    text_ws = (_BACKEND / "modules" / "interview" / "ws.py").read_text(encoding="utf-8")
+     text_main = (_BACKEND / "main.py").read_text(encoding="utf-8")
+ 
+     # ★ 判 import 关系用 AST，不用子串：这两个文件的**文档里**就写着对方的名字
+     #   （解释"为什么不反向依赖"），子串判断会恒假失败。
+     watcher_imports = _imported_modules(_BACKEND / "services" / "ws_revocation_watcher.py")
+     revocation_imports = _imported_modules(_BACKEND / "services" / "ws_revocation.py")
+-    ws_imports = _imported_modules(_BACKEND / "api" / "interview_ws.py")
++    ws_imports = _imported_modules(_BACKEND / "modules" / "interview" / "ws.py")
+ 
+     _check("★ 轮询器**不** import 实时通道（靠 register_handler 解耦）",
+-           not any("interview_ws" in m for m in watcher_imports),
++           not any("interview_ws" in m or m == "modules.interview.ws" for m in watcher_imports),
+            str(sorted(watcher_imports)))
+     _check("★ 撤销存储**不** import 实时通道 / 编排层",
+-           not any(("interview_ws" in m) or ("orchestrator" in m) for m in revocation_imports),
++           not any(("interview_ws" in m) or (m == "modules.interview.ws") or ("orchestrator" in m) for m in revocation_imports),
+            str(sorted(revocation_imports)))
+     _check("★ 实时通道**不** import 轮询器（只 import 共享存储）",
+            not any("ws_revocation_watcher" in m for m in ws_imports),
+@@ -608,7 +609,10 @@ def _wiring_guards() -> None:
+     _check("★ 高风险操作（answer/finish）执行前复核",
+            "ws_auth_revoked_on_high_risk" in text_ws)
+     _check("★ 复核用 auth_session_id 查 user_session（不是只查 User 存在）",
+-           "UserSession.id == int(auth_session_id)" in text_ws)
++           "await load_session_by_id(db, int(auth_session_id))" in inspect.getsource(ws._auth_still_valid)
++           and "security.load_session_by_id" in ws_imports
++           and "select(UserSession).where(UserSession.id == int(session_id))"
++           in inspect.getsource(ws.load_session_by_id))
+     _check("★ 管理员踢下线端点存在且要求 admin 依赖",
+            '"/api/admin/users/{user_id}/kick"' in text_main
+            and "Depends(get_current_admin)" in text_main)
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_ws_ticket.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_ws_ticket.py"
+index 5229c64..69a5a46 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.migration-audit\\test_ws_ticket.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\tests\\test_ws_ticket.py"
+@@ -69,7 +69,7 @@ from starlette.websockets import WebSocketDisconnect  # noqa: E402
+ 
+ import main  # noqa: E402
+ import models  # noqa: E402,F401
+-from api import interview_ws as ws  # noqa: E402
++from modules.interview import ws as ws  # noqa: E402
+ from database import Base  # noqa: E402
+ from models import InterviewSession, User, UserSession, WsTicket  # noqa: E402
+ from services import ws_ticket_store as store  # noqa: E402
+@@ -561,8 +561,8 @@ def _ws_checks(client: TestClient, ticket: str, owner_sid: int, other_sid: int)
+ 
+ def _source_guards() -> None:
+     print("\n[18] 源码守卫：进程内字典已移除 / 存储只在 service 层")
+-    text_api = (_BACKEND / "api" / "interview.py").read_text(encoding="utf-8")
+-    text_ws = (_BACKEND / "api" / "interview_ws.py").read_text(encoding="utf-8")
++    text_api = (_BACKEND / "modules" / "interview" / "api.py").read_text(encoding="utf-8")
++    text_ws = (_BACKEND / "modules" / "interview" / "ws.py").read_text(encoding="utf-8")
+     text_store = (_BACKEND / "services" / "ws_ticket_store.py").read_text(encoding="utf-8")
+ 
+     _check("★ 文字面试 HTTP 契约文件不含 ticket 逻辑", "ws-ticket" not in text_api)

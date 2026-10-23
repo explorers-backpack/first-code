@@ -1,0 +1,3353 @@
+{
+  "generated_by": "backend/tests/rag_eval_run.py",
+  "respect_env": false,
+  "chunk_stats": {
+    "eval_corpus": {
+      "count": 16,
+      "unique": 16,
+      "duplicate_rate": 0.0,
+      "avg_len": 343.0,
+      "min_len": 269,
+      "max_len": 418,
+      "avg_overlap": 0.0,
+      "max_overlap": 0
+    },
+    "interview_corpus": {
+      "count": 32,
+      "unique": 32,
+      "duplicate_rate": 0.0,
+      "avg_len": 354.8,
+      "min_len": 144,
+      "max_len": 493,
+      "avg_overlap": 25.2,
+      "max_overlap": 78
+    }
+  },
+  "embedding": {
+    "provider": "hash-local",
+    "dimension": 256,
+    "semantic_enabled": false,
+    "name": "hash-local"
+  },
+  "corpus": {
+    "documents": 16,
+    "queries": 16
+  },
+  "grid": [
+    {
+      "backend": "sql",
+      "top_k": 1,
+      "min_score": null,
+      "min_score_ratio": null,
+      "recall": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 16,
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "skipped": 0
+      },
+      "latency_ms": {
+        "p50": 3.24,
+        "p95": 3.69,
+        "max": 4.77,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3038,
+      "top1_score_min": 0.1184,
+      "empty_queries": [],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2458,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.1884,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2357,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2022,
+          "top1_is_gold": true
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.1184,
+          "top1_is_gold": true
+        }
+      ]
+    },
+    {
+      "backend": "sql",
+      "top_k": 2,
+      "min_score": null,
+      "min_score_ratio": null,
+      "recall": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 16,
+        "mean": 0.5,
+        "min": 0.5,
+        "max": 0.5,
+        "skipped": 0
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 16,
+        "mean": 0.5,
+        "min": 0.5,
+        "max": 0.5,
+        "skipped": 0
+      },
+      "latency_ms": {
+        "p50": 3.17,
+        "p95": 3.78,
+        "max": 4.09,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3038,
+      "top1_score_min": 0.1184,
+      "empty_queries": [],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.2458,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.1884,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.2357,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.2022,
+          "top1_is_gold": true
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.1184,
+          "top1_is_gold": true
+        }
+      ]
+    },
+    {
+      "backend": "sql",
+      "top_k": 3,
+      "min_score": null,
+      "min_score_ratio": null,
+      "recall": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 16,
+        "mean": 0.3333,
+        "min": 0.3333,
+        "max": 0.3333,
+        "skipped": 0
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 16,
+        "mean": 0.6667,
+        "min": 0.6667,
+        "max": 0.6667,
+        "skipped": 0
+      },
+      "latency_ms": {
+        "p50": 3.09,
+        "p95": 4.33,
+        "max": 4.95,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3038,
+      "top1_score_min": 0.1184,
+      "empty_queries": [],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.2458,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.1884,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.2357,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.2022,
+          "top1_is_gold": true
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.1184,
+          "top1_is_gold": true
+        }
+      ]
+    },
+    {
+      "backend": "sql",
+      "top_k": 5,
+      "min_score": null,
+      "min_score_ratio": null,
+      "recall": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 16,
+        "mean": 0.2,
+        "min": 0.2,
+        "max": 0.2,
+        "skipped": 0
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 16,
+        "mean": 0.8,
+        "min": 0.8,
+        "max": 0.8,
+        "skipped": 0
+      },
+      "latency_ms": {
+        "p50": 3.18,
+        "p95": 4.15,
+        "max": 6.0,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3038,
+      "top1_score_min": 0.1184,
+      "empty_queries": [],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2458,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.1884,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2357,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2022,
+          "top1_is_gold": true
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.1184,
+          "top1_is_gold": true
+        }
+      ]
+    },
+    {
+      "backend": "sql",
+      "top_k": 8,
+      "min_score": null,
+      "min_score_ratio": null,
+      "recall": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 16,
+        "mean": 0.125,
+        "min": 0.125,
+        "max": 0.125,
+        "skipped": 0
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 16,
+        "mean": 0.875,
+        "min": 0.875,
+        "max": 0.875,
+        "skipped": 0
+      },
+      "latency_ms": {
+        "p50": 2.97,
+        "p95": 3.55,
+        "max": 4.16,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3038,
+      "top1_score_min": 0.1184,
+      "empty_queries": [],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 8,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 8,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 8,
+          "hit_gold": true,
+          "top1_score": 0.2458,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 8,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 8,
+          "hit_gold": true,
+          "top1_score": 0.1884,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 8,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 8,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 8,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 8,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 8,
+          "hit_gold": true,
+          "top1_score": 0.2357,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 8,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 8,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 8,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 8,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 8,
+          "hit_gold": true,
+          "top1_score": 0.2022,
+          "top1_is_gold": true
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 8,
+          "hit_gold": true,
+          "top1_score": 0.1184,
+          "top1_is_gold": true
+        }
+      ]
+    },
+    {
+      "backend": "sql",
+      "top_k": 10,
+      "min_score": null,
+      "min_score_ratio": null,
+      "recall": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 16,
+        "mean": 0.1,
+        "min": 0.1,
+        "max": 0.1,
+        "skipped": 0
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 16,
+        "mean": 0.9,
+        "min": 0.9,
+        "max": 0.9,
+        "skipped": 0
+      },
+      "latency_ms": {
+        "p50": 3.18,
+        "p95": 3.86,
+        "max": 4.57,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3038,
+      "top1_score_min": 0.1184,
+      "empty_queries": [],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 10,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 10,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 10,
+          "hit_gold": true,
+          "top1_score": 0.2458,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 10,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 10,
+          "hit_gold": true,
+          "top1_score": 0.1884,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 10,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 10,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 10,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 10,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 10,
+          "hit_gold": true,
+          "top1_score": 0.2357,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 10,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 10,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 10,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 10,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 10,
+          "hit_gold": true,
+          "top1_score": 0.2022,
+          "top1_is_gold": true
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 10,
+          "hit_gold": true,
+          "top1_score": 0.1184,
+          "top1_is_gold": true
+        }
+      ]
+    },
+    {
+      "backend": "sql",
+      "top_k": 5,
+      "min_score": 0.05,
+      "min_score_ratio": null,
+      "recall": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 16,
+        "mean": 0.2115,
+        "min": 0.2,
+        "max": 0.3333,
+        "skipped": 0
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 16,
+        "mean": 0.7885,
+        "min": 0.6667,
+        "max": 0.8,
+        "skipped": 0
+      },
+      "latency_ms": {
+        "p50": 3.39,
+        "p95": 4.59,
+        "max": 4.89,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3038,
+      "top1_score_min": 0.1184,
+      "empty_queries": [],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2458,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.1884,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 4,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2357,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2022,
+          "top1_is_gold": true
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.1184,
+          "top1_is_gold": true
+        }
+      ]
+    },
+    {
+      "backend": "sql",
+      "top_k": 5,
+      "min_score": 0.1,
+      "min_score_ratio": null,
+      "recall": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 16,
+        "mean": 0.3625,
+        "min": 0.2,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 16,
+        "mean": 0.6375,
+        "min": 0.0,
+        "max": 0.8,
+        "skipped": 0
+      },
+      "latency_ms": {
+        "p50": 3.13,
+        "p95": 4.52,
+        "max": 5.23,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3038,
+      "top1_score_min": 0.1184,
+      "empty_queries": [],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 4,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 4,
+          "hit_gold": true,
+          "top1_score": 0.2458,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.1884,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 4,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.2357,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 4,
+          "hit_gold": true,
+          "top1_score": 0.2022,
+          "top1_is_gold": true
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.1184,
+          "top1_is_gold": true
+        }
+      ]
+    },
+    {
+      "backend": "sql",
+      "top_k": 5,
+      "min_score": 0.15,
+      "min_score_ratio": null,
+      "recall": {
+        "n": 16,
+        "mean": 0.9375,
+        "min": 0.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 15,
+        "mean": 0.7078,
+        "min": 0.2,
+        "max": 1.0,
+        "skipped": 1
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 0.9375,
+        "min": 0.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 0.9375,
+        "min": 0.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 15,
+        "mean": 0.2922,
+        "min": 0.0,
+        "max": 0.8,
+        "skipped": 1
+      },
+      "latency_ms": {
+        "p50": 3.2,
+        "p95": 4.08,
+        "max": 4.5,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3161,
+      "top1_score_min": 0.1884,
+      "empty_queries": [
+        "秒杀系统怎么做限流和降级"
+      ],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.2458,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.1884,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2357,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 4,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2022,
+          "top1_is_gold": true
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 0,
+          "hit_gold": false,
+          "top1_score": null,
+          "top1_is_gold": false
+        }
+      ]
+    },
+    {
+      "backend": "sql",
+      "top_k": 5,
+      "min_score": 0.2,
+      "min_score_ratio": null,
+      "recall": {
+        "n": 16,
+        "mean": 0.875,
+        "min": 0.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 14,
+        "mean": 0.8095,
+        "min": 0.3333,
+        "max": 1.0,
+        "skipped": 2
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 0.875,
+        "min": 0.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 0.875,
+        "min": 0.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 14,
+        "mean": 0.1905,
+        "min": 0.0,
+        "max": 0.6667,
+        "skipped": 2
+      },
+      "latency_ms": {
+        "p50": 3.06,
+        "p95": 3.79,
+        "max": 4.54,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3253,
+      "top1_score_min": 0.2022,
+      "empty_queries": [
+        "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "秒杀系统怎么做限流和降级"
+      ],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2458,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 0,
+          "hit_gold": false,
+          "top1_score": null,
+          "top1_is_gold": false
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2357,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2022,
+          "top1_is_gold": true
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 0,
+          "hit_gold": false,
+          "top1_score": null,
+          "top1_is_gold": false
+        }
+      ]
+    },
+    {
+      "backend": "sql",
+      "top_k": 5,
+      "min_score": 0.25,
+      "min_score_ratio": null,
+      "recall": {
+        "n": 16,
+        "mean": 0.6875,
+        "min": 0.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 11,
+        "mean": 0.8939,
+        "min": 0.3333,
+        "max": 1.0,
+        "skipped": 5
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 0.6875,
+        "min": 0.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 0.6875,
+        "min": 0.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 11,
+        "mean": 0.1061,
+        "min": 0.0,
+        "max": 0.6667,
+        "skipped": 5
+      },
+      "latency_ms": {
+        "p50": 3.09,
+        "p95": 3.78,
+        "max": 4.98,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3518,
+      "top1_score_min": 0.2525,
+      "empty_queries": [
+        "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+        "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+        "支付网关怎么做到幂等和日终对账",
+        "秒杀系统怎么做限流和降级"
+      ],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 0,
+          "hit_gold": false,
+          "top1_score": null,
+          "top1_is_gold": false
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 0,
+          "hit_gold": false,
+          "top1_score": null,
+          "top1_is_gold": false
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 0,
+          "hit_gold": false,
+          "top1_score": null,
+          "top1_is_gold": false
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 3,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 0,
+          "hit_gold": false,
+          "top1_score": null,
+          "top1_is_gold": false
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 0,
+          "hit_gold": false,
+          "top1_score": null,
+          "top1_is_gold": false
+        }
+      ]
+    },
+    {
+      "backend": "sql",
+      "top_k": 5,
+      "min_score": 0.3,
+      "min_score_ratio": null,
+      "recall": {
+        "n": 16,
+        "mean": 0.5,
+        "min": 0.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 8,
+        "mean": 0.9375,
+        "min": 0.5,
+        "max": 1.0,
+        "skipped": 8
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 0.5,
+        "min": 0.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 0.5,
+        "min": 0.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 8,
+        "mean": 0.0625,
+        "min": 0.0,
+        "max": 0.5,
+        "skipped": 8
+      },
+      "latency_ms": {
+        "p50": 3.03,
+        "p95": 4.71,
+        "max": 7.21,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3798,
+      "top1_score_min": 0.3191,
+      "empty_queries": [
+        "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+        "Redis 的 RDB 和 AOF 持久化有什么区别",
+        "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "JVM 垃圾回收算法和常见收集器",
+        "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+        "订单中台的缓存击穿是怎么治理的",
+        "支付网关怎么做到幂等和日终对账",
+        "秒杀系统怎么做限流和降级"
+      ],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 0,
+          "hit_gold": false,
+          "top1_score": null,
+          "top1_is_gold": false
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 0,
+          "hit_gold": false,
+          "top1_score": null,
+          "top1_is_gold": false
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 0,
+          "hit_gold": false,
+          "top1_score": null,
+          "top1_is_gold": false
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 0,
+          "hit_gold": false,
+          "top1_score": null,
+          "top1_is_gold": false
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 0,
+          "hit_gold": false,
+          "top1_score": null,
+          "top1_is_gold": false
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 0,
+          "hit_gold": false,
+          "top1_score": null,
+          "top1_is_gold": false
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 0,
+          "hit_gold": false,
+          "top1_score": null,
+          "top1_is_gold": false
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 0,
+          "hit_gold": false,
+          "top1_score": null,
+          "top1_is_gold": false
+        }
+      ]
+    },
+    {
+      "backend": "sql",
+      "top_k": 5,
+      "min_score": null,
+      "min_score_ratio": 0.7,
+      "recall": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 16,
+        "mean": 0.875,
+        "min": 0.5,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 16,
+        "mean": 0.125,
+        "min": 0.0,
+        "max": 0.5,
+        "skipped": 0
+      },
+      "latency_ms": {
+        "p50": 2.96,
+        "p95": 3.36,
+        "max": 3.47,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3038,
+      "top1_score_min": 0.1184,
+      "empty_queries": [],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2458,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.1884,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2357,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2022,
+          "top1_is_gold": true
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.1184,
+          "top1_is_gold": true
+        }
+      ]
+    },
+    {
+      "backend": "sql",
+      "top_k": 5,
+      "min_score": null,
+      "min_score_ratio": 0.8,
+      "recall": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 16,
+        "mean": 0.9375,
+        "min": 0.5,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 16,
+        "mean": 0.0625,
+        "min": 0.0,
+        "max": 0.5,
+        "skipped": 0
+      },
+      "latency_ms": {
+        "p50": 2.95,
+        "p95": 3.58,
+        "max": 3.93,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3038,
+      "top1_score_min": 0.1184,
+      "empty_queries": [],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2458,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.1884,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2357,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2022,
+          "top1_is_gold": true
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.1184,
+          "top1_is_gold": true
+        }
+      ]
+    },
+    {
+      "backend": "sql",
+      "top_k": 5,
+      "min_score": null,
+      "min_score_ratio": 0.9,
+      "recall": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 16,
+        "mean": 0.9688,
+        "min": 0.5,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 16,
+        "mean": 0.0312,
+        "min": 0.0,
+        "max": 0.5,
+        "skipped": 0
+      },
+      "latency_ms": {
+        "p50": 2.98,
+        "p95": 3.88,
+        "max": 4.67,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3038,
+      "top1_score_min": 0.1184,
+      "empty_queries": [],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2458,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.1884,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2357,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2022,
+          "top1_is_gold": true
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.1184,
+          "top1_is_gold": true
+        }
+      ]
+    },
+    {
+      "backend": "sql",
+      "top_k": 5,
+      "min_score": null,
+      "min_score_ratio": 0.95,
+      "recall": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 16,
+        "mean": 0.9688,
+        "min": 0.5,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 16,
+        "mean": 0.0312,
+        "min": 0.0,
+        "max": 0.5,
+        "skipped": 0
+      },
+      "latency_ms": {
+        "p50": 2.93,
+        "p95": 3.63,
+        "max": 4.12,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3038,
+      "top1_score_min": 0.1184,
+      "empty_queries": [],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2458,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.1884,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2357,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 2,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2022,
+          "top1_is_gold": true
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.1184,
+          "top1_is_gold": true
+        }
+      ]
+    },
+    {
+      "backend": "sql",
+      "top_k": 5,
+      "min_score": null,
+      "min_score_ratio": 0.99,
+      "recall": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 16,
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "skipped": 0
+      },
+      "latency_ms": {
+        "p50": 3.03,
+        "p95": 4.1,
+        "max": 4.7,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3038,
+      "top1_score_min": 0.1184,
+      "empty_queries": [],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2458,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.1884,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2357,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.2022,
+          "top1_is_gold": true
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 1,
+          "hit_gold": true,
+          "top1_score": 0.1184,
+          "top1_is_gold": true
+        }
+      ]
+    }
+  ],
+  "backend_parity": true,
+  "backends": [
+    {
+      "backend": "sql",
+      "top_k": 5,
+      "min_score": null,
+      "min_score_ratio": null,
+      "recall": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 16,
+        "mean": 0.2,
+        "min": 0.2,
+        "max": 0.2,
+        "skipped": 0
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 16,
+        "mean": 0.8,
+        "min": 0.8,
+        "max": 0.8,
+        "skipped": 0
+      },
+      "latency_ms": {
+        "p50": 3.17,
+        "p95": 6.37,
+        "max": 8.53,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3038,
+      "top1_score_min": 0.1184,
+      "empty_queries": [],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2458,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.1884,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2357,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2022,
+          "top1_is_gold": true
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.1184,
+          "top1_is_gold": true
+        }
+      ]
+    },
+    {
+      "backend": "chroma",
+      "top_k": 5,
+      "min_score": null,
+      "min_score_ratio": null,
+      "recall": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "precision": {
+        "n": 16,
+        "mean": 0.2,
+        "min": 0.2,
+        "max": 0.2,
+        "skipped": 0
+      },
+      "mrr": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "ndcg": {
+        "n": 16,
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "skipped": 0
+      },
+      "noise": {
+        "n": 16,
+        "mean": 0.8,
+        "min": 0.8,
+        "max": 0.8,
+        "skipped": 0
+      },
+      "latency_ms": {
+        "p50": 5.04,
+        "p95": 6.55,
+        "max": 12.1,
+        "samples": 112
+      },
+      "top1_score_mean": 0.3038,
+      "top1_score_min": 0.1184,
+      "empty_queries": [],
+      "details": [
+        {
+          "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3899,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 线程池的核心参数和拒绝策略",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.4786,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2458,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2525,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.1884,
+          "top1_is_gold": true
+        },
+        {
+          "query": "MySQL 的可重复读隔离级别和间隙锁",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.4057,
+          "top1_is_gold": true
+        },
+        {
+          "query": "JVM 垃圾回收算法和常见收集器",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2932,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3483,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Kafka 怎么保证消息不重复消费、幂等生产",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3435,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2357,
+          "top1_is_gold": true
+        },
+        {
+          "query": "HTTP 的强缓存和协商缓存有什么区别",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.427,
+          "top1_is_gold": true
+        },
+        {
+          "query": "Java 后端工程师的岗位职责和任职要求",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3261,
+          "top1_is_gold": true
+        },
+        {
+          "query": "大数据开发工程师需要熟悉哪些计算引擎",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.3191,
+          "top1_is_gold": true
+        },
+        {
+          "query": "订单中台的缓存击穿是怎么治理的",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.286,
+          "top1_is_gold": true
+        },
+        {
+          "query": "支付网关怎么做到幂等和日终对账",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.2022,
+          "top1_is_gold": true
+        },
+        {
+          "query": "秒杀系统怎么做限流和降级",
+          "returned": 5,
+          "hit_gold": true,
+          "top1_score": 0.1184,
+          "top1_is_gold": true
+        }
+      ]
+    }
+  ],
+  "scale": [
+    {
+      "backend": "sql",
+      "dim": 2560,
+      "chunks": 32,
+      "p50_ms": 53.9,
+      "p95_ms": 67.93,
+      "max_ms": 67.93,
+      "samples": 7
+    },
+    {
+      "backend": "sql",
+      "dim": 2560,
+      "chunks": 200,
+      "p50_ms": 320.18,
+      "p95_ms": 367.43,
+      "max_ms": 367.43,
+      "samples": 7
+    },
+    {
+      "backend": "sql",
+      "dim": 2560,
+      "chunks": 1000,
+      "p50_ms": 1428.66,
+      "p95_ms": 1509.75,
+      "max_ms": 1509.75,
+      "samples": 7
+    },
+    {
+      "backend": "sql",
+      "dim": 2560,
+      "chunks": 3000,
+      "p50_ms": 4267.31,
+      "p95_ms": 4493.1,
+      "max_ms": 4493.1,
+      "samples": 7
+    },
+    {
+      "backend": "chroma",
+      "dim": 2560,
+      "chunks": 32,
+      "p50_ms": 25.51,
+      "p95_ms": 34.32,
+      "max_ms": 34.32,
+      "samples": 7
+    },
+    {
+      "backend": "chroma",
+      "dim": 2560,
+      "chunks": 200,
+      "p50_ms": 22.13,
+      "p95_ms": 30.83,
+      "max_ms": 30.83,
+      "samples": 7
+    },
+    {
+      "backend": "chroma",
+      "dim": 2560,
+      "chunks": 1000,
+      "p50_ms": 25.37,
+      "p95_ms": 26.98,
+      "max_ms": 26.98,
+      "samples": 7
+    },
+    {
+      "backend": "chroma",
+      "dim": 2560,
+      "chunks": 3000,
+      "p50_ms": 40.42,
+      "p95_ms": 76.36,
+      "max_ms": 76.36,
+      "samples": 7
+    }
+  ],
+  "production_default": {
+    "recall": {
+      "n": 16,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0,
+      "skipped": 0
+    },
+    "mrr": {
+      "n": 16,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0,
+      "skipped": 0
+    },
+    "ndcg": {
+      "n": 16,
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0,
+      "skipped": 0
+    },
+    "noise": {
+      "n": 16,
+      "mean": 0.8,
+      "min": 0.8,
+      "max": 0.8,
+      "skipped": 0
+    },
+    "latency_ms": {
+      "p50": 3.17,
+      "p95": 6.37,
+      "max": 8.53,
+      "samples": 112
+    },
+    "top1_score_mean": 0.3038,
+    "top1_score_min": 0.1184,
+    "empty_queries": []
+  },
+  "prompt_injection": {
+    "samples": [
+      {
+        "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
+        "chunks": 3,
+        "template": "question_knowledge",
+        "prompt_chars": 3518,
+        "source_marks": 3,
+        "distinct_sources": 3,
+        "sources_in_prompt": true,
+        "question_ok": true,
+        "question_has_evidence_points": true
+      },
+      {
+        "query": "Java 线程池的核心参数和拒绝策略",
+        "chunks": 3,
+        "template": "question_knowledge",
+        "prompt_chars": 3558,
+        "source_marks": 3,
+        "distinct_sources": 3,
+        "sources_in_prompt": true,
+        "question_ok": true,
+        "question_has_evidence_points": true
+      },
+      {
+        "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
+        "chunks": 3,
+        "template": "question_knowledge",
+        "prompt_chars": 3519,
+        "source_marks": 3,
+        "distinct_sources": 3,
+        "sources_in_prompt": true,
+        "question_ok": true,
+        "question_has_evidence_points": true
+      },
+      {
+        "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
+        "chunks": 3,
+        "template": "question_knowledge",
+        "prompt_chars": 3470,
+        "source_marks": 3,
+        "distinct_sources": 3,
+        "sources_in_prompt": true,
+        "question_ok": true,
+        "question_has_evidence_points": true
+      },
+      {
+        "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
+        "chunks": 3,
+        "template": "question_knowledge",
+        "prompt_chars": 3527,
+        "source_marks": 3,
+        "distinct_sources": 3,
+        "sources_in_prompt": true,
+        "question_ok": true,
+        "question_has_evidence_points": true
+      }
+    ],
+    "all_sources_traceable": true,
+    "all_questions_ok": true,
+    "avg_chunks": 3.0,
+    "avg_prompt_chars": 3518.4
+  }
+}

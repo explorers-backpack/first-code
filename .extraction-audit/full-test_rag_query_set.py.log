@@ -1,0 +1,121 @@
+==========================================================================
+RAG 检索准确性 · 固定 query 测试集 自检
+数据集：backend\scripts\rag_query_set.json
+==========================================================================
+
+--------------------------------------------------------------------------
+[1] 数据格式校验
+--------------------------------------------------------------------------
+  [PASS] 文件存在
+  [PASS] 是合法 JSON 且顶层是对象
+  [PASS] 顶层含必填键 'name'
+  [PASS] 顶层含必填键 'version'
+  [PASS] 顶层含必填键 'purpose'
+  [PASS] 顶层含必填键 'format'
+  [PASS] 顶层含必填键 'corpus'
+  [PASS] 顶层含必填键 'queries'
+  [PASS] corpus 是对象且含 documents 列表
+  [PASS] queries 是非空列表
+  [PASS] corpus 每篇恰好 4 键 ('title', 'content', 'category', 'source')
+  [PASS] corpus 四键取值都是非空字符串
+  [PASS] corpus category 全部合法（('job', 'technical', 'company', 'project')）
+  [PASS] corpus 文档自然键 (title+source+category) 无重复
+  [PASS] ★ corpus 每篇正文 <= 480 字（保证每篇恰好 1 片，关键词取证无歧义）
+  [PASS]   └ 该上限确实小于 DEFAULT_CHUNK_SIZE(500)
+  [PASS] ★ 每条 query 恰好 5 键 ('query', 'expected_category', 'expected_keywords', 'top_k', 'min_score')
+  [PASS] query 是非空字符串
+  [PASS] expected_category 是合法 category
+  [PASS] expected_keywords 是非空字符串列表（每个元素非空）
+  [PASS] ★ top_k 是正整数（显式挡掉 bool）
+  [PASS] ★ min_score 是数值（显式挡掉 bool）且落在余弦取值域 [-1, 1]
+  [PASS] query 文本无重复（固定测试集不该有重复项）
+  [PASS] ★ 需求点名的三类知识都有覆盖 ('technical', 'job', 'project')
+  [PASS] corpus 的类别集合与 query 期望类别一致（没有查不到的类别）
+
+--------------------------------------------------------------------------
+[2] 可以被测试读取
+--------------------------------------------------------------------------
+  [PASS] 文件可按 UTF-8 解码（中文内容无乱码）
+  [PASS] 重新 json.loads 得到与首次一致的结构（可重复读取）
+  [PASS] 不需要任何业务对象即可读出规模（纯数据）
+  corpus 16 篇：job=2 / technical=11 / company=0 / project=3
+  queries 16 条：job=2 / technical=11 / company=0 / project=3
+  top_k 取值：[1, 3, 5]
+  min_score 区间：[0.05, 0.23]
+  [PASS] 每类都有 query（读取后能算出完整分布）
+  [PASS] top_k 不止一个取值（覆盖不同截断）
+  [PASS] min_score 逐条不同（是逐条标定，不是一刀切）
+
+--------------------------------------------------------------------------
+[3] 端到端检索准确性（内存 SQLite + 真实检索器）
+--------------------------------------------------------------------------
+  embedder=hash-local dimension=256 （离线占位，非语义——见文件 model_dependency 字段）
+  [PASS] corpus 全部入库成功
+  [PASS] knowledge_document 行数 == corpus 篇数
+  [PASS] ★ knowledge_chunk 行数 == corpus 篇数（每篇恰好 1 片）
+
+    score  期望类别       命中类别         条数 top_k  结果
+  ----------------------------------------------------------------------------------------------------
+   0.3899  technical  technical     1     3  [OK ] HashMap 的扩容机制，链表什么时候会转成红黑树
+           -> Java HashMap 原理与扩容
+   0.4786  technical  technical     1     1  [OK ] Java 线程池的核心参数和拒绝策略
+           -> Java 并发：线程池与锁
+   0.2458  technical  technical     3     3  [OK ] Redis 缓存穿透、击穿、雪崩分别怎么解决
+           -> Redis 缓存穿透、击穿与雪崩
+   0.2525  technical  technical     2     3  [OK ] Redis 的 RDB 和 AOF 持久化有什么区别
+           -> Redis 持久化：RDB 与 AOF
+   0.1884  technical  technical     3     5  [OK ] MySQL 索引优化，怎么看 EXPLAIN 执行计划
+           -> MySQL 索引与执行计划
+   0.4057  technical  technical     1     1  [OK ] MySQL 的可重复读隔离级别和间隙锁
+           -> MySQL 事务隔离级别与锁
+   0.2932  technical  technical     1     3  [OK ] JVM 垃圾回收算法和常见收集器
+           -> JVM 内存结构与垃圾回收
+   0.3483  technical  technical     2     3  [OK ] Spring 事务传播行为 REQUIRES_NEW 和 NESTED
+           -> Spring 事务与传播行为
+   0.3435  technical  technical     1     3  [OK ] Kafka 怎么保证消息不重复消费、幂等生产
+           -> Kafka 消息可靠性与幂等
+   0.2357  technical  technical     2     3  [OK ] HTTPS 的 TLS 握手过程，客户端如何校验证书链
+           -> HTTPS 握手与证书校验
+   0.4270  technical  technical     3     3  [OK ] HTTP 的强缓存和协商缓存有什么区别
+           -> HTTP 状态码与缓存机制
+   0.3261  job        job           2     3  [OK ] Java 后端工程师的岗位职责和任职要求
+           -> Java 后端工程师（高级）
+   0.3191  job        job           3     3  [OK ] 大数据开发工程师需要熟悉哪些计算引擎
+           -> 大数据开发工程师
+   0.2860  project    project       3     3  [OK ] 订单中台的缓存击穿是怎么治理的
+           -> 项目：订单中台缓存治理
+   0.2022  project    project       3     3  [OK ] 支付网关怎么做到幂等和日终对账
+           -> 项目：支付网关幂等与对账
+   0.1184  project    project       3     3  [OK ] 秒杀系统怎么做限流和降级
+           -> 项目：秒杀系统限流与降级
+  [PASS] 契约 1：每条 query 的结果条数 <= top_k
+  [PASS] 契约 2：每条结果 score >= min_score
+  [PASS] 契约 3：top-1 的 category == expected_category
+  [PASS] 契约 4：top-1 正文包含全部 expected_keywords
+  [PASS] 每条 query 都检出了结果（不是靠空结果绕过断言）
+  [PASS] ★ 检索准确率 = 100%（top-1 类别与关键词全部命中）
+  [PASS] min_score 确实起了过滤作用（至少一条 query 的条数 < top_k）
+
+--------------------------------------------------------------------------
+[4] 边界（不修改业务代码 / 不依赖生产知识库）
+--------------------------------------------------------------------------
+  [PASS] ★ Retriever / VectorStore / Embedding / InterviewAgent 都不引用本测试集
+  [PASS] VectorKnowledgeRetriever.retrieve 签名仍是 (self, job_info, topic, context)
+  [PASS] VectorStore 的抽象方法仍是 add / search / count
+  [PASS] EmbeddingService 的抽象方法仍是 {_embed_one}
+  [PASS] InterviewAgent.generate_question 的 knowledge_context 仍是 keyword-only
+  [PASS] ★ 测试集文件不含任何数据库连接串/生产表名（纯数据，不指向生产库）
+  [PASS]   └ 守卫词表对真实连接串有效（自检，证明不是空跑）
+  [PASS]   └ 本套件用内存 SQLite（corpus 自己导入，不读生产库）
+  [PASS]   └ 本套件没有 import 生产库读取路径（knowledge_document_service）
+  [PASS] 守卫自检：子串检查能区分「有」与「无」
+
+==========================================================================
+测试数据规模
+==========================================================================
+  corpus      : 16 篇（每篇 1 片 ⇒ 16 片）
+  queries     : 16 条
+  检索准确率  : 16/16 top-1 命中
+==========================================================================
+结果: 通过 51 项，失败 0 项
+==========================================================================

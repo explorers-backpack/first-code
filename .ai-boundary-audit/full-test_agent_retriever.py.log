@@ -1,0 +1,95 @@
+======================================================================
+AI 模拟面试 · KnowledgeRetriever 接入 Agent 出题流程 自检
+======================================================================
+
+[1] 接缝契约（Core 是唯一接线点）
+  [PASS] Core 暴露 retrieve_knowledge
+  [PASS]   └ 是协程函数（真实检索要访问外部服务）
+  [PASS]   └ 已声明在 __all__
+  [PASS] Core 暴露 current_topic
+  [PASS] retrieve_knowledge 不收 db（检索不耦合业务库）
+  [PASS]   └ retriever 是 keyword-only 且默认 None（不注入＝不接真实知识库）
+  [PASS]   └ 参数顺序为 (job, topic, context)（与 Retriever 接口对齐）
+  [PASS] ★ 缺省（不注入）＝ 空实现，恒返回 []
+  [PASS] generate_next_question 新增 keyword-only retriever（默认 None）
+  [PASS]   └ 既有参数（db/session_id/user_id/spark/context/plan）顺序未变
+  [PASS] Core 源码中只有一处真正调用检索（唯一接线点）
+
+[2] current_topic 推导（纯函数、确定性）
+  [PASS] priority_topics 中未覆盖的第一项优先
+  [PASS]   └ 已覆盖则跳到下一个未覆盖项
+  [PASS]   └ 全部覆盖则回到 priority 首项
+  [PASS] 无 priority 时取 target_topics 首项
+  [PASS] 无 plan 时回落到 current_stage
+  [PASS]   └ 全空则为空串（不猜）
+  [PASS] 非 list 形状的字段被安全忽略（不逐字符拆字符串）
+  [PASS] 不改入参（纯函数）
+  [PASS] 同输入同输出（确定性）
+  [PASS]   └ 也支持 ORM 风格对象（getattr 读取）
+
+[3] agent 模式触发 Retriever（要求 1）
+  [PASS] agent 出题成功
+  [PASS] ★ 检索器恰好被调用 1 次（每题一次）
+  [PASS]   └ 入参第 1 位是 job（岗位行）
+  [PASS]   └ 入参第 2 位是推导出的当前 topic
+  [PASS]   └ 入参第 3 位是面试上下文
+  [PASS]   └ 只调用模型一次（检索不额外消耗 LLM）
+  [PASS]   └ 结果字段集恒定
+  [PASS]   └ ★ knowledge_chunks == 0（空检索器 ⇒ 正向信号为 0，不虚报）
+  [PASS]   └ 空检索器不产生 warning（空是正常语义，不是失败）
+  [PASS] 经 AgentQuestionGenerator 同样触发检索（mode=agent）
+  [PASS] 取到两个生成器的 generate AST 节点（否则后续断言会假通过）
+  [PASS]   └ 生成器不自己调 retrieve（只透传给 Core）
+
+[4] rule 模式不触发 Retriever（要求 2）
+  [PASS] rule 出题成功（不依赖 LLM）
+  [PASS] ★ 注入检索器后调用次数仍为 0
+  [PASS]   └ 与不注入 retriever 时结果逐字段一致（rule 完全不受影响）
+  [PASS]   └ 整场出题 5 道（规则批量语义未变）
+  [PASS] RuleQuestionGenerator.generate 方法体内无任何检索调用
+  [PASS]   └ 签名里也接收 retriever（接口统一，但接收≠使用）
+
+[5] Retriever 为空仍能生成（要求 3）
+  [PASS] 不注入（None → 空实现） → 仍能生成
+  [PASS]   └ Prompt 与「无知识」基线逐字节相同
+  [PASS]   └ Prompt 不含知识痕迹
+  [PASS]   └ 结果字段集恒定且 warnings 为空
+  [PASS] 空基类 KnowledgeRetriever() → 仍能生成
+  [PASS]   └ Prompt 与「无知识」基线逐字节相同
+  [PASS]   └ Prompt 不含知识痕迹
+  [PASS]   └ 结果字段集恒定且 warnings 为空
+  [PASS] MockKnowledgeRetriever(chunks=[]) → 仍能生成
+  [PASS]   └ Prompt 与「无知识」基线逐字节相同
+  [PASS]   └ Prompt 不含知识痕迹
+  [PASS]   └ 结果字段集恒定且 warnings 为空
+  [PASS] 桩返回 [] → 仍能生成
+  [PASS]   └ Prompt 与「无知识」基线逐字节相同
+  [PASS]   └ Prompt 不含知识痕迹
+  [PASS]   └ 结果字段集恒定且 warnings 为空
+
+[6] 有知识时确实注入 Prompt
+  [PASS] 有知识时仍能生成
+  [PASS] ★ Prompt 切到知识模板（含「参考知识：」）
+  [PASS]   └ 含 Mock 知识正文（RDB/AOF 片段）
+  [PASS]   └ 含来源标注
+  [PASS]   └ 与无知识基线 Prompt 不同（确实注入了）
+  [PASS]   └ 结果字段集不变（调用方无分支）
+
+[7] 检索失败静默降级（可选增强，不中断出题）
+  [PASS] ★ 检索抛异常时出题仍然成功
+  [PASS]   └ 记入 warnings（稳定码 knowledge_retrieval_failed）
+  [PASS]   └ 不进 errors（不是失败）
+  [PASS]   └ 降级为「无知识」：Prompt 与基线逐字节相同
+  [PASS]   └ 检索器确实被调用过（是失败，不是没调）
+
+[8] 边界：Agent 只接收、不检索；Service 未改
+  [PASS] InterviewAgent 仍不 import knowledge_retriever
+  [PASS]   └ Agent 源码里没有任何 retrieve 调用（AST 取证，非子串匹配）
+  [PASS] Service 未接入检索（不 import knowledge_retriever）
+  [PASS] Core 仍不反向 import 策略层 question_generator
+  [PASS]    └ Core 也不 import Service（依赖方向单向）
+  [PASS] KnowledgeChunk 仍可被 Agent 消费（鸭子类型）
+
+======================================================================
+结果: 通过 72 项，失败 0 项
+======================================================================

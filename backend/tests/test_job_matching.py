@@ -14,6 +14,9 @@
    正常技能匹配 / 多技能匹配 / 空字符串 / None / 大小写不同 /
    技能不存在 / 完全匹配 / 部分匹配；
 3. ``main.py`` 不再保留同名定义，而是引用同一份实现（无影子函数）。
+
+★ P2 之后这些函数搬到了 ``modules/career/service.py``（``main.py`` 里已经
+没有岗位匹配代码了），本套件第 [14] 节改为验证 **career 服务**接线正确。
 """
 
 import asyncio
@@ -25,7 +28,8 @@ import sys
 _BACKEND = str(pathlib.Path(__file__).resolve().parents[1])
 sys.path.insert(0, _BACKEND)
 
-# 必须先于 `import main` 设置：main.py 会在导入期用 DATABASE_URL 构造 engine。
+# 必须先于 `import modules.career.service` 设置：它经 database.py 在导入期
+# 用 DATABASE_URL 构造 engine。
 # 用 setdefault 而非直接赋值，避免覆盖真实 .env 中的配置；
 # load_dotenv 默认 override=False，不会反向覆盖此处的兜底值。
 os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
@@ -37,7 +41,7 @@ from services.job_matching import (  # noqa: E402
 )
 from services import job_matching  # noqa: E402
 
-import main  # noqa: E402
+import modules.career.service as career_service  # noqa: E402
 
 
 # ============================================================
@@ -318,28 +322,28 @@ def test_match_job() -> bool:
 # 14. 集成：main.py 使用唯一实现 + filter_jobs_by_keywords 行为不变
 # ============================================================
 def test_main_uses_single_implementation() -> bool:
-    print("\n[14] 集成：main.py 引用唯一实现，且匹配/排序/阈值行为不变")
-    ok = _check("main.keyword_match 即 services.job_matching.keyword_match",
-                main.keyword_match is job_matching.keyword_match)
+    print("\n[14] 集成：career 服务引用唯一实现，且匹配/排序/阈值行为不变")
+    ok = _check("career_service.keyword_match 即 services.job_matching.keyword_match",
+                career_service.keyword_match is job_matching.keyword_match)
 
-    # 统计 main 模块中名为 keyword_match 的定义数量（应为 0：已无本地定义）
-    local_defs = [
-        v for k, v in vars(main).items()
-        if k == "keyword_match" and getattr(v, "__module__", None) == "main"
-    ]
-    ok &= _check(f"main 模块内无本地 keyword_match 定义（实际 {len(local_defs)}）",
-                 len(local_defs) == 0)
+    # 唯一实现必须**真的来自** services.job_matching，而不是某处又长出一份
+    # 逐字节相同的影子函数（这正是本套件当初存在的原因）。
+    src_module = getattr(career_service.keyword_match, "__module__", None)
+    ok &= _check(f"keyword_match 的 __module__ 是 services.job_matching（实际 {src_module}）",
+                 src_module == "services.job_matching")
 
     # 用假数据替换 get_all_jobs，验证过滤 + 降序排序
     async def _fake_get_all_jobs():
         return JOBS
 
-    original = main.get_all_jobs
-    main.get_all_jobs = _fake_get_all_jobs
+    original = career_service.get_all_jobs
+    career_service.get_all_jobs = _fake_get_all_jobs
     try:
-        results = asyncio.run(main.filter_jobs_by_keywords(["Python", "MySQL"], min_match_rate=30))
+        results = asyncio.run(
+            career_service.filter_jobs_by_keywords(["Python", "MySQL"], min_match_rate=30)
+        )
     finally:
-        main.get_all_jobs = original
+        career_service.get_all_jobs = original
 
     ok &= _check(f"低于阈值(30)的前端岗位被过滤（实际 {[r['job_id'] for r in results]}）",
                  [r["job_id"] for r in results] == [3, 1])
@@ -350,7 +354,7 @@ def test_main_uses_single_implementation() -> bool:
                      for r in results))
 
     # clean_jobs_to_text 仍可消费该结构（沿用 keyword_match 键）
-    text = main.clean_jobs_to_text(results)
+    text = career_service.clean_jobs_to_text(results)
     ok &= _check("clean_jobs_to_text 正常渲染", "数据开发工程师" in text and "66.7%" in text)
     return ok
 

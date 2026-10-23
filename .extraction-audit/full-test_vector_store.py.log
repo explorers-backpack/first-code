@@ -1,0 +1,145 @@
+======================================================================
+AI 面试知识库 · 向量存储层（VectorStore）自检
+======================================================================
+
+[1] VectorStore 接口 + 零依赖（不绑定任何数据库）
+  [PASS] services.vector_store 可导入
+  [PASS] ★ VectorStore 是抽象接口，三个方法都未实现
+  [PASS]   └ 直接实例化被拒（接口必须被实现）
+  [PASS] ★ 接口签名里没有任何数据库概念（无 db / session / engine）
+  [PASS]   └ add 只收一组记录
+  [PASS]   └ search 的过滤参数齐全（top_k / model / document_id / category / min_score）
+  [PASS] 默认 top_k 是正整数
+  [PASS] ★ 接口模块只 import 标准库（顶层依赖恰为 5 个）
+  [PASS]   └ 不 import 任何数据库 / 向量库 / 业务模块
+
+[2] 值对象 VectorRecord / VectorMatch
+  [PASS] ★ 构造时把 int 向量归一成 float
+  [PASS]   └ dimension 反映向量长度
+  [PASS]   └ to_dict 键集合固定（顺序稳定）
+  [PASS]   └ to_dict 里的容器是副本（改它不影响对象）
+  [PASS]   └ 是 frozen dataclass（不可重新赋值）
+  [PASS]   └ metadata 默认是独立空 dict（不是共享字面量）
+  [PASS] ★ 构造即拒绝非法向量：空向量
+  [PASS] ★ 构造即拒绝非法向量：字符串
+  [PASS] ★ 构造即拒绝非法向量：含 bool
+  [PASS] ★ 构造即拒绝非法向量：含字符串元素
+  [PASS] ★ 构造即拒绝非法向量：含 None
+  [PASS] ★ 构造即拒绝非法向量：不可迭代
+  [PASS] VectorMatch.to_dict 键集合固定
+  [PASS]   └ 检索结果**不含向量本体**（不带上千个浮点回上层）
+  [PASS]   └ score 归一为 float
+
+[3] 相似度数学
+  [PASS] 点积
+  [PASS] 模长
+  [PASS] ★ 自己与自己余弦 == 1
+  [PASS] ★ 正交向量余弦 == 0
+  [PASS] ★ 相反向量余弦 == -1
+  [PASS] 45 度向量余弦 ≈ 0.7071
+  [PASS]   └ 与向量长度无关（只看向量方向）
+  [PASS] 零向量不除零（返回 0.0）
+  [PASS] ★ 维度不符抛 VectorStoreDimensionError（不静默截断）
+
+[4] 入参校验
+  [PASS] 拒绝非法 top_k：0
+  [PASS] 拒绝非法 top_k：-1
+  [PASS] 拒绝非法 top_k：True
+  [PASS] 拒绝非法 top_k：1.5
+  [PASS] 拒绝非法 top_k：字符串
+  [PASS] 拒绝非法 top_k：None
+  [PASS] top_k=1 合法
+  [PASS] ★ add 不接受单个对象（要包成 [record]）
+  [PASS]   └ add([]) 合法（空批次）
+  [PASS]   └ dict 形式可归一成 VectorRecord
+  [PASS]   └ 非记录类型被拒（错误信息含第几条）
+
+[5] 保存向量（内存实现）
+  [PASS] 初始为空
+  [PASS] ★ add 返回实际写入条数
+  [PASS] ★ count 反映已向量化条数
+  [PASS]   └ 未给 chunk_id 时自动分配自增 id
+  [PASS]   └ 记录自带 model 时以记录为准
+  [PASS] ★ upsert：同 chunk_id 覆盖而非新增
+  [PASS] ★ 补向量只更新 vector（新向量生效）
+  [PASS] ★ 补向量**不改切片正文**（向量层不负责切片内容）
+  [PASS]   └ 补向量也不改切片元信息 / 归属文档
+  [PASS] 空批次写入 0 条
+  [PASS] 记录未带 model 时用 store 的默认模型补齐（避免无主向量）
+
+[6] 相似查询（内存实现）
+  [PASS] ★ 查询向量 == 第一条时，第一条排第一
+  [PASS] ★ 相似度排序正确：x(1.0) > x+y(0.707) > y(0.0)
+  [PASS]   └ 返回 VectorMatch 且带 chunk_id / document_id
+  [PASS] ★ top_k 截断生效
+  [PASS]   └ top_k 大于候选数时返回全部
+  [PASS] ★ min_score 过滤低相似结果
+  [PASS]   └ 阈值高于余弦上限（1.0）时返回空
+  [PASS] ★ 按 category 过滤（取自 metadata）
+  [PASS]   └ 按 document_id 过滤
+  [PASS]   └ 按 model 过滤（另一模型查不到）
+  [PASS] ★ 空库查询返回 []（确实没有候选，不报错）
+  [PASS] ★ 候选非空但维度全不符 → 抛错（不安静返回空）
+  [PASS]   └ 部分维度不符时跳过不符的，其余照常返回
+  [PASS] ★ 同分时按候选顺序稳定排序（同输入同输出）
+
+[7] 保存向量（SQL 实现，复用 knowledge_chunk.embedding 扩展字段）
+  [PASS] 初始无已向量化切片
+  [PASS] ★ 空库查询返回 []（确实没有候选，不报错）
+  [PASS] ★ add 返回写入条数
+  [PASS] ★ count == 3（只统计已向量化的行）
+  [PASS] ★ 新建切片确实落库（content + embedding 三列都写入）
+  [PASS]   └ metadata 落到 chunk_metadata（列名仍是 metadata）
+  [PASS] ★ 给既有切片补向量（upsert，不新增行）
+  [PASS]   └ 模型名与维度同步更新（换模型后可筛旧向量）
+  [PASS]   └ 补向量不会覆盖既有 content
+  [PASS] ★ 给不存在的切片写向量 → 明确报错（不悄悄新建）
+  [PASS]   └ 新建切片缺 document_id → 报错
+  [PASS]   └ 新建切片缺非空 content → 报错
+
+[8] 相似查询（SQL 实现）
+  [PASS] ★ 查询 x：x(1.0) 排第一，y(0.0) 第二
+  [PASS] ★ 相似度数值正确
+  [PASS] ★ model 过滤生效（m2 的向量不参与 m1 的查询）
+  [PASS]   └ 查 m2 只能查到 z
+  [PASS]   └ 不传 model 时用 store 默认模型（构造时给的 m1）
+  [PASS] ★ top_k 截断生效
+  [PASS] ★ min_score 过滤生效
+  [PASS] ★ 按 category 过滤（Python 侧，因 metadata 是 JSON）
+  [PASS]   └ 按 document_id 过滤（SQL 侧，真列）
+  [PASS]   └ 返回的 chunk_id 是数据库真 id
+  [PASS] ★ 维度不符 → 抛错（不是安静返回空）
+
+[9] 换后端不换语义（同一数据、同一查询，两实现结果一致）
+  [PASS] ★ 补向量不改切片正文（内存实现，与 SQL 实现同口径）
+  [PASS] ★ 两个实现的检索结果完全一致（接口把语义固定住了）
+  [PASS]   └ count 也一致
+
+[10] 端到端：HashEmbeddingService → VectorStore → 查回自己
+  [PASS] ★ 用第一条文本的向量查询，命中它自己且相似度 ≈ 1
+  [PASS]   └ 返回 3 条（该模型下全部候选）
+  [PASS]   └ 结果按相似度降序
+  [PASS]   └ to_dict 可直接交给上层（无向量本体）
+  [PASS]   └ count 统计**全部**已向量化切片（不按模型区分）：3 + 3
+
+[11] 依赖收口：向量层的消费者是已知闭集（写侧入库 / 读侧检索）
+  [PASS] ★ 消费向量存储**接口**的恰好是读侧检索器 + 写侧入库 Pipeline + 维护 + 迁移模块
+  [PASS] ★ 每个后端实现的消费者都**收口为唯一组装器** knowledge_rag
+  [PASS]   └ 面试流程模块（interview_*）都不直接碰向量层
+  [PASS] SQL 后端确实依赖 SQLAlchemy 与模型（它就是那个 DB 后端）
+  [PASS]   └ 但它不 import embedding_service / Retriever / Interview
+  [PASS]   └ 也不 import chroma 后端（组合方向是 chroma → sql，不能反过来）
+  [PASS] ★ ANN 后端**在单独模块**里（接口模块的零依赖断言要求如此）
+  [PASS]   └ 它组合 SQL 后端作为权威行读写器（不是另建一套切片存储）
+  [PASS]   └ 但它不 import embedding / Retriever / Interview / Prompt
+  [PASS]   └ chromadb 只在**函数体内**延迟导入（默认后端不装它也能跑）
+  [PASS]   └ services/interview_core.py 未被改动
+  [PASS]   └ services/interview_agent.py 未被改动
+  [PASS]   └ services/interview_service.py 未被改动
+  [PASS]   └ services/knowledge_retriever.py 未被改动
+  [PASS]   └ services/embedding_service.py 未被改动
+  [PASS]   └ services/document_chunker.py 未被改动
+
+======================================================================
+结果: 通过 116 项，失败 0 项
+======================================================================

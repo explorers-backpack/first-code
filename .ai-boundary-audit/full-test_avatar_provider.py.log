@@ -1,0 +1,112 @@
+====================================================================
+数字人 Avatar Provider 自检（单元 + Mock 流程）
+====================================================================
+
+[1] 值对象契约
+  [PASS] AvatarSession.to_dict 键集恒定（7 键）
+  [PASS] from_dict(to_dict(x)) == x（往返）
+  [PASS] from_dict 未知键忽略
+  [PASS] from_dict 缺失取默认（status=created）
+  [PASS] from_dict 类型不符 → AvatarValueError
+  [PASS] from_dict 非 dict → AvatarValueError
+  [PASS] 空 avatar_session_id → AvatarValueError
+  [PASS] AvatarSpeech / AvatarAnswer / AvatarStatus 键集恒定
+  [PASS] to_dict 的 raw 是浅拷贝（改返回不污染内部）
+
+[2] 错误分类（决定处理方式）
+  [PASS] ConfigError 同时是 ValueError（配置错不该重试）
+  [PASS] UnavailableError 是 RuntimeError（可重试 / 可降级）
+  [PASS] ResponseError / ValueError 均属 AvatarProviderError
+
+[3] Mock Provider：六能力全流程
+  [PASS] create_session 返回 created
+  [PASS] create_session 对同一 session_ref 幂等
+  [PASS] 不同 session_ref ⇒ 不同会话
+  [PASS] initialize ⇒ initialized + stream_url
+  [PASS] speak ⇒ speaking + duration_ms = 60×字数
+  [PASS] fetch_answer ⇒ ready + text + audio_url
+  [PASS] status ⇒ speaking / initialized
+  [PASS] stop ⇒ stopped
+  [PASS] calls 记录完整且有序
+  [PASS] answer_text 为空 ⇒ fetch_answer 返回 empty
+  [PASS] 未知会话 → ResponseError（不返回 None）
+
+[4] Mock 失败注入（供降级测试）
+  [PASS]   └ fail_on='create_session' → UnavailableError
+  [PASS]   └ fail_on='initialize' → UnavailableError
+  [PASS]   └ fail_on='speak' → UnavailableError
+  [PASS]   └ fail_on='fetch_answer' → UnavailableError
+  [PASS]   └ fail_on='status' → UnavailableError
+  [PASS]   └ fail_on='stop' → UnavailableError
+
+[5] 讯飞 Provider 配置
+  [PASS] 缺凭据 → ConfigError（构造期就报）
+  [PASS] 非法 AVATAR_TIMEOUT → ConfigError
+  [PASS] 非正数 AVATAR_TIMEOUT → ConfigError
+  [PASS] base_path 不以 / 开头 → ConfigError
+  [PASS] 空串等价未配置（host 回落默认占位）
+  [PASS] masked_api_key 只露尾 4 位
+  [PASS] api_key / api_secret 不进 repr
+  [PASS] configured 判据 = 三项齐全
+
+[6] 讯飞鉴权（HMAC-SHA256，POST 请求行）
+  [PASS] 固定 date ⇒ 签名逐字节可复现
+  [PASS] query 三键齐全（authorization / date / host）
+  [PASS] 请求行用的是 POST（与 main._make_url 的 GET 不同）
+  [PASS] signed url 为 https 且带鉴权 query
+
+[7] 讯飞 Provider（假 transport，零联网）
+  [PASS] create_session 解析出上游会话 id
+  [PASS] initialize 解析出 stream_url
+  [PASS] speak 解析出 duration_ms
+  [PASS] fetch_answer 解析出 text / audio_url
+  [PASS] status 解析出 initialized / speaking
+  [PASS] stop ⇒ stopped
+  [PASS] 共发出 6 次请求，路径与能力一一对应
+  [PASS] 三段式报文（header / parameter / payload）
+  [PASS]   └ header 带 app_id，uid 用上层会话 id
+  [PASS]   └ speak 的 payload 带 text（文本驱动）
+  [PASS]   └ 每次请求都带 Content-Type + timeout
+  [PASS] header.code != 0 → ResponseError（带上游 message）
+  [PASS] 网络异常 → UnavailableError（可降级）
+  [PASS] 响应缺会话 id → ResponseError（不静默造 id）
+
+[8] 工厂（按 AVATAR_PROVIDER 选实现）
+  [PASS] 未配置 → Mock（不配=默认=离线）
+  [PASS] 空串 → Mock（空串等价未配置）
+  [PASS] mock → Mock
+  [PASS] iflytek + 凭据 → IflytekAvatarProvider
+  [PASS] 非法取值 → ConfigError（报错不静默）
+  [PASS] describe（未配置）→ provider=mock / configured=True / error=None
+  [PASS] describe（讯飞缺凭据）→ configured=False 且 error 有说明，**不抛异常**
+  [PASS] describe（非法取值）→ 把原因塞进 error，不抛异常
+  [PASS] describe（讯飞齐全）→ configured=True + masked_api_key
+
+[9] 零依赖守卫（AST）
+  [PASS] 接口模块顶层只 import 标准库
+  [PASS]   └ 全文从不 import httpx（真实实现不在本模块）
+  [PASS] 讯飞模块顶层不 import httpx（延迟到函数体内）
+  [PASS]   └ 顶层只 import 标准库 + services.avatar_provider
+  [PASS] 通道层不 import 任何厂商 SDK / 网络库
+
+[10] Mock 流程：完整面试经通道驱动 provider
+  [PASS] start ⇒ create_session + initialize + speak(第一题)
+  [PASS]   └ 播报的正是第一题原文
+  [PASS]   └ 流程状态机照常推进（ongoing / 第 1 题）
+  [PASS] answer ⇒ create(幂等复用) + speak(下一题) + fetch_answer(ASR)
+  [PASS]   └ 复用的是同一场数字人会话（未重复新建）
+  [PASS] end ⇒ stop
+  [PASS]   └ 报告照常生成
+  [PASS] text 会话全程 **零** provider 调用（text 完全不受影响）
+  [PASS] provider 抛异常时 enter **原样返回同一对象**（降级）
+  [PASS]   └ 数字人故障不影响 start 出题
+  [PASS]   └ 全流程仍可跑完并出报告（降级不阻断）
+  [PASS] provider 配置非法时 enter 仍原样返回（降级）
+
+====================================================================
+结果: 通过 81 项，失败 0 项
+====================================================================
+数字人通道执行失败，已降级为纯文本交付：[mock] 注入的失败：speak
+数字人通道执行失败，已降级为纯文本交付：[mock] 注入的失败：speak
+数字人通道执行失败，已降级为纯文本交付：[mock] 注入的失败：speak
+数字人 provider 解析失败，已降级为纯文本交付：AVATAR_PROVIDER 取值非法：'bogus'，允许 mock / iflytek

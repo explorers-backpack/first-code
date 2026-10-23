@@ -61,7 +61,7 @@ from services import (  # noqa: E402
 _PASSED = 0
 _FAILED = 0
 
-# 分层契约：Service 对外必须保留的生命周期函数（api/interview.py 与既有测试都在用）
+# 分层契约：Service 对外必须保留的生命周期函数（modules/interview/api.py 与既有测试都在用）
 LIFECYCLE_API = (
     "create_session",
     "start_session",
@@ -317,7 +317,7 @@ async def run() -> bool:
         not any(hasattr(interview_core, n) for n in ("router", "get_current_user", "get_db")),
     )
 
-    api_src = (BACKEND_DIR / "api" / "interview.py").read_text(encoding="utf-8")
+    api_src = (BACKEND_DIR / "modules" / "interview" / "api.py").read_text(encoding="utf-8")
     api_imports = _imported_modules(api_src)
     _check("路由层只依赖 Service，不直接 import Core",
            "services.interview_core" not in api_imports, str(sorted(api_imports)))

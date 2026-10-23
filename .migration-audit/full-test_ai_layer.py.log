@@ -1,0 +1,162 @@
+======================================================================
+AI 能力接入层（modules.ai）· 契约自检
+======================================================================
+
+[1] 运行模式（mock / offline / production）
+  [PASS] 凭据缺失 ⇒ 自动判定为 offline（不联网）
+  [PASS] 凭据齐全 ⇒ 自动判定为 production
+  [PASS] 显式 mock（大小写不敏感）
+  [PASS] 显式 offline 覆盖齐全的凭据
+  [PASS] 非法取值必须报错（不静默降级）
+  [PASS] describe_run_mode 绝不抛异常，把原因塞进 error
+  [PASS]   └ 缺失的凭据键名被列出（不返回值本身）
+  [PASS] production + 缺凭据 ⇒ 启动校验失败
+  [PASS] production + 凭据齐全 ⇒ 启动校验通过
+
+[2] 生产模式不静默回退到 Mock / offline
+  [PASS] production 缺凭据 ⇒ AiModeError
+  [PASS] production 未注册传输层 ⇒ AiModeError
+  [PASS] production 显式选 fake ⇒ AiModeError（假数据不得进生产）
+  [PASS] production 选未知 provider ⇒ AiModeError
+  [PASS] production 装配出真实 Provider
+  [PASS] mock 模式装配出 Fake（假装成功）
+  [PASS] offline 模式装配出 Offline（确定失败）
+
+[3] 错误分类（retryable 是类属性，不解析文案）
+  [PASS] AiAuthError ⇒ kind=auth retryable=False
+  [PASS] AiTimeoutError ⇒ kind=timeout retryable=True
+  [PASS] AiRateLimitError ⇒ kind=rate_limit retryable=True
+  [PASS] AiUnavailableError ⇒ kind=unavailable retryable=True
+  [PASS] AiResponseError ⇒ kind=response retryable=False
+  [PASS] AiBoundaryError ⇒ kind=boundary retryable=False
+  [PASS] AiModeError ⇒ kind=mode retryable=False
+  [PASS] AiConfigError ⇒ kind=config retryable=False
+  [PASS] TimeoutError ⇒ AiTimeoutError
+  [PASS] ConnectionResetError ⇒ AiUnavailableError
+  [PASS] HTTP 401 文案 ⇒ AiAuthError
+  [PASS] HTTP 429 文案 ⇒ AiRateLimitError
+  [PASS] 无法识别 ⇒ 保守归类为不可重试
+  [PASS] 已是 AiError 的原样返回（幂等）
+
+[4] 超时 / 有限重试 / 指数退避（可注入零等待）
+  [PASS] 可重试错误重试后成功
+  [PASS]   └ 恰好调用 3 次
+  [PASS]   └ 退避 2 次（首次失败不等待）
+  [PASS] 退避下界 = cap*(1-ratio)
+  [PASS] 退避上界 = cap
+  [PASS] 指数增长：第 2 次失败区间翻倍
+  [PASS] 封顶：第 20 次失败不超过 max_delay
+  [PASS] jitter 真的在抖动（rand 两端不等）
+  [PASS] 外层超时 ⇒ AiTimeoutError
+  [PASS] 鉴权失败不重试（只调用 1 次）
+  [PASS] 重试耗尽后抛出最后一次错误（调用 3 次）
+  [PASS] 非 AiError 异常被收敛为 AiError
+
+[5] 非幂等操作不得盲目自动重试
+  [PASS] 幂等请求按策略允许 5 次
+  [PASS] ★ 非幂等请求恒为 1 次（配置写得再大也没用）
+  [PASS] ★ 非幂等调用只尝试一次（即使错误本身可重试）
+
+[6] 请求追踪 / Prompt 版本 / 指标 / Token 用量
+  [PASS] 指标键集为固定闭集（8 键）
+  [PASS]   └ snapshot 键集与 METRIC_KEYS 完全一致
+  [PASS] 未登记的指标名被忽略（键集不漂移）
+  [PASS] Prompt 版本贯穿到响应
+  [PASS]   └ prompt_id 贯穿到响应
+  [PASS]   └ request_id 非空且贯穿到 scope
+  [PASS] Token 用量被透传
+  [PASS] 耗时被记录
+  [PASS] scope.response 被写回
+  [PASS] scope.error 为空
+  [PASS] 调用数被计数
+  [PASS] 累计耗时被记录
+  [PASS] Token 用量被计数
+  [PASS] 按 provider 分解
+  [PASS] 失败时 scope.error_dict 给出结构化原因
+  [PASS]   └ 错误里不含 Prompt 正文
+  [PASS] 错误数 / 超时数被计数
+  [PASS] 响应摘要含 model / usage / latency（供日志）
+
+[7] Prompt 数据边界（越权 / 无关数据 / 敏感信息）
+  [PASS] 超长 Prompt 被拒绝（不截断）
+  [PASS] 禁止注入的标识符被拒绝
+  [PASS] 正常 Prompt 通过
+  [PASS] 归属不一致必须拒绝
+  [PASS] 归属一致放行
+  [PASS] 双方都为空（系统级）放行
+  [PASS] 手机号被脱敏
+  [PASS] 邮箱被脱敏
+  [PASS] 身份证被脱敏
+  [PASS] 正常文字不被误伤
+
+[8] 旧字符串契约（失败哨兵逐字沿用，冻结文件零改动）
+  [PASS] 成功时原样返回文本
+  [PASS] AiTimeoutError ⇒ API调用失败: 请求超时
+  [PASS]   └ 旧判定仍认它是失败
+  [PASS]   └ 前缀落在 LEGACY_FAILURE_PREFIXES 内
+  [PASS] AiAuthError ⇒ API调用失败: 鉴权失败
+  [PASS]   └ 旧判定仍认它是失败
+  [PASS]   └ 前缀落在 LEGACY_FAILURE_PREFIXES 内
+  [PASS] AiRateLimitError ⇒ API调用失败: 供应商限流
+  [PASS]   └ 旧判定仍认它是失败
+  [PASS]   └ 前缀落在 LEGACY_FAILURE_PREFIXES 内
+  [PASS] AiUnavailableError ⇒ API调用失败: 服务不可用
+  [PASS]   └ 旧判定仍认它是失败
+  [PASS]   └ 前缀落在 LEGACY_FAILURE_PREFIXES 内
+  [PASS] AiResponseError ⇒ AI 回答为空
+  [PASS]   └ 旧判定仍认它是失败
+  [PASS]   └ 前缀落在 LEGACY_FAILURE_PREFIXES 内
+  [PASS] AiModeError ⇒ SparkAPI not available
+  [PASS]   └ 旧判定仍认它是失败
+  [PASS]   └ 前缀落在 LEGACY_FAILURE_PREFIXES 内
+  [PASS] 旧哨兵串 'API调用失败: 连接超时' ⇒ kind=timeout
+  [PASS] 旧哨兵串 'API调用失败: 401 unauthorized' ⇒ kind=auth
+  [PASS] 旧哨兵串 'AI 回答为空' ⇒ kind=response
+  [PASS] 旧哨兵串 'SparkAPI not available' ⇒ kind=unavailable
+  [PASS] offline 模式立即失败且给出旧哨兵
+  [PASS] 门面把任意异常也收敛成哨兵（绝不抛）
+
+[9] 契约测试：注入 Fake Provider，面试业务核心零改动
+  [PASS] ★ 冻结的 interview_agent 用新 Provider 正常出题
+  [PASS]   └ 解析出题目
+  [PASS]   └ Fake 收到了 Prompt
+  [PASS]   └ Prompt 里带上了本次简历的技能（数据边界内正常注入）
+  [PASS]   └ 已问过的问题进了变量层（上下文正常注入）
+  [PASS] ★ 换 Offline Provider ⇒ ok=False 且 question 为空（不伪造）
+  [PASS]   └ 失败原因可读（含 Spark 或 服务不可用）
+  [PASS] ★ 换第三个 Provider 同样零改动
+
+[10] 源码守卫（新增的是外围，不是改写核心）
+  [PASS] 冻结文件 services/interview_agent.py 不 import modules.ai（零改动）
+  [PASS] 冻结文件 services/interview_core.py 不 import modules.ai（零改动）
+  [PASS] 冻结文件 services/interview_planner.py 不 import modules.ai（零改动）
+  [PASS] 冻结文件 services/interview_context.py 不 import modules.ai（零改动）
+  [PASS] 冻结文件 services/question_validator.py 不 import modules.ai（零改动）
+  [PASS] modules/ai 是包（有 __init__.py）
+  [PASS] modules/ai/__init__.py 顶层不 import services.knowledge_rag/chromadb/httpx/requests/aiohttp/main
+  [PASS] modules/ai/boundary.py 顶层不 import services.knowledge_rag/chromadb/httpx/requests/aiohttp/main
+  [PASS] modules/ai/compat.py 顶层不 import services.knowledge_rag/chromadb/httpx/requests/aiohttp/main
+  [PASS] modules/ai/errors.py 顶层不 import services.knowledge_rag/chromadb/httpx/requests/aiohttp/main
+  [PASS] modules/ai/factory.py 顶层不 import services.knowledge_rag/chromadb/httpx/requests/aiohttp/main
+  [PASS] modules/ai/llm.py 顶层不 import services.knowledge_rag/chromadb/httpx/requests/aiohttp/main
+  [PASS] modules/ai/llm_fake.py 顶层不 import services.knowledge_rag/chromadb/httpx/requests/aiohttp/main
+  [PASS] modules/ai/llm_spark.py 顶层不 import services.knowledge_rag/chromadb/httpx/requests/aiohttp/main
+  [PASS] modules/ai/modes.py 顶层不 import services.knowledge_rag/chromadb/httpx/requests/aiohttp/main
+  [PASS] modules/ai/policy.py 顶层不 import services.knowledge_rag/chromadb/httpx/requests/aiohttp/main
+  [PASS] modules/ai/telemetry.py 顶层不 import services.knowledge_rag/chromadb/httpx/requests/aiohttp/main
+  [PASS] 旧协议实现仍留在 main.py（本层不重写 websocket 协议）
+  [PASS] main.py 已装配门面（spark_api = build_legacy_spark_facade()）
+  [PASS]   └ 传输层已注册
+  [PASS]   └ 启动期做 AI 配置校验
+
+[11] 配置摘要（describe_llm / describe_capabilities 永不抛异常）
+  [PASS] describe_llm 报出有效 Provider
+  [PASS] describe_llm 配置非法也不抛，把原因写进 error
+  [PASS] describe_capabilities 汇总四类能力
+  [PASS]   └ 语音识别明确标注「复用数字人，不单独抽象」
+  [PASS]   └ 指标快照随能力视图一起暴露
+  [PASS] validate_startup 在生产缺凭据时失败
+
+======================================================================
+结果: 全部通过
+======================================================================

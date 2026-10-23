@@ -22,8 +22,8 @@
 [6]  错误分支：未知消息 → ``bad_message``；顺序不对 → ``state_error``（**状态不被污染**）；
      ``ping`` → ``pong``；``snapshot`` → 三连推
 [7]  文字面试**完全不受影响**：HTTP 文字流程照常；WS 路由与既有 HTTP 路由互不干扰
-[8]  边界守卫（AST）：**只有** ``api/interview_ws.py`` import 编排层（守住「可选层」性质）；
-     本模块不 import provider；``api/interview.py`` 未被改动
+[8]  边界守卫（AST）：**只有** ``modules/interview/ws.py`` import 编排层（守住「可选层」性质）；
+     本模块不 import provider；``modules/interview/api.py`` 未被改动
 
 数据库使用**临时文件** SQLite（``NullPool``，跨事件循环安全），不触碰本机 MySQL。
 ``AVATAR_PROVIDER`` 由 ``regression_env`` 钉成空串 ⇒ 数字人走 **Mock**，零联网。
@@ -56,7 +56,7 @@ from starlette.websockets import WebSocketDisconnect  # noqa: E402
 
 import main  # noqa: E402
 import models  # noqa: E402,F401
-from api import interview_ws as ws  # noqa: E402
+from modules.interview import ws as ws  # noqa: E402
 from database import Base, get_db  # noqa: E402
 from models import Job, User, UserSession  # noqa: E402
 from services import avatar_interview, interview_orchestrator as orch  # noqa: E402
@@ -628,7 +628,7 @@ def run() -> bool:  # noqa: C901 - 自检脚本，顺序即文档
     # [8] 边界守卫（AST）
     # ------------------------------------------------------------
     print("\n[8] 边界守卫（AST：分层单向 / 不碰 provider）")
-    ws_src = (_BACKEND / "api" / "interview_ws.py").read_text(encoding="utf-8")
+    ws_src = (_BACKEND / "modules" / "interview" / "ws.py").read_text(encoding="utf-8")
     ws_imports = _all_imports(ws_src)
     _check("实时通道确实 import 编排层（它就是为这条时间线服务的）",
            "services.interview_orchestrator" in ws_imports, str(sorted(ws_imports)))
@@ -647,20 +647,20 @@ def run() -> bool:  # noqa: C901 - 自检脚本，顺序即文档
                    for tok in ("embedding", "vector", "chroma", "knowledge")),
            str(sorted(ws_imports)))
 
-    # ★ 守住编排层的「可选」性质：全项目**只有** api/interview_ws.py 引入它
+    # ★ 守住编排层的「可选」性质：全项目**只有** modules/interview/ws.py 引入它
     consumers = []
-    for path in sorted((_BACKEND / "services").glob("*.py")) + sorted((_BACKEND / "api").glob("*.py")):
+    for path in sorted((_BACKEND / "services").glob("*.py")) + sorted((_BACKEND / "api").glob("*.py")) + sorted((_BACKEND / "modules").rglob("*.py")):
         if "services.interview_orchestrator" in _all_imports(path.read_text(encoding="utf-8")):
             consumers.append(path.relative_to(_BACKEND).as_posix())
     if "services.interview_orchestrator" in _all_imports(
         (_BACKEND / "main.py").read_text(encoding="utf-8")
     ):
         consumers.append("main.py")
-    _check("★★ 编排层消费者**收口为唯一闭集**：只有 api/interview_ws.py",
-           consumers == ["api/interview_ws.py"], str(consumers))
+    _check("★★ 编排层消费者**收口为唯一闭集**：只有 modules/interview/ws.py",
+           consumers == ["modules/interview/ws.py"], str(consumers))
 
-    api_src = (_BACKEND / "api" / "interview.py").read_text(encoding="utf-8")
-    _check("★ api/interview.py **未改**（文字面试的 HTTP 契约一行未动）",
+    api_src = (_BACKEND / "modules" / "interview" / "api.py").read_text(encoding="utf-8")
+    _check("★ modules/interview/api.py **未改**（文字面试的 HTTP 契约一行未动）",
            "interview_orchestrator" not in api_src and "interview_ws" not in api_src
            and "WebSocket" not in api_src)
 

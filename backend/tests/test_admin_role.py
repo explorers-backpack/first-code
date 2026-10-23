@@ -50,6 +50,9 @@ import main  # noqa: E402
 import models  # noqa: E402,F401
 from database import Base, get_db  # noqa: E402
 from models import User  # noqa: E402
+# ★ 口令助手随认证模块迁到 modules/auth/service.py（原 auth_service._hash_password）。
+#   断言意图不变：用**旧格式**（无盐 SHA-256）造数据，验证登录时能自动升级。
+from modules.auth import service as auth_service  # noqa: E402
 
 ADMIN_EMAIL = "admin@career.ai"
 ADMIN_PASSWORD = "admin123"
@@ -128,7 +131,7 @@ async def run() -> bool:
     _check("退出码 0", code == 0, str(code))
     _check(f"已创建且 role='admin'（实际 {u and u.role!r}）", u is not None and u.role == ADMIN_ROLE)
     _check("密码使用 bcrypt 且可校验",
-           u is not None and main._verify_password(ADMIN_PASSWORD, u.password_hash)[0])
+           u is not None and auth_service._verify_password(ADMIN_PASSWORD, u.password_hash)[0])
 
     print("\n[2] create_admin.py：已存在且 admin -> 幂等跳过，不改凭据")
     old_hash = u.password_hash
@@ -141,7 +144,7 @@ async def run() -> bool:
     print("\n[3] create_admin.py：已存在但 role=user -> 拒绝，不静默提权")
     async with session_factory() as s:
         s.add(User(username="bob", email="bob@example.com",
-                   password_hash=main._hash_password("bob123456"), role=USER_ROLE))
+                   password_hash=auth_service._hash_password("bob123456"), role=USER_ROLE))
         await s.commit()
     code = await run_script(email="bob@example.com", username="bob")
     bob = await db_user("bob@example.com")
@@ -196,7 +199,9 @@ async def run() -> bool:
         mallory_token = b.get("token")
 
         print("\n[9] UserRegister 模型不含 role 字段（需求 3）")
-        from main import UserRegister
+        # ★ 模型随认证模块迁到 modules/auth/schemas.py（原 main.UserRegister）。
+        #   断言内容不变：字段集合恰好三个 + extra="ignore"（客户端传 role 会被丢弃）。
+        from modules.auth.schemas import UserRegister
         _check("字段集合 == {username, email, password}",
                set(UserRegister.model_fields) == {"username", "email", "password"},
                str(set(UserRegister.model_fields)))
@@ -237,6 +242,19 @@ async def run() -> bool:
         _check("格式错误的头 -> 401",
                (await c.get("/api/admin/user-logs",
                             headers={"Authorization": "Token abc"})).status_code == 401)
+
+        print("\n[13b] 三个管理员端点统一鉴权与踢下线 404 契约")
+        for method, path, payload in [
+            ("GET", "/api/admin/user-logs", None),
+            ("POST", "/api/admin/add-job", {"job_name": "guard", "city": "北京"}),
+            ("POST", "/api/admin/users/999999/kick", None),
+        ]:
+            for label, token, expected in [("缺失", None, 401), ("伪造", "invalid", 401), ("普通用户", user_token, 403)]:
+                headers = {} if token is None else {"Authorization": f"Bearer {token}"}
+                response = await c.request(method, path, headers=headers, json=payload)
+                _check(f"{path} {label}凭证 -> {expected}", response.status_code == expected)
+        missing = await c.post("/api/admin/users/999999/kick", headers={"Authorization": f"Bearer {admin_token}"})
+        _check("管理员踢不存在的用户 -> 404 原文案", missing.status_code == 404 and missing.json() == {"detail": "用户不存在"})
 
         print("\n[14] 普通用户登录保持 role=user（需求 7）")
         r = await c.post("/api/auth/login", json={"email": "alice@example.com", "password": "alice123456"})

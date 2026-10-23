@@ -1,0 +1,105 @@
+======================================================================
+AI 模拟面试 · 真实 RAG 接入 Agent 出题流程 自检
+======================================================================
+
+[1] RAG 开关契约（resolve_retriever = 全项目唯一开关）
+  [PASS] Core 暴露 resolve_retriever
+  [PASS]   └ 已声明在 __all__
+  [PASS]   └ 是**同步**函数（只构造对象、不发起 IO）
+  [PASS]   └ 签名为 (db, retriever=None, use_rag=False, *, retriever_kwargs=None)
+  [PASS] ★ 注入的 retriever 优先（即使 use_rag=True 也不组装）
+  [PASS] ★ 都不给 → None（不注入就不接，绝不悄悄打开 RAG）
+  [PASS] ★ use_rag=True → 组装出真实检索器
+  [PASS] ★ 组装失败 → 降级为 None + 稳定 warning（不抛异常）
+  [PASS] ★ retriever_kwargs=None / {} ⇒ 与不传逐字段等价（默认行为不变）
+  [PASS] ★ retriever_kwargs 真正透传到 VectorKnowledgeRetriever
+  [PASS]   └ 未提及的参数仍取检索器默认值（不是整体覆盖）
+  [PASS] ★ 注入了 retriever ⇒ retriever_kwargs 不被读取（注入者自带配置）
+  [PASS] ★ 非法 retriever_kwargs ⇒ 静默降级为「无知识」+ warning（不抛异常）
+  [PASS] generate_next_question 新增 keyword-only use_rag（默认 False）
+  [PASS]   └ 既有参数顺序未变（db/session_id/user_id/spark/context/plan/retriever）
+  [PASS]   └ 新增 keyword-only retriever_kwargs（默认 None，追加在最后）
+  [PASS] question_generator.generate_questions 也有 use_rag（默认 False）
+  [PASS]   └ 且也有 retriever_kwargs（默认 None）
+  [PASS]   └ QuestionGenerator.generate 签名含 use_rag
+  [PASS]      └ 也含 retriever_kwargs（接口统一）
+  [PASS]   └ RuleQuestionGenerator.generate 签名含 use_rag
+  [PASS]      └ 也含 retriever_kwargs（接口统一）
+  [PASS]   └ AgentQuestionGenerator.generate 签名含 use_rag
+  [PASS]      └ 也含 retriever_kwargs（接口统一）
+
+[2] 组装器 knowledge_rag（唯一一处知道用哪个 Embedding / 向量后端）
+  [PASS] ★ 组装出 VectorKnowledgeRetriever
+  [PASS]   └ embedder 是默认占位实现 HashEmbeddingService
+  [PASS]   └ store 是 SqlAlchemyVectorStore（复用 knowledge_chunk 扩展字段）
+  [PASS]   └ 默认按 embedder.name 过滤模型（不同模型的向量不可比）
+  [PASS] ★ 注入 embedder 生效（换模型只改一个参数）
+  [PASS]   └ retriever_kwargs 原样透传（top_k / dedup）
+  [PASS] ★ db 为空 → RetrieverConfigError（明确报错，不静默）
+  [PASS] ★ 非法 kwargs 透传到检索器并报错（错误信息更精确）
+  [PASS] ★ 组装器的三个协作者都是**延迟导入**（模块顶层不拉 SQLAlchemy）
+
+[3] 要求 2 · 无知识正常生成（空知识库 / 默认不接）
+  [PASS] 默认（use_rag=False）能生成
+  [PASS]   └ 无知识基线 Prompt 不含「参考知识」
+  [PASS]   └ warnings 为空（没检索就什么都没发生）
+  [PASS] ★ use_rag=True 但知识库为空 → 仍能生成
+  [PASS]   └ Prompt 与无知识基线**逐字节相同**（空结果＝无知识，不是注入空串）
+  [PASS]   └ 检索到 0 条**不是失败**：warnings 仍为空
+  [PASS] ★ 空实现 KnowledgeRetriever() → 仍能生成且 Prompt 与基线相同
+  [PASS] ★ MockKnowledgeRetriever(chunks=[]) → 仍能生成且 Prompt 与基线相同
+  [PASS]   └ 结果字段集恒定（调用方无分支）
+
+[4] 要求 1 · Agent 有知识生成问题（真实表 + 真实向量 + 真实检索器）
+  [PASS] ★ 有知识时仍能生成
+  [PASS] ★ Prompt 切到知识模板：含「参考知识：」
+  [PASS] ★ 含**真实切片正文**（来自 knowledge_chunk 表，不是 Mock 片段）
+  [PASS]   └ 含来源标注（可溯源）
+  [PASS]   └ 含第 2 条切片（top_k 生效，确实从库里取回多条）
+  [PASS]   └ 与无知识基线不同（确实注入了）
+  [PASS]   └ 检索成功 → warnings 为空
+  [PASS]   └ 结果字段集与无知识时一致
+  [PASS]   └ 题目经 Validator 标准化（不是原始 LLM 输出）
+  [PASS]   └ Agent 只被调用一次（检索不触发额外 LLM 调用）
+  [PASS] ★ 经 question_generator(mode='agent') 也走同一条 RAG 链路
+
+[5] 要求 3 · Rule 模式不触发 RAG（AST + 运行时双重取证）
+  [PASS] 取到 RuleQuestionGenerator.generate 的 AST 节点
+  [PASS] ★ 规则生成器方法体内**没有任何检索调用**（AST 取证，非子串匹配）
+  [PASS]   └ 也不 import knowledge_rag / vector_* / retriever 相关模块
+  [PASS]   └ Core 里唯一真正调用检索的地方只有一处
+  [PASS] ★ rule + use_rag=True + 爆炸检索器 → 仍然成功（不受影响）
+  [PASS] ★ 规则模式**根本没调用**检索器
+  [PASS] ★ 规则模式**根本没组装** RAG（组装次数 0）
+  [PASS]   └ 规则模式不调大模型（ExplodingSpark 未被触发）
+
+[6] 要求 4 · RAG 失败不影响规则模式
+  [PASS] ★ agent 模式检索抛异常 → 仍能生成
+  [PASS]   └ 记入稳定 warning 码（不是 errors）
+  [PASS]   └ 降级为「无知识」：Prompt 与基线逐字节相同
+  [PASS]   └ 检索器确实被调用过（是失败，不是没调）
+  [PASS] ★ agent 模式组装抛异常 → 仍能生成
+  [PASS]   └ 同样降级为「无知识」+ warning
+  [PASS] ★ RAG 组装炸掉时，规则出题结果与基线**逐字段相同**
+  [PASS]   └ 规则结果里没有 warning（RAG 与它无关）
+  [PASS] ★ RAG 检索炸掉时，规则出题结果同样逐字段相同
+  [PASS]   └ 且规则模式一次都没调那个爆炸检索器
+  [PASS]   └ 同一场面试里 rule 结果与 agent+知识结果互不干扰
+
+[7] 隔离守卫（依赖方向 / 延迟导入 / 子进程）
+  [PASS] ★ InterviewAgent 未 import 检索器 / 组装器（知识由调用方传入）
+  [PASS]   └ Agent 源码里没有任何 retrieve 调用
+  [PASS]   └ Agent 仍只通过 knowledge_context 参数接收知识
+  [PASS] ★ Core **模块顶层**不 import knowledge_rag（延迟导入，保持零耦合）
+  [PASS]   └ Core 模块顶层也不 import sqlalchemy / models / database
+  [PASS]   └ question_generator 不 import knowledge_rag（不自己组装）
+  [PASS]   └ interview_service 不 import knowledge_rag（只透传）
+  [PASS] ★ 组装器 knowledge_rag 的消费者 = 读侧 Core + 写侧 Pipeline + 维护 + 迁移 + 状态上报
+  [PASS] ★ start_session 仍走纯规则出题（RAG 不进入默认业务路径）
+  [PASS]   └ 规则出题计划函数签名里没有任何检索参数
+  [PASS] ★ 子进程（无 DATABASE_URL）可 import Core 与组装器
+  [PASS]   └ 导入后 sqlalchemy / models / database 未泄漏进 sys.modules
+
+======================================================================
+结果: 通过 84 项，失败 0 项
+======================================================================

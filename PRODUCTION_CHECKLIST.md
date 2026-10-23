@@ -603,3 +603,58 @@ python tests/run_mysql_suites.py --list
   但**不覆盖**进程内状态的跨实例问题 —— 那正是 `login_throttle` 的待办。
 - `engine_pool_mysql_run.py` 的 `[4]` 需要 `KILL CONNECTION <自己的连接>`，
   所以要求账号能杀自己的线程（MySQL 默认允许），只读账号跑不了这一节。
+
+---
+
+## 15. AI 能力接入层（`services/ai`）
+
+> 详细设计、接口与测试见仓库根 `AI_LAYER_REFACTOR_REPORT.md`。本节只列**部署必做项**。
+
+### 15.1 新增环境变量
+
+| 变量 | 空串 / 未配置 | 可选值 | 说明 |
+|---|---|---|---|
+| `AI_RUN_MODE` | **按凭据自动判定** | `mock` / `offline` / `production` | 生产**必须**显式设 `production` |
+| `AI_LLM_PROVIDER` | `spark` | `spark` / `fake` | `fake` 仅非生产模式可用 |
+| `AI_LLM_TIMEOUT` | 90（秒） | ≥ 1 的数字 | 必须**大于**传输层自身超时（旧 websocket 60s） |
+| `AI_LLM_MAX_ATTEMPTS` | 1（不重试） | ≥ 1 的整数 | 重试是显式 opt-in |
+| `AI_LLM_BACKOFF_BASE` | 0.5（秒） | ≥ 0 的数字 | equal jitter，封顶 8s |
+
+### 15.2 三种模式
+
+| 模式 | 联网 | 凭据 | 行为 |
+|---|---|---|---|
+| `mock` | ❌ | ❌ | 返回**固定占位文本**，仅用于联调 / 演示 |
+| `offline` | ❌ | ❌ | 任何调用**确定失败**，走各自降级路径 |
+| `production` | ✅ | ✅ | 调真实模型 |
+
+★ **自动判定永远不会落到 `mock`**（静默返回假数据比失败严重得多）。
+
+### 15.3 发布前必做
+
+- [ ] 生产环境设 `AI_RUN_MODE=production`，且 `SPARK_APP_ID` / `SPARK_API_KEY` / `SPARK_API_SECRET` 齐全。
+      缺任一项 ⇒ **进程起不来**（`AiModeError`），这是有意的 fail-closed。
+- [ ] **绝对不要**在生产设 `AI_RUN_MODE=mock`：`mock` 下所有 AI 输出都是固定占位文本。
+      该模式在启动日志里会打一行明确警告。
+- [ ] 确认启动日志里出现 `[ai] 运行模式=production provider=spark ... —— 调用真实模型`。
+- [ ] 抽查 `POST /api/resume/analyze` 的响应体：成功时 `ai_error` 为 `null`，
+      降级时 `ai_error.kind` 能区分 `timeout` / `auth` / `rate_limit` / `unavailable` / `empty`。
+- [ ] 回归套件**必须**跑在 `AI_RUN_MODE=offline` 上（`tests/regression_env.py` 已钉扎），
+      否则本机 `.env` 里的真实凭据会让套件真打星火。
+
+### 15.4 排障入口
+
+| 想知道 | 怎么查 |
+|---|---|
+| 当前用的哪个 Provider / 哪个模式 | `services.ai.describe_llm()`（**不联网、不抛异常**） |
+| 四类能力（LLM / Embedding / 数字人 / ASR）的状态 | `services.ai.describe_capabilities()` |
+| 累计调用数 / 错误数 / 重试数 / 耗时 / Token | `services.ai.telemetry.snapshot()`（进程内，多 worker 各自独立） |
+| 某次调用为什么失败 | 结构化日志里的 `ai_call_failed`（带 `request_id` / `error_kind` / `prompt_id`） |
+
+### 15.5 诚实说明
+
+- 指标是**进程内**的，多 worker 不聚合（与 `utils/login_throttle` 同一取舍）。
+- Token 用量恒为 0：旧星火 transport 不返回用量，本层**不猜**（`LlmUsage.estimated=False`）。
+- 外层超时取消的是 `await`，**杀不掉** `run_in_executor` 里的阻塞线程；
+  线程会一直阻塞到它自己的 60s websocket 超时。这是旧协议层的固有限制。
+- 真实供应商的**联网**验证不在回归循环里（`tests/*_run.py` 才做）。

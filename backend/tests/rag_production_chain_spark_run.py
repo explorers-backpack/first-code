@@ -261,8 +261,9 @@ async def main_async(args: argparse.Namespace) -> int:
     main.app.dependency_overrides[get_db] = override_get_db
 
     spark = SpySpark()
-    original_spark = main.spark_api
-    main.spark_api = spark  # type: ignore[assignment]
+    from common.llm import get_llm, configure
+    original_spark = get_llm()
+    configure(spark)
 
     real_builder = knowledge_rag.build_vector_retriever
     recorder = RecordingRetriever(None)
@@ -513,7 +514,7 @@ async def main_async(args: argparse.Namespace) -> int:
                 })
     finally:
         knowledge_rag.build_vector_retriever = real_builder  # type: ignore[assignment]
-        main.spark_api = original_spark  # type: ignore[assignment]
+        configure(original_spark)
         main.app.dependency_overrides.clear()
         await engine.dispose()
         # 生产连接池也要在**同一个事件循环内**释放，否则 aiomysql 的

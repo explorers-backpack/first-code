@@ -193,8 +193,12 @@ def _retrieval_calls(node) -> list:
 def _production_files():
     """后端生产代码（排除 tests / __pycache__），用于「谁 import 谁」的检查。"""
     files = []
+    # ★ 模块化重构（第 10 轮）新增了 common/ 与 modules/<业务>/*.py。
+    #   不把它们纳入遍历，「谁 import 谁」的闭集断言就会**看不见新代码**，
+    #   于是「消费者清单精确相等」这种断言会因漏项而假绿。
     for pattern in ("*.py", "api/*.py", "services/*.py", "models/*.py",
-                    "schemas/*.py", "utils/*.py"):
+                    "schemas/*.py", "utils/*.py",
+                    "common/*.py", "modules/*/*.py"):
         for path in BACKEND_DIR.glob(pattern):
             if "__pycache__" in path.parts:
                 continue
@@ -716,7 +720,9 @@ async def run() -> bool:
                 consumers.append(path.relative_to(BACKEND_DIR).as_posix())
         _check("★ 组装器 knowledge_rag 的消费者 = 读侧 Core + 写侧 Pipeline + 维护 + 迁移 + 状态上报",
                consumers == [
-                   "main.py",
+                   # ★ 状态上报的消费方在 P4 从 main.py 迁到 common/health.py
+                   #   （`_count_knowledge_chunks` / `vector_status` 整体搬走）。
+                   "common/health.py",
                    "services/interview_core.py",
                    "services/knowledge_embedding_migration.py",
                    "services/knowledge_import_pipeline.py",

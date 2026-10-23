@@ -1,0 +1,63 @@
+====================================================================
+轻量级 schema 同步自检（utils/schema_sync.py）
+====================================================================
+
+[1] 配置契约（DESIRED_COLUMNS）
+  [PASS] DESIRED_COLUMNS 是 {表: {列: {配置}}} 两层字典
+  [PASS] 已声明 interview_session.interview_mode
+  [PASS]   └ type = VARCHAR(20)
+  [PASS]   └ default = 'text'（SQL 字面量，自带引号）
+  [PASS]   └ nullable = False
+  [PASS] 允许的配置键只有 type / default / nullable
+  [PASS] DDL 渲染：type + NOT NULL + DEFAULT
+  [PASS] DDL 渲染：省略 nullable 视为可空
+  [PASS] DDL 渲染：省略 default 不生成 DEFAULT 子句
+  [PASS] 非法配置键被拒（如 drop / modify）
+  [PASS] 缺少 type 被拒
+  [PASS] 非法配置异常继承 ValueError（领域基类 + 内建异常）
+  [PASS] ALTER 模板只含 ADD COLUMN
+  [PASS]   └ 模板不含任何删 / 改动词
+
+[2] 缺少字段 → 自动新增（模拟升级上来的旧库）
+  [PASS] 改造前：表存在但缺 interview_mode
+  [PASS]   └ 检查阶段是只读的（尚未发 DDL）
+  [PASS] ensure_columns 返回实际新增的列
+  [PASS] 恰好执行了 1 条 ALTER TABLE
+  [PASS]   └ 语句形状正确（MySQL 语法）
+  [PASS]   └ 只含 ADD COLUMN，无删 / 改动词
+  [PASS] 列已新增
+  [PASS]   └ 类型为 VARCHAR(20)
+  [PASS]   └ NOT NULL
+  [PASS]   └ DEFAULT 'text'
+  [PASS] 既有列一个不少
+  [PASS] 历史行仍在（未被清空）
+  [PASS]   └ 既有字段值未变
+  [PASS]   └ 新列自动填充默认值 text
+
+[3] 已存在字段 → 不重复执行（幂等）
+  [PASS] 二次调用返回空列表
+  [PASS]   └ ALTER 总数仍为 1（未重复 ALTER）
+  [PASS] 三次调用依旧为空
+  [PASS]   └ ALTER 总数仍为 1
+  [PASS] missing_columns 对齐全的表返回空
+
+[4] 表不存在 → 跳过（不报错、不建表）
+  [PASS] 不报错
+  [PASS]   └ 返回空列表
+  [PASS]   └ 未创建 interview_session（建表归 create_all 管）
+  [PASS]   └ 一条 DDL 都没发
+
+[5] 只增不改不删（护栏）
+  [PASS] 至少声明了 1 列
+  [PASS] 所有配置都能渲染成非空 DDL
+  [PASS] 任何配置的 DDL 都不含删 / 改动词
+  [PASS] DESIRED_COLUMNS 无法表达「删列 / 改列」意图（配置键已收窄）
+
+[6] 与 ORM 模型口径一致
+  [PASS] 类型一致（VARCHAR(20)）
+  [PASS] 可空性一致（均为 NOT NULL）
+  [PASS] 默认值一致（均为 text）
+
+====================================================================
+结果: 通过 44 项，失败 0 项
+====================================================================

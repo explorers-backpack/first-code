@@ -1,0 +1,96 @@
+====================================================================
+知识库文件上传路由自检（POST /api/knowledge/documents/upload）
+====================================================================
+
+[1] 鉴权与权限
+  [PASS] 无 token → 401
+  [PASS] 普通用户 → 403
+
+[2] 上传 DOCX（解析 + 导入全链路）
+  [PASS] 状态码 200
+
+[3] 解析信息回传（形状与取值）
+  [PASS] ok=true
+  [PASS] status=ok
+  [PASS] stage=done
+  [PASS] filename 原样回传
+  [PASS] parsed_format=docx
+  [PASS] parsed_chars > 0
+  [PASS] docx 无 parse_warnings
+  [PASS] 继承导入报告的 13 键（chunk_count）
+  [PASS] document_id 为 int
+  [PASS] chunk_count ≥ 1
+  [PASS] embedded_chunks == chunk_count
+
+[4] 标题回落
+  [PASS] 缺省标题 = 文件名去扩展名
+  [PASS] source 透传
+  [PASS] 显式 title 优先且被 strip
+  [PASS] 纯空白 title 回落到文件名（不会 400）
+
+[5] 正文确实落库（不是只看状态码）
+  [PASS] 落库正文含「Redis 持久化」
+  [PASS] 落库正文含「RDB 是快照，AOF 是追加日志。」
+  [PASS] 落库正文不含 XML 标签
+  [PASS] 落库正文字符数与回传 parsed_chars 一致
+  [PASS] 知识切片表确有写入
+  [PASS] 文档表确有写入
+
+[6] 其余格式
+  [PASS] PDF 上传 200 + ok
+  [PASS] parsed_format=pdf
+  [PASS] PDF 正文含提取出的文字
+  [PASS] PPTX 上传 200 + ok
+  [PASS] parsed_format=pptx
+  [PASS] PPTX 正文含页码分隔
+  [PASS] HTML 上传 200 + ok
+  [PASS] parsed_format=html
+  [PASS] HTML 正文已去标签
+  [PASS] UTF-8 txt 上传成功
+  [PASS] parsed_encoding=utf-8
+  [PASS] UTF-8 无 parse_warnings
+  [PASS] GB18030 txt 上传成功
+  [PASS] parsed_encoding=gb18030
+  [PASS] 非 UTF-8 的告警被回传（不静默）
+  [PASS] GB18030 正文解码正确
+
+[7] 错误口径（400 / 413）
+  [PASS] .doc → 400
+  [PASS] 400 detail 提示另存为 .docx
+  [PASS] .xlsx → 400
+  [PASS] 无文本层 PDF → 400（不导入空文档）
+  [PASS] 提示里点明 OCR / 扫描件
+  [PASS] 0 字节文件 → 400
+  [PASS] 非法 category → 400
+  [PASS] 400 detail 列出允许的 category
+  [PASS] 以上 5 次失败**都没产生半成品文档**
+  [PASS] 超限 → 413
+  [PASS] 缺 category 表单字段 → 422
+  [PASS] 缺 file 字段 → 422
+
+[8] 现有 JSON 契约未被破坏
+  [PASS] POST /documents 仍按 JSON 工作
+  [PASS] JSON 路由的报告里**没有**解析字段（契约未变）
+  [PASS] JSON 路由仍校验空标题 → 400
+
+[9] 源码守卫（AST）
+  [PASS] 上传路由挂 get_current_admin
+  [PASS] 上传路由挂 get_db
+  [PASS] 上传路由**不**挂 get_current_user（写接口只认 admin）
+  [PASS] 知识库路由层不 import interview_service
+  [PASS] 知识库路由层不 import interview_core
+  [PASS] 知识库路由层不 import interview_agent
+  [PASS] 知识库路由层不 import interview_planner
+  [PASS] 解析层顶层不 import database
+  [PASS] 解析层顶层不 import fastapi
+  [PASS] 解析层顶层不 import sqlalchemy
+  [PASS] 解析层顶层不 import models
+  [PASS] 解析层顶层不 import schemas
+
+[10] 报告形状恒定（成功 / 失败同形状）
+  [PASS] KnowledgeUploadReport 继承导入报告的 13 键
+  [PASS] 额外 5 个解析字段齐备
+
+====================================================================
+结果: 通过 69 项，失败 0 项
+====================================================================

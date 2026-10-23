@@ -1,0 +1,231 @@
+==========================================================================
+RAG 检索结果 → InterviewAgent → 最终 Prompt 注入验证
+==========================================================================
+
+--------------------------------------------------------------------------
+[1] 前置与契约（「不要修改」是被验证的）
+--------------------------------------------------------------------------
+  [PASS] ★ services/knowledge_retriever.py 源码指纹未变  -> 实际 dcf74a93fbdf… 期望 dcf74a93fbdf…
+  [PASS] ★ services/vector_knowledge_retriever.py 源码指纹未变  -> 实际 477782f1840a… 期望 477782f1840a…
+  [PASS] ★ services/vector_store.py 源码指纹未变  -> 实际 0dd7c96fe9f5… 期望 0dd7c96fe9f5…
+  [PASS] ★ services/vector_store_sql.py 源码指纹未变  -> 实际 a81dd62411a1… 期望 a81dd62411a1…
+  [PASS] ★ services/vector_store_chroma.py 源码指纹未变  -> 实际 109e760e6096… 期望 109e760e6096…
+  [PASS] ★ services/embedding_service.py 源码指纹未变  -> 实际 a7bd287ea5b2… 期望 a7bd287ea5b2…
+  [PASS] ★ services/embedding_provider.py 源码指纹未变  -> 实际 33dcd6ddfa5d… 期望 33dcd6ddfa5d…
+  [PASS] 守卫自检：内容变化会改变指纹
+  [PASS] 默认 embedder 是离线词面实现（语义检索未启用）  -> provider=hash-local dim=256
+  [PASS] ★ 因此检索用 topic 必须与固定 chunk 有词面重叠（本套件用固定 topic 兜住）  -> Redis 持久化
+  [PASS] ★ interview_core 确实调用 interview_agent.generate_question
+  [PASS] ★ 且以 knowledge_context= 关键字传入（不是漏传/位置错位）  -> ['knowledge_context', 'spark']
+  [PASS] ★ generate_next_question 也以 knowledge_context= 调 generate_candidate_question  -> ['knowledge_context', 'spark']
+  [PASS] Agent 的 knowledge_context 是 keyword-only（避免位置传参错位）
+  [PASS] Agent 的 knowledge_context 默认 None（不用可变默认值）
+  [PASS] Agent 签名里没有 retriever 参数（Agent 不持有检索器）  -> ['context', 'plan', 'resume', 'job', 'knowledge_context', 'spark']
+
+--------------------------------------------------------------------------
+[2] 第 1 跳 · KnowledgeRetriever 返回内容（真实实现）
+--------------------------------------------------------------------------
+  [PASS] 固定知识 chunk 入库成功  -> status=ok stage=done
+  [PASS] 入库产出 1 个切片  -> 1
+  [PASS] 检索器是真实 VectorKnowledgeRetriever  -> VectorKnowledgeRetriever
+  [PASS] 底层是真实 SqlAlchemyVectorStore（不是 InMemory 替身）  -> SqlAlchemyVectorStore
+  [PASS] 检索到 1 条知识  -> 1
+  [PASS] 检索器收到的 topic == plan.priority_topics[0]（Core 的 current_topic）  -> ['Redis 持久化']
+  [PASS] 返回类型是 knowledge_retriever.KnowledgeChunk  -> KnowledgeChunk
+  [PASS] ★ content == 固定知识正文（逐字节，检索不改写原文）  -> 'Redis 持久化提供 RDB 与 AOF 两种机制：RDB 是某一时刻的全量快'
+  [PASS] ★ source == 文档的 source（从 metadata 提升而来）  -> 'handbook://redis/persistence'
+  [PASS] metadata 保留溯源信息（chunk_id / document_id / score）  -> ['category', 'chunk_id', 'chunk_index', 'document_id', 'embedding_model', 'score']
+  [PASS] KnowledgeChunk.to_dict() 恒为三键  -> ['content', 'metadata', 'source']
+  [PASS] 检索结果不含向量本体（不把 256 个浮点带进 Prompt 预算）  -> ['category', 'chunk_id', 'chunk_index', 'document_id', 'embedding_model', 'score']
+  [PASS] 同输入同输出（重复检索结果一致）
+
+--------------------------------------------------------------------------
+[3] 第 2 跳 · Agent 接收到 knowledge_context（检查 1）
+--------------------------------------------------------------------------
+  [PASS] ★ _gather_knowledge 返回检索器的全部结果（条数一致）  -> 1 vs 1
+  [PASS] ★ 且内容逐条相等（Core 不裁剪、不改写、不重排）
+  [PASS] 成功检索不产生 warning  -> []
+  [PASS] _gather_knowledge 把 topic 传给检索器（不是空串）  -> Redis 持久化
+  [PASS] 经 generate_candidate_question 出题成功  -> None
+  [PASS] ★ Agent 侧最终 Prompt 含知识正文 ⇒ knowledge_context 确实到达了 Agent
+  [PASS] Agent 收到非空知识 ⇒ 走变体模板（Prompt 含参考知识小节）
+  [PASS] Agent 收到空知识 ⇒ 走原模板（Prompt 不含参考知识小节）
+  [PASS] 两种输入的 Prompt 确实不同（分流生效）
+  [PASS] 归一化后恰好 1 行  -> 1
+  [PASS] ★ 归一化把 source 内联进同一行  -> 'Redis 持久化提供 RDB 与 AOF 两种机制：RDB 是某一时刻的全量快照，通过 fork 子进程写盘，文件紧凑'
+
+--------------------------------------------------------------------------
+[4] 第 3 跳 · Prompt 包含知识内容（检查 2）
+--------------------------------------------------------------------------
+  [PASS] 模板名 == question_knowledge  -> question_knowledge
+  [PASS] ★ Prompt 含知识正文（逐字节，不被截断/改写）
+  [PASS] ★ Prompt 含来源标注
+  [PASS] ★ Prompt 含「参考知识：」标签
+  [PASS] ★ Prompt 含知识小节标题
+  [PASS] 知识正文落在「参考知识」小节**之内**
+  [PASS] 知识正文在整个 Prompt 里只出现 1 次（未重复注入）  -> 1
+  [PASS] 小节标题只出现 1 次  -> 1
+  [PASS] 注入知识后仍保留原有变量内容（岗位名）
+  [PASS] 注入知识后仍保留原有变量内容（知识点）
+  [PASS] 注入知识后仍保留原有变量内容（阶段）
+  [PASS] 注入知识后仍保留原有变量内容（难度）
+  [PASS] ★ 无未渲染占位符（{{ 已全部替换）
+  [PASS] 无知识时用原模板
+  [PASS] 有知识 Prompt ≠ 无知识 Prompt
+  [PASS] ★ 有知识 Prompt 比无知识 Prompt 只多出知识小节的内容  -> 删掉知识小节后应逐字节等于无知识 Prompt
+  [PASS] 端到端出题成功（ok=True）  -> None
+  [PASS] ★ **实际发给模型的** Prompt 含知识正文
+  [PASS] 实际 Prompt 含来源标注
+  [PASS] 只调用一次模型（知识不额外触发 LLM）  -> 1
+  [PASS] 返回值字段集不变（8 键，调用方无需分支）  -> ['difficulty', 'error', 'expected_points', 'ok', 'question', 'question_type', 'reason', 'topic']
+
+--------------------------------------------------------------------------
+[5] 知识格式正确（检查 3）
+--------------------------------------------------------------------------
+  ---- 「参考知识」小节原文 ----
+  | ## 四·五、参考知识（外部检索结果，可选）
+  | 
+  | 参考知识：
+  | - Redis 持久化提供 RDB 与 AOF 两种机制：RDB 是某一时刻的全量快照，通过 fork 子进程写盘，文件紧凑、恢复快，但两次快照之间的写入会丢失；AOF 记录每条写命令，appendfsync 可取 always / everysec / no，everysec 是生产常见折中，最多丢 1 秒数据，重写时用 BGREWRITEAOF。（来源：handbook://redis/persistence）
+  | 
+  | 出题时请把这些知识融入问题的场景与追问点，但不得整段照抄进 `question`，
+  | 也不得把知识中的结论直接写进 `question`（`expected_points` 可参考）。
+  | 
+  ---- 小节结束 ----
+  [PASS] 小节里有且仅有 1 个项目符号行  -> 1
+  [PASS] ★ 项目符号行 == '- 正文（来源：…）'（逐字节）  -> '- Redis 持久化提供 RDB 与 AOF 两种机制：RDB 是某一时刻的全量快照，通过 fork 子进程写盘，文件紧凑、恢复快，但两次'
+  [PASS] ★ 格式为「- 正文（来源：…）」：以 '- ' 开头
+  [PASS] ★ 来源用中文括号包裹、附在正文之后
+  [PASS] 正文与来源之间无多余分隔符（不是 '- 正文 - 来源'）
+  [PASS] ★ score 数值不出现在 Prompt 里（检索分数不进 Prompt）  -> 0.1856953381770518
+  [PASS] ★ metadata 的键名也不出现（chunk_id / document_id / embedding_model）  -> ['category', 'chunk_id', 'chunk_index', 'document_id', 'embedding_model', 'score']
+  [PASS] 'score' 一词不出现
+  [PASS] 无 source 时不渲染「（来源：）」空括号
+  [PASS] 无 source 时该行就是 '- 正文'  -> ['- 没有来源的知识正文']
+  [PASS] 两条知识 ⇒ 两个项目符号行  -> 2
+  [PASS] ★ 逐条一行且保序（与输入顺序一致）  -> ['- 第一条知识正文（来源：mock://a）', '- 第二条知识正文（来源：mock://b）']
+  [PASS] ★ 数字/布尔/None 被丢弃（Prompt 里不出现 '123' / 'True'）
+  [PASS] 多段落文档入库为 1 个切片（段落被合并）  -> 1
+  [PASS] 该切片 content 内部含空行（\n\n）⇒ 多段落是**可达**的
+  ---- 多段落切片渲染结果（现状）----
+  | ## 四·五、参考知识（外部检索结果，可选）
+  | 
+  | 参考知识：
+  | - 第一段：Redis 持久化有两种机制。
+  | 
+  | 第二段：RDB 是全量快照，AOF 记录写命令。
+  | 
+  | 第三段：生产上常两者混用。（来源：handbook://multi-paragraph）
+  | 
+  | 出题时请把这些知识融入问题的场景与追问点，但不得整段照抄进 `question`，
+  | 也不得把知识中的结论直接写进 `question`（`expected_points` 可参考）。
+  | 
+  ---- 结束 ----
+  [PASS] ★ 现状：只有**首行**带项目符号（后续段落无 '- ' 前缀）  -> 1
+  [PASS] ★ 现状：三段正文**全部**保留（内容不丢失）
+  [PASS] ★ 现状：来源附在**最后一段**之后（不是首段）
+  [PASS] 多段落时 Prompt 仍无未渲染占位符
+
+--------------------------------------------------------------------------
+[6] 端到端 · generate_next_question（真实 session 行 + 真实检索器）
+--------------------------------------------------------------------------
+  [PASS] 会话行已创建  -> 1
+  [PASS] 端到端出题成功（ok=True）  -> errors=[] error=None
+  [PASS] errors 为空  -> []
+  [PASS] ★ 检索成功 ⇒ 无 knowledge_retrieval_failed 警告  -> []
+  [PASS] ★ knowledge_chunks > 0（命中知识 ⇒ 正向信号如实上报，不只报失败）  -> 1
+  [PASS] 返回字段集恒定为 QUESTION_RESULT_FIELDS（13 键）  -> ('ok', 'question_no', 'question', 'question_type', 'topic', 'difficulty', 'expected_points', 'reason', 'stage', 'warnings', 'errors', 'error', 'knowledge_chunks')
+  [PASS] 检索器确实被调用（queries 非空）  -> ['Redis 持久化']
+  [PASS] 只调用一次模型  -> 1
+  [PASS] ★ 最终 Prompt（模型实际收到的那一份）含知识正文
+  [PASS] ★ 最终 Prompt 含来源标注
+  [PASS] ★ 最终 Prompt 含参考知识小节
+  [PASS] ★ 最终 Prompt 的格式与单独渲染一致（Core 不改写 Prompt）  -> ['- Redis 持久化提供 RDB 与 AOF 两种机制：RDB 是某一时刻的全量快照，通过 fork 子进程写盘，文件紧凑、恢复快，但
+  [PASS] 题号/阶段等既有字段仍正确  -> no=1 stage=technical topic=Redis 持久化
+
+--------------------------------------------------------------------------
+[7] 边界与降级
+--------------------------------------------------------------------------
+  [PASS] ★ 检索抛异常时出题**仍成功**（可选增强不阻塞主流程）  -> errors=[]
+  [PASS] ★ 失败只记 warning，不进 errors（失败与「检索不到」分开）  -> errors=[] warnings=['knowledge_retrieval_failed']
+  [PASS] ★ 降级后 Prompt 回落原模板（不含参考知识小节）
+  [PASS] 降级后 Prompt 里没有未渲染占位符
+  [PASS] ★ 检索失败 ⇒ knowledge_chunks == 0（正向信号不虚报）  -> 0
+  [PASS] 检索返回 [] ⇒ 出题成功  -> None
+  [PASS] ★ 检索返回 [] **不**产生 warning（「检索不到」不是故障）  -> []
+  [PASS] Prompt 回落原模板
+  [PASS] ★ min_score 高于该条得分 ⇒ 检索为空（阈值过滤生效）  -> 0
+  [PASS] 过滤成空 ⇒ 出题成功且无 warning  -> []
+  [PASS] 过滤成空 ⇒ Prompt 回落原模板
+  [PASS] ★ Agent 侧去重按「整行文本」（source 不同 ⇒ 两行都保留）  -> ['同一段知识正文（来源：mock://s1）', '同一段知识正文（来源：mock://s2）']
+  [PASS] ★ 完全相同（含 source）的两条被去重成 1 行  -> ['同一段知识正文（来源：mock://s1）']
+  [PASS] 检索不修改 plan（Core 传入的 plan 保持原样）
+
+==========================================================================
+Prompt 示例（固定知识 chunk 经真实检索器注入后的**最终** Prompt）
+==========================================================================
+# 任务：生成下一道面试问题
+
+你正在主持一场面试，请根据下面的配置、岗位、简历与进度，生成**下一道**面试问题。
+
+## 一、面试配置
+
+- 面试类型：technical
+- 面试难度：mid
+- 当前阶段：technical
+
+## 二、目标岗位
+
+- 岗位名称：后端开发工程师
+- 岗位描述：岗位职责：负责后端服务的设计与开发
+
+## 三、候选人简历摘要
+
+3 年后端经验，技术栈 Python / MySQL / Redis
+
+## 四、本场面试计划
+
+{
+  "interview_type": "technical",
+  "difficulty": "mid",
+  "total_questions": 5,
+  "stages": [],
+  "target_topics": [],
+  "priority_topics": [
+    "Redis 持久化"
+  ],
+  "resume_focus_points": []
+}
+
+## 四·五、参考知识（外部检索结果，可选）
+
+参考知识：
+- Redis 持久化提供 RDB 与 AOF 两种机制：RDB 是某一时刻的全量快照，通过 fork 子进程写盘，文件紧凑、恢复快，但两次快照之间的写入会丢失；AOF 记录每条写命令，appendfsync 可取 always / everysec / no，everysec 是生产常见折中，最多丢 1 秒数据，重写时用 BGREWRITEAOF。（来源：handbook://redis/persistence）
+
+出题时请把这些知识融入问题的场景与追问点，但不得整段照抄进 `question`，
+也不得把知识中的结论直接写进 `question`（`expected_points` 可参考）。
+
+## 五、本场进度（用于避免重复）
+
+已提问问题：
+（无）
+
+已覆盖知识点：
+（无）
+
+薄弱知识点（优先补强）：
+（无）
+
+  …（此处省略「六、生成要求」与「七、输出格式」两节，共 2044 字符）
+
+==========================================================================
+结果
+==========================================================================
+  链路：VectorKnowledgeRetriever → interview_core._gather_knowledge
+        → interview_agent.generate_question → question_knowledge.txt
+  固定知识 chunk：handbook://redis/persistence（1 个切片）
+  检索实现：HashEmbeddingService + SqlAlchemyVectorStore + VectorKnowledgeRetriever
+  保护模块指纹：7 个（Retriever / VectorStore / Embedding 全部未改）
+  修复动作：无（注入本来就正确，未触发「发现未注入」条件）
+  断言：通过 107 项，失败 0 项
+==========================================================================

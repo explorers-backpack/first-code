@@ -1,0 +1,87 @@
+======================================================================
+AI 面试知识库 · 文档导入（KnowledgeDocumentService）自检
+======================================================================
+
+[1] 模块可导入 + 出参契约常量
+  [PASS] services.knowledge_document_service 可导入
+  [PASS] 暴露 create_document / get_document / list_documents
+  [PASS] ★ DOCUMENT_FIELDS 与需求字段清单逐字一致
+  [PASS] ★ 列表项契约 = 整篇契约去掉 content
+  [PASS]   └ 列表项确实不含 content
+  [PASS] 分页常量合法（0 < 默认 <= 上限）
+  [PASS] __all__ 列出三个公开函数
+
+[2] 创建文档成功（要求 1）
+  [PASS] create_document 返回普通 dict
+  [PASS] ★ 返回键集合 == DOCUMENT_FIELDS（不多不少）
+  [PASS] 落库后拿到自增 id（正整数）
+  [PASS]   └ 四篇文档 id 互不相同
+  [PASS] title / content / category / source 逐字回读
+  [PASS] created_at 已由 ORM 自动填充（非 None）
+  [PASS] ★ 三类素材都能建：技术文档 / 岗位JD / 公司资料
+  [PASS]   └ 第四类项目经验知识同样可建
+  [PASS] 四篇都真的落库了（count == 4）
+  [PASS] ★ 未生成任何切片（要求「不生成 Chunk」）
+
+[3] 查询文档成功（要求 2）
+  [PASS] get_document 按 id 读回整篇
+  [PASS]   └ 含正文且与创建时一致
+  [PASS] get_document 读不存在的 id → 404
+  [PASS] list_documents 返回 {total, items, limit, offset}
+  [PASS]   └ total == 4 且 items 长度 4
+  [PASS]   └ 每项键集合 == DOCUMENT_SUMMARY_FIELDS
+  [PASS]   └ ★ 列表项不含 content（避免整库正文回传）
+  [PASS]   └ 默认按 id 倒序（最新在前）
+  [PASS] 按 category 过滤：technical → 1 篇
+  [PASS] 按 keyword 检索标题：'订单' → 1 篇
+  [PASS]   └ 纯空白 keyword 视为不传（total 仍 4）
+  [PASS] 分页：limit=2 返回 2 条但 total 仍 4
+  [PASS]   └ 第二页与第一页不重叠
+  [PASS]   └ 两页合计覆盖全部 4 篇
+  [PASS] 分页参数越界自动收敛（limit→上限，offset→0）
+  [PASS]   └ limit=0 收敛为 1
+  [PASS] 列表传非法 category → 400（不静默返回空）
+
+[4] 空内容拒绝（要求 3）
+  [PASS] ★ 拒绝：content 空串
+  [PASS] ★ 拒绝：content 纯空白（空格/换行/制表）
+  [PASS] ★ 拒绝：content=None
+  [PASS] ★ 拒绝：content 缺失
+  [PASS]   └ 拒绝时提示指向 content
+  [PASS] 拒绝：title 空串
+  [PASS] 拒绝：title 纯空白
+  [PASS] 拒绝：title 缺失
+  [PASS] 拒绝：category 非法值
+  [PASS] 拒绝：category 缺失
+  [PASS] 拒绝：category 空串
+  [PASS] 校验顺序：title 与 content 同时空 → 先报 title
+  [PASS] ★ 全部非法请求均未写库（行数不变）
+  [PASS]   └ 非法请求也未生成切片
+
+[5] 输入形状（dict / 对象）与字段口径
+  [PASS] 对象（SimpleNamespace）入参同样可创建
+  [PASS] source 缺省为 ""（不是 None）
+  [PASS] 标签类字段去首尾空白（title）
+  [PASS]   └ 标签类字段去首尾空白（source）
+  [PASS] ★ 正文字段原样保存（不 strip，保真）
+  [PASS]   └ 正文含换行的多行内容不被压平
+  [PASS] 多次导入同名文档允许（本阶段刻意不去重）
+
+[6] 边界：只落库，不引入 RAG，不改面试
+  [PASS] ★ 未 import Embedding / 向量库 / 大模型 SDK
+  [PASS] ★ 未 import Retriever / 任何 Interview 模块（与面试完全解耦）
+  [PASS] 只依赖 KnowledgeDocument，不碰 KnowledgeChunk（本阶段不切片）
+  [PASS] ★ 接线点收口为已知闭集（导入仍不自动切片）
+  [PASS]   └ services/interview_core.py 未被改动（未 import 知识库模型 / 本服务）
+  [PASS]   └ services/interview_service.py 未被改动（未 import 知识库模型 / 本服务）
+  [PASS]   └ services/interview_agent.py 未被改动（未 import 知识库模型 / 本服务）
+
+[7] 出参契约恒定
+  [PASS] _document_to_dict 键集合 == DOCUMENT_FIELDS
+  [PASS] _document_summary 键集合 == DOCUMENT_SUMMARY_FIELDS
+  [PASS] 两个契约常量都是元组（顺序稳定）
+  [PASS] _document_summary 是 _document_to_dict 的严格子集
+
+======================================================================
+结果: 通过 66 项，失败 0 项
+======================================================================

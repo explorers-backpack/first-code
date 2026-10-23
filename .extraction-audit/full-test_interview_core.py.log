@@ -1,0 +1,185 @@
+======================================================================
+AI 模拟面试 · Interview 分层架构自检（Service / Core / Agent / Validator）
+======================================================================
+
+[1] 分层结构与职责边界
+  [PASS] Service 不再自行实现 score_answer（已迁至 Core）
+  [PASS] Core 提供 score_answer
+  [PASS] Service 不再自行实现 build_report（已迁至 Core）
+  [PASS] Core 提供 build_report
+  [PASS] Service 不再自行实现 plan_question_types（已迁至 Core）
+  [PASS] Core 提供 plan_question_types
+  [PASS] Service 不再自行实现 build_question_text（已迁至 Core）
+  [PASS] Core 提供 build_question_text
+  [PASS] Service 不再自行实现 build_question_plan（已迁至 Core）
+  [PASS] Core 提供 build_question_plan
+  [PASS] Service 不再自行实现 build_answer_feedback（已迁至 Core）
+  [PASS] Core 提供 build_answer_feedback
+  [PASS] Service 不再自行实现 job_match_score（已迁至 Core）
+  [PASS] Core 提供 job_match_score
+  [PASS] Service 保留生命周期接口 create_session
+  [PASS]   └ create_session 仍是协程（可直接 await）
+  [PASS] Service 保留生命周期接口 start_session
+  [PASS]   └ start_session 仍是协程（可直接 await）
+  [PASS] Service 保留生命周期接口 get_session_detail
+  [PASS]   └ get_session_detail 仍是协程（可直接 await）
+  [PASS] Service 保留生命周期接口 get_current_question
+  [PASS]   └ get_current_question 仍是协程（可直接 await）
+  [PASS] Service 保留生命周期接口 submit_answer
+  [PASS]   └ submit_answer 仍是协程（可直接 await）
+  [PASS] Service 保留生命周期接口 end_session
+  [PASS]   └ end_session 仍是协程（可直接 await）
+  [PASS] Service 保留生命周期接口 get_report
+  [PASS]   └ get_report 仍是协程（可直接 await）
+  [PASS] Service 是唯一接触数据库的层（_load_* 数据访问留在 Service）
+  [PASS] Core 不承担题目 / 作答的读取（那是 Service 的 _load_questions / _load_answers）
+  [PASS] Core 只读不写：源码中不出现 db.add( / db.commit(
+  [PASS] Core 的会话读取仅限编排所需（load_session_row 等只读加载，公开供上层策略复用）
+  [PASS] Core 不含序列化函数（前端契约留在 Service）
+  [PASS] Core 不含 HTTP 路由 / 鉴权依赖
+  [PASS] 路由层只依赖 Service，不直接 import Core
+  [PASS] 路由层不绕过 Core 直接 import Agent / Validator
+  [PASS] 路由层确实 import 了 Service
+
+[2] 依赖方向：Core 零数据库 / 零 LLM 耦合
+  [PASS] 无 DATABASE_URL 也能导入 Core（零 DB 配置耦合）
+  [PASS] 导入 Core 不会拉入 models
+  [PASS] 导入 Core 不会拉入 database
+  [PASS] 导入 Core 不会拉入 sqlalchemy（AsyncSession 仅用于类型标注）
+  [PASS] 导入 Core 不会拉入 Prompt 加载器
+  [PASS] 导入 Core 不会拉入 Agent（延迟导入）
+  [PASS] 导入 Core 不会拉入 Validator（延迟导入）
+  [PASS] Core 不反向依赖 Service（无循环导入）
+  [PASS] Core 未在模块级 import interview_service
+
+[3] 向后兼容：旧符号与 Core 是同一对象
+  [PASS] interview_service.score_answer is interview_core.score_answer
+  [PASS] interview_service.build_report is interview_core.build_report
+  [PASS] interview_service._plan_question_types is interview_core.plan_question_types
+  [PASS] interview_service._build_question_text is interview_core.build_question_text
+  [PASS] interview_service._build_question_plan is interview_core.build_question_plan
+  [PASS] interview_service._build_feedback is interview_core.build_answer_feedback
+  [PASS] 常量 DIFFICULTY_LABELS 由 Core 单点定义（同一对象）
+  [PASS] 常量 INTERVIEW_TYPE_LABELS 由 Core 单点定义（同一对象）
+  [PASS] 常量 ANSWER_DIMENSION_WEIGHTS 由 Core 单点定义（同一对象）
+  [PASS] 常量 REPORT_DIMENSION_WEIGHTS 由 Core 单点定义（同一对象）
+
+[4] 业务规则等价（出题计划 / 评分 / 报告）
+  [PASS] plan_question_types：题量 2..20 × 3 种面试类型，长度与首尾题型均正确
+  [PASS] plan_question_types(total<=1) 退化为单道 intro（既有既定行为，未改动）
+  [PASS] 未知 interview_type 回落到 comprehensive 权重
+  [PASS] score_answer 确定性：同输入同输出
+  [PASS] score_answer 返回六个键
+  [PASS] score_answer 分数落在 0-100
+  [PASS] 空回答得分低于优质回答
+  [PASS] build_question_plan 产出题量与计划一致
+  [PASS] build_question_plan 每项六字段齐全
+  [PASS] build_question_plan 题号连续且从 1 开始
+  [PASS] build_question_plan 无岗位时仍可产出（技能退化为空）
+  [PASS] build_question_plan 确定性：同输入同输出
+  [PASS] job_match_score：未指定岗位返回 None（不猜）
+  [PASS] job_match_score：岗位无技能要求返回 None
+  [PASS] job_match_score：简历技能命中 2/5 得 40 分
+
+[5] 编排接缝：Context / Plan / Agent / Validator
+  [PASS] Core 暴露接缝 load_context
+  [PASS] Core 暴露接缝 build_interview_plan
+  [PASS] Core 暴露接缝 build_interview_plan_for
+  [PASS] Core 暴露接缝 generate_candidate_question
+  [PASS] Core 暴露接缝 validate_candidate_question
+  [PASS] load_context 是协程（需读库）
+  [PASS] build_interview_plan_for 是协程（需读库）
+  [PASS] generate_candidate_question 是协程（需调 LLM）
+  [PASS] build_interview_plan 是纯同步函数（不读库）
+  [PASS] validate_candidate_question 是纯同步函数
+  [PASS] generate_candidate_question 不接收 db（与 Agent 契约一致）
+  [PASS] build_interview_plan 委托 Planner 并返回 stages
+  [PASS] build_interview_plan 透传 difficulty=senior
+  [PASS] build_interview_plan 标记来源（rule）
+  [PASS] build_interview_plan 产出 priority_topics / resume_focus_points
+  [PASS] build_interview_plan 不复制默认值：省略参数即用 Planner 默认值
+  [PASS] validate_candidate_question 合法输入 valid=True
+  [PASS] validate_candidate_question 产出 normalized_question（六字段）
+  [PASS] validate_candidate_question 非法 difficulty → invalid_difficulty
+  [PASS] validate_candidate_question difficulty 缺失时回落到 plan.difficulty
+  [PASS] validate_candidate_question 与历史完全相同 → duplicate_question
+  [PASS] generate_candidate_question 委托 Agent 成功出题
+  [PASS]   └ 返回结构化问题（question / topic / difficulty）
+  [PASS]   └ 确实调用了注入的 Spark
+  [PASS]   └ Prompt 已渲染（无残留 {{占位符}}）
+  [PASS] Agent 失败路径不伪造问题（question 恒为空）
+  [PASS]   └ 非法 JSON 触发 1 次修复（共 2 次调用）
+
+[6] 调用链证明：Service 确实经由 Core
+  [PASS] start_session → Core.build_question_plan 被调用
+  [PASS] submit_answer → Core.score_answer 被调用
+  [PASS] end_session → Core.build_report 被调用
+  [PASS] 端到端：4 道题全部生成
+  [PASS] 端到端：已落 1 条作答且带分数
+  [PASS] 端到端：报告已生成且总分在 0-100
+  [PASS] 替换 Core.score_answer 后落库分数变为 7（Service 无第二套评分逻辑）
+  [PASS] 无作答时 end_session 仍 400（Core 抛出的 HTTPException 原样透传）
+
+[7] 流程控制：generate_next_question（session→context→plan→Agent→Validator）
+  [PASS] Core 暴露流程入口 generate_next_question
+  [PASS]   └ 是协程函数
+  [PASS]   └ 已声明在 __all__
+  [PASS]   └ 结果字段集常量与实现一致
+  [PASS] [7.1] 正常生成问题：ok=True
+  [PASS]   └ 返回 question / topic / difficulty / expected_points
+  [PASS]   └ question_no 取状态机当前题号
+  [PASS]   └ stage 来自 Context
+  [PASS]   └ 结果字段集恒定
+  [PASS]   └ 确实调用了注入的 Spark（恰好 1 次）
+  [PASS]   └ 不落库：题目数量不变
+  [PASS]   └ 已幂等确保 Context 存在
+  [PASS]   └ 返回的是 Validator 标准化后的字段（六字段齐备）
+  [PASS] [7.2] Agent 失败：ok=False
+  [PASS]   └ question 恒为空（不伪造问题）
+  [PASS]   └ errors 含 agent_failed
+  [PASS]   └ 非法 JSON 触发 1 次修复（共 2 次调用）
+  [PASS]   └ 字段集与成功时一致
+  [PASS]   └ 仍带 question_no / stage（便于前端定位）
+  [PASS] [7.3] Validator 失败：ok=False
+  [PASS]   └ question 恒为空（不放行未通过校验的问题）
+  [PASS]   └ errors 含 validation_failed
+  [PASS]   └ errors 保留 Validator 原始错误码 invalid_difficulty
+  [PASS]   └ error 文案可读
+  [PASS]   └ 字段集与成功时一致
+  [PASS] [7.4] 会话不存在：session_not_found
+  [PASS]   └ 归属不符按不存在处理（不泄露他人会话）
+  [PASS]   └ 全部答完：all_answered
+  [PASS]   └ 已结束：session_finished
+  [PASS] [7.5] Service.generate_next_question 可用（Service → Core）
+  [PASS]   └ 他人会话被 Service 拦下（404）
+  [PASS]   └ 替换 Core 实现后 Service 返回值随之改变（确实经由 Core）
+  [PASS]   └ Service 把 retriever / use_rag / retriever_kwargs 原样透传（默认都不开 → 不接 RAG）
+  [PASS]   └ 显式传入时也透传（Service 只做透传，不自己组装检索器）
+  [PASS]   └ retriever_kwargs 原样透传（Service 不解释、不裁剪、不白名单）
+  [PASS]   └ Service 未直接调用 Agent 的 generate_question
+  [PASS]   └ Core 编排里 Agent 只被调用一次（不重复生成）
+
+[8] 接缝未被现有业务路径调用（不改变现有业务效果）
+  [PASS] create_session 未调用 LLM 接缝（generate_candidate_question）
+  [PASS] start_session 未调用 LLM 接缝（generate_candidate_question）
+  [PASS] get_session_detail 未调用 LLM 接缝（generate_candidate_question）
+  [PASS] get_current_question 未调用 LLM 接缝（generate_candidate_question）
+  [PASS] submit_answer 未调用 LLM 接缝（generate_candidate_question）
+  [PASS] end_session 未调用 LLM 接缝（generate_candidate_question）
+  [PASS] get_report 未调用 LLM 接缝（generate_candidate_question）
+  [PASS] Service 源码中不出现 Agent / Validator / Planner / Context 的接缝调用
+  [PASS] Service 不直接 import Agent / Validator / Planner / Context
+  [PASS] Service 只依赖 Core 一个协作模块
+
+[9] 纯函数 / 无副作用
+  [PASS] score_answer 不修改入参 question
+  [PASS] build_question_plan 不修改 resume_skills 入参
+  [PASS] build_question_plan 不修改 session / job 入参
+  [PASS] validate_candidate_question 不修改入参 question_data
+  [PASS] validate_candidate_question 不修改入参 context
+  [PASS] 模块 __all__ 已声明且覆盖接缝
+  [PASS] Core 不导出数据库 / HTTP 依赖
+
+======================================================================
+结果: 通过 160 项，失败 0 项
+======================================================================

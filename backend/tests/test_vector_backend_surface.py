@@ -13,14 +13,14 @@
 本套件把这件事变成可见 + 可断言，并顺带验证「真的切过去」这条路径是通的。
 
 覆盖：
-[1] ``main.vector_status()`` 形状契约（固定 3 键；成功时 ``error=None``）
+[1] ``health.vector_status()`` 形状契约（固定 3 键；成功时 ``error=None``）
 [2] 未配置档 ⇒ ``sql`` / ``ann=False``（**静默全表扫描的那一档**）
 [3] chroma 档 ⇒ ``chroma`` / ``ann=True``（含取值别名）
 [4] 非法档 ⇒ ``error`` 非空且**不抛异常**（健康检查永远不该 500）
 [5] 规模告警**纯函数** ``_vector_size_warning``（阈值上下、非 sql 后端、未知规模）
 [6] 启动日志 ``_report_vector_status``（常规 / 超阈值告警 / chroma / 配置非法）
 [7] ``GET /api/health`` 回带 ``vector``；``status`` / ``service`` / ``embedding`` 向后兼容
-[8] 组装器同源：``describe_vector_backend`` 与 ``main.vector_status`` 逐键相等；阈值常量合法
+[8] 组装器同源：``describe_vector_backend`` 与 ``health.vector_status`` 逐键相等；阈值常量合法
 [9] ★ **切换验证**：同一份权威行，``sql`` → ``chroma`` 全链路
     （含「切后端后必须先重建派生索引，否则检索**静默返回 0 条**」这条坑）
 [10] AST 守卫：``main.py`` 顶层**不** import ``services.knowledge_rag`` / ``chromadb``
@@ -56,6 +56,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from sqlalchemy.pool import StaticPool  # noqa: E402
 
 import main  # noqa: E402
+from common import health  # noqa: E402
 from database import Base  # noqa: E402
 from models import KnowledgeChunk  # noqa: E402
 from services import interview_core, knowledge_rag  # noqa: E402
@@ -121,7 +122,7 @@ def _capture_report(chunks: Optional[int]) -> str:
     """跑一次 ``_report_vector_status`` 并把 stdout 抓回来。"""
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf):
-        main._report_vector_status(chunks)
+        health._report_vector_status(chunks)
     return buf.getvalue()
 
 
@@ -309,7 +310,7 @@ async def run() -> bool:
     # ---------------- [1] 形状契约 ----------------
     print("\n[1] 形状契约（固定 3 键）")
     _set_vector_store("")
-    status = main.vector_status()
+    status = health.vector_status()
     _check("键集恰好为 3 键", set(status) == VECTOR_STATUS_KEYS, str(sorted(status)))
     _check("成功时 error is None", status["error"] is None, repr(status["error"]))
     _check("ann 是**真 bool**（不是 0 / 不是字符串）",
@@ -319,7 +320,7 @@ async def run() -> bool:
     # ---------------- [2] 未配置档 ----------------
     print("\n[2] 未配置档 ⇒ sql（**这就是以前完全静默的全表扫描**）")
     _set_vector_store("")
-    status = main.vector_status()
+    status = health.vector_status()
     _check("★ backend == sql", status["backend"] == BACKEND_SQL, repr(status["backend"]))
     _check("★ ann is False（没有 ANN 索引）", status["ann"] is False, repr(status["ann"]))
     _check("error is None（未配置**不是**配置错误）", status["error"] is None, repr(status["error"]))
@@ -330,7 +331,7 @@ async def run() -> bool:
     # ---------------- [3] chroma 档 ----------------
     print("\n[3] chroma 档 ⇒ ann=True（含取值别名）")
     _set_vector_store(BACKEND_CHROMA)
-    status = main.vector_status()
+    status = health.vector_status()
     _check("★ backend == chroma", status["backend"] == BACKEND_CHROMA, repr(status["backend"]))
     _check("★ ann is True", status["ann"] is True, repr(status["ann"]))
     _check("error is None", status["error"] is None, repr(status["error"]))
@@ -343,7 +344,7 @@ async def run() -> bool:
     print("\n[4] 配置非法档 ⇒ 错误可见、但**不抛异常**")
     _set_vector_store("faiss")
     try:
-        status = main.vector_status()
+        status = health.vector_status()
         raised = None
     except Exception as exc:  # noqa: BLE001
         status, raised = {}, exc
@@ -357,7 +358,7 @@ async def run() -> bool:
 
     # ---------------- [5] 规模告警纯函数 ----------------
     print("\n[5] 规模告警纯函数（不读库、可单测）")
-    warn = main._vector_size_warning
+    warn = health._vector_size_warning
     _check("★ sql + 未达阈值 ⇒ None",
            warn(BACKEND_SQL, FULL_SCAN_WARN_CHUNKS - 1) is None,
            repr(warn(BACKEND_SQL, FULL_SCAN_WARN_CHUNKS - 1)))
@@ -418,8 +419,8 @@ async def run() -> bool:
                set(body.get("vector") or {}) == VECTOR_STATUS_KEYS,
                str(sorted((body.get("vector") or {}).keys())))
         _check("vector 与 vector_status() 同源（逐键相等）",
-               body.get("vector") == main.vector_status(),
-               f"{body.get('vector')} vs {main.vector_status()}")
+               body.get("vector") == health.vector_status(),
+               f"{body.get('vector')} vs {health.vector_status()}")
         _check("未配置环境下报 sql / ann=False",
                body["vector"]["backend"] == BACKEND_SQL and body["vector"]["ann"] is False,
                str(body["vector"]))
@@ -434,9 +435,9 @@ async def run() -> bool:
     # ---------------- [8] 组装器同源 + 常量合法 ----------------
     print("\n[8] 组装器同源与阈值常量")
     _set_vector_store("")
-    _check("★ describe_vector_backend() 与 main.vector_status() 逐键相等",
-           describe_vector_backend() == main.vector_status(),
-           f"{describe_vector_backend()} vs {main.vector_status()}")
+    _check("★ describe_vector_backend() 与 health.vector_status() 逐键相等",
+           describe_vector_backend() == health.vector_status(),
+           f"{describe_vector_backend()} vs {health.vector_status()}")
     _check("★ FULL_SCAN_WARN_CHUNKS 是正整数（且不是 bool）",
            isinstance(FULL_SCAN_WARN_CHUNKS, int)
            and not isinstance(FULL_SCAN_WARN_CHUNKS, bool)

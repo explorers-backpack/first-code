@@ -10,7 +10,7 @@
 
 - ``interview_core.resolve_retriever(db, None, use_rag=True)`` 调
   ``build_vector_retriever(db)`` 时**一个参数都不给**；
-- ``api/interview.py`` 的 7 个路由**没有任何一处**调用 ``generate_next_question``
+- ``modules/interview/api.py`` 的 7 个路由**没有任何一处**调用 ``generate_next_question``
   （``start_session`` 走纯规则 ``build_question_plan``）。
 
 ⇒ 「配了阈值」与「阈值生效」仍是两件事：默认口径恒为

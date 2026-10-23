@@ -1,0 +1,80 @@
+======================================================================
+AI 模拟面试 · InterviewContext 上下文管理自检
+======================================================================
+
+[1] 创建初始 Context
+  [PASS] session_id 正确
+  [PASS] current_stage 默认 introduction
+  [PASS] asked_questions 初始为空数组
+  [PASS] covered_topics 初始为空数组
+  [PASS] weak_topics 初始为空数组
+  [PASS] follow_up_count 初始为 0
+  [PASS] current_question_no 投影自 session（0）
+  [PASS] total_questions 投影自 session（5）
+  [PASS] max_questions 默认取 total_questions
+  [PASS] 9 个必需字段齐全
+  [PASS] 重复创建幂等（不覆盖）
+  [PASS] 数据库层仍只有 1 条上下文（1:1）
+  [PASS] 非法 stage 被拒（400）
+  [PASS] max_questions<1 被拒（400）
+  [PASS] 会话不存在时 404
+  [PASS] 可显式指定 max_questions（8）
+
+[2] 获取 Context
+  [PASS] 读取结果与创建一致
+  [PASS] 未创建上下文时 404
+  [PASS] 会话不存在时 404
+
+[3] 更新 Context
+  [PASS] 阶段可切到 introduction
+  [PASS] 阶段可切到 resume
+  [PASS] 阶段可切到 technical
+  [PASS] 阶段可切到 project
+  [PASS] 阶段可切到 scenario
+  [PASS] 阶段可切到 hr
+  [PASS] 阶段可切到 closing
+  [PASS] 非法 stage 被拒（400）
+  [PASS] 未知字段被拒（400）
+  [PASS] 空更新被拒（400）
+  [PASS] 非数组列表被拒（400）
+  [PASS] follow_up_count 负数被拒（400）
+
+[4] 增加已提问问题
+  [PASS] 字符串问题已追加
+  [PASS] 对象型问题已追加
+  [PASS] 提问数变为 2
+  [PASS] 允许重复提问（日志语义，不去重）
+  [PASS] 空字符串被拒（400）
+  [PASS] 非法类型被拒（400）
+  [PASS] 提问记录已持久化（重读一致）
+
+[5] 增加已覆盖知识点（去重）
+  [PASS] 已覆盖知识点去重
+  [PASS] 空 topic 被拒（400）
+
+[6] 增加薄弱知识点（去重）
+  [PASS] 薄弱知识点去重
+  [PASS] 薄弱与已覆盖互不影响
+
+[7] 增加追问次数
+  [PASS] 默认 +1
+  [PASS] 可一次 +3（累计 4）
+  [PASS] count<1 被拒（400）
+
+[8] 判断是否达到最大问题数量
+  [PASS] 初始未达到上限
+  [PASS] 提问 1 次未达上限
+  [PASS] 提问 3 次（=上限）判定为已达到
+  [PASS] get_context_state 返回 max_reached=True
+  [PASS] remaining_questions 归零
+  [PASS] 已问满 total_questions 但未达 max_questions
+  [PASS] 追问到 max_questions 后判定达到
+
+[9] current_question_no 由 session 实时投影
+  [PASS] session 题号变化后 Context 同步反映（3）
+  [PASS] asked_count 取题号与日志的较大值（3）
+  [PASS] 未达上限（3 < 5）
+
+======================================================================
+结果: 通过 55 项，失败 0 项
+======================================================================

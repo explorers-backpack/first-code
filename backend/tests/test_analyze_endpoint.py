@@ -4,7 +4,25 @@
 直接运行（需已安装 fastapi 等后端依赖）：
     python backend/tests/test_analyze_endpoint.py
 
-不连数据库：通过 monkeypatch 替换 get_all_jobs 与 SparkAPI，只验证接口装配逻辑。
+不连数据库：替换 ``modules.career.service.get_all_jobs`` 与 LLM 门面，只验证
+接口装配逻辑。
+
+★ P2 迁移后的调用方式变了，这里说明为什么
+------------------------------------------
+``/api/resume/analyze`` 从 ``main.py`` 搬到了 ``modules/career/api.py``，LLM
+门面不再是一个可以 monkeypatch 的模块全局（``main.spark_api``），而是
+**显式参数** ``llm``（FastAPI 里由 ``Depends(get_llm)`` 注入）。
+
+所以测试直接调函数时必须**把 llm 传进去**：
+
+    await career_api.analyze_resume(file=..., llm=_FakeLlm("..."))
+
+★ 不能只传 file 然后指望 ``Depends`` 自己解析——直接调用函数时，``llm`` 的
+默认值是 ``Depends(...)`` 对象本身，不是门面。那会让 ``await llm.chat_async``
+变成 ``AttributeError``，而错误信息看起来像「测试写错了」，实际是「忘了注入」。
+
+显式传参比 monkeypatch 全局更好：每个用例的假门面互相独立，不会因为执行
+顺序不同而串味。
 """
 
 import asyncio
@@ -16,7 +34,20 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
 from fastapi import HTTPException, UploadFile  # noqa: E402
 
-import main  # noqa: E402
+import modules.career.api as career_api  # noqa: E402
+import modules.career.service as career_service  # noqa: E402
+
+
+class _FakeLlm:
+    """最小的 LLM 门面替身：业务层只需要 ``async chat_async(prompt) -> str``。"""
+
+    def __init__(self, answer: str) -> None:
+        self.answer = answer
+        self.prompts: list = []
+
+    async def chat_async(self, prompt: str) -> str:
+        self.prompts.append(prompt)
+        return self.answer
 
 JOBS = [
     {
@@ -71,12 +102,14 @@ async def run() -> bool:
     print("简历分析接口 · 集成自检")
     print("=" * 68)
 
-    main.get_all_jobs = lambda: _async_return(JOBS)
+    career_service.get_all_jobs = lambda: _async_return(JOBS)
 
     # ---- 1. LLM 不可用：应降级为规则引擎文案，而非原始错误串 ----
     print("\n[1] LLM 不可用时的降级")
-    main.spark_api.chat_async = lambda prompt: _async_return("API调用失败: 连接超时")
-    r = await main.analyze_resume(file=_upload(RESUME_TXT.encode("utf-8")))
+    r = await career_api.analyze_resume(
+        file=_upload(RESUME_TXT.encode("utf-8")),
+        llm=_FakeLlm("API调用失败: 连接超时"),
+    )
     ok = _check("ai_available 为 False", r["ai_available"] is False)
     ok &= _check("不再把原始错误串当诊断结果", "API调用失败" not in r["chat_answer"])
     ok &= _check("降级文案含维度名", "【核心优势】" in r["chat_answer"] and "【提升建议】" in r["chat_answer"])
@@ -98,7 +131,9 @@ async def run() -> bool:
     print("\n[3] 二进制格式显式拒绝")
     for payload, label, expect in ((b"%PDF-1.7\n...binary...", "PDF", 415), (b"PK\x03\x04docx", "DOCX", 415)):
         try:
-            await main.analyze_resume(file=_upload(payload, f"a.{label.lower()}"))
+            await career_api.analyze_resume(
+                file=_upload(payload, f"a.{label.lower()}"), llm=_FakeLlm("unused")
+            )
             ok &= _check(f"{label} 应被拒绝", False, "未抛异常")
         except HTTPException as e:
             ok &= _check(f"{label} 返回 {e.status_code} 且提示可读", e.status_code == expect, str(e.detail))
@@ -106,16 +141,21 @@ async def run() -> bool:
     # ---- 4. 无技能简历不捏造技能 ----
     print("\n[4] 无技能简历")
     plain = "王芳\n教育背景\n2016.09-2020.06 某某大学 汉语言文学 本科\n工作经历\n2020.07-2023.06 某公司 文案策划\n负责公众号内容撰写，累计产出 120 篇推文\n"
-    r2 = await main.analyze_resume(file=_upload(plain.encode("utf-8")))
+    r2 = await career_api.analyze_resume(
+        file=_upload(plain.encode("utf-8")), llm=_FakeLlm("unused")
+    )
     ok &= _check("技能列表为空", r2["skills"] == [], str(r2["skills"]))
     ok &= _check("未出现 Python/JavaScript/Git 兜底", "Python" not in r2["skills"])
 
     # ---- 5. LLM 正常时使用模型输出 ----
     print("\n[5] LLM 可用时")
-    main.spark_api.chat_async = lambda prompt: _async_return(
-        "【核心优势】：架构设计与性能优化经验扎实，QPS 提升 6 倍以上。\n【提升建议】：补充代码评审与需求分析经历。"
+    r3 = await career_api.analyze_resume(
+        file=_upload(RESUME_TXT.encode("utf-8")),
+        llm=_FakeLlm(
+            "【核心优势】：架构设计与性能优化经验扎实，QPS 提升 6 倍以上。\n"
+            "【提升建议】：补充代码评审与需求分析经历。"
+        ),
     )
-    r3 = await main.analyze_resume(file=_upload(RESUME_TXT.encode("utf-8")))
     ok &= _check("ai_available 为 True", r3["ai_available"] is True)
     ok &= _check("使用模型输出", "QPS" in r3["chat_answer"])
     ok &= _check("提示词未包含裸分数行", "综合评分：" not in "".join(

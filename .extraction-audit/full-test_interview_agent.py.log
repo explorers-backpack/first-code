@@ -1,0 +1,206 @@
+======================================================================
+AI 模拟面试 · Interview Agent（问题生成）自检
+======================================================================
+
+[1] 正常生成问题
+  [PASS] ok=True
+  [PASS] question 非空且解析正确
+  [PASS] question_type 正确
+  [PASS] topic 正确
+  [PASS] difficulty 正确
+  [PASS] expected_points 为 4 项
+  [PASS] reason 正确
+  [PASS] error 为 None
+  [PASS] 只调用一次 Spark（成功不重试）
+  [PASS] 输出字段集为 8 个（6 业务字段 + ok + error）
+  [PASS] 注入当前阶段
+  [PASS] 注入岗位名称
+  [PASS] 注入岗位描述（技能要求 + 职责）
+  [PASS] 注入简历摘要
+  [PASS] 注入已提问问题
+  [PASS] 注入已覆盖知识点
+  [PASS] 注入薄弱知识点
+  [PASS] 注入优先考察点（经 interview_plan）
+  [PASS] 注入计划阶段
+  [PASS] 无残留占位符
+  [PASS] 加载的是 question.txt（含 7 阶段指引）
+  [PASS] 注入面试类型与难度
+
+[2] 非法 JSON → 修复一次后成功
+  [PASS] 修复后 ok=True
+  [PASS] 共调用两次（首次 + 修复）
+  [PASS] 第二次是修复提示词
+  [PASS] 修复提示词带失败原因
+  [PASS] 修复提示词带上次原始输出
+  [PASS] 修复提示词带历史问题
+  [PASS] 修复提示词无残留占位符
+
+[2b] 非法 JSON 且修复仍失败 → 明确错误
+  [PASS] ok=False
+  [PASS] question 为空（不伪造）
+  [PASS] expected_points 为空
+  [PASS] error 说明修复次数
+  [PASS] 恰好调用两次（重试上限为 1）
+
+[2c] 其他非法 JSON 形态
+  [PASS] 空字符串 → ok=False 且 question 为空
+  [PASS] JSON 被截断 → ok=False 且 question 为空
+  [PASS] JSON 数组 → ok=False 且 question 为空
+
+[3] 空问题
+  [PASS] 首次空问题 → 触发修复并成功
+  [PASS] 空问题时也重试一次
+  [PASS] 修复提示词指出 question 为空
+  [PASS] 两次都空 → ok=False
+  [PASS] 失败时 question 为空字符串
+  [PASS] error 保留可读原因
+
+[3b] 模型显式返回 error 分支
+  [PASS] 显式 error → ok=False
+  [PASS] 显式 error 原因被保留并上报
+
+[4] 与历史问题高度重复
+  [PASS] 首次重复 → 触发修复并成功
+  [PASS] 重复时重试一次
+  [PASS] 修复提示词指出重复
+  [PASS] 两次都重复 → ok=False
+  [PASS] 失败时 question 为空（不伪造）
+  [PASS] error 含「高度重复」
+
+[4b] 近似改写（非字面相同）也能识别
+  [PASS] 短问题被扩写从句 → 判为重复
+  [PASS] 扩写版相似度被判为 1.0
+
+[4c] 包含关系兜底有长度下限（避免短串误命中）
+  [PASS] 短于下限时不启用包含规则（6 字历史）
+  [PASS] 达到下限时启用包含规则（8 字历史）
+  [PASS] 等长但不同的问题不受包含规则影响
+
+[4d] 与历史不重复时正常通过
+  [PASS] 全新问题一次通过
+  [PASS] 未触发多余调用
+
+[5] 缺少 topic
+  [PASS] 首次缺 topic → 触发修复并成功
+  [PASS] 缺 topic 时重试一次
+  [PASS] 修复提示词指出 topic 为空
+  [PASS] 两次都缺 topic → ok=False
+  [PASS] 失败时 question 为空
+  [PASS] error 含 topic 提示
+
+[5b] topic 字段完全缺失
+  [PASS] 缺字段同样判为失败
+
+[6] difficulty 校验
+  [PASS] 非法 difficulty → 触发修复并成功
+  [PASS] 修复提示词指出 difficulty 非法
+  [PASS] 两次都非法 → ok=False
+  [PASS] error 列出合法取值
+  [PASS] difficulty 缺失时用本场难度补齐（不算失败）
+  [PASS] 补齐值为 plan 的 difficulty（mid）
+  [PASS] 补齐不触发重试
+  [PASS] 合法难度 junior 被接受
+  [PASS] 合法难度 mid 被接受
+  [PASS] 合法难度 senior 被接受
+
+[7] 服务级故障
+  [PASS] 调用抛异常 → ok=False
+  [PASS] 异常信息被上报
+  [PASS] 抛异常时不重试
+  [PASS] 失败时 question 为空
+  [PASS] 哨兵串「API调用失败」→ ok=False
+  [PASS] 哨兵串「API调用失败」不重试
+  [PASS] 哨兵串「API调用失败」不伪造问题
+  [PASS] 哨兵串「SparkAPI not available」→ ok=False
+  [PASS] 哨兵串「SparkAPI not available」不重试
+  [PASS] 哨兵串「SparkAPI not available」不伪造问题
+  [PASS] 哨兵串「AI 回答为空」→ ok=False
+  [PASS] 哨兵串「AI 回答为空」不重试
+  [PASS] 哨兵串「AI 回答为空」不伪造问题
+  [PASS] 哨兵串「空返回」→ ok=False
+  [PASS] 哨兵串「空返回」不重试
+  [PASS] 哨兵串「空返回」不伪造问题
+  [PASS] 拿不到 Spark 实例 → ok=False
+  [PASS] 不可用时给出明确原因
+
+[8] 所有失败路径都不伪造问题
+  [PASS] 失败用例 1：ok=False 且 question 为空
+  [PASS] 失败用例 1：error 非空
+  [PASS] 失败用例 1：字段集与成功结果一致
+  [PASS] 失败用例 2：ok=False 且 question 为空
+  [PASS] 失败用例 2：error 非空
+  [PASS] 失败用例 2：字段集与成功结果一致
+  [PASS] 失败用例 3：ok=False 且 question 为空
+  [PASS] 失败用例 3：error 非空
+  [PASS] 失败用例 3：字段集与成功结果一致
+  [PASS] 失败用例 4：ok=False 且 question 为空
+  [PASS] 失败用例 4：error 非空
+  [PASS] 失败用例 4：字段集与成功结果一致
+  [PASS] 失败用例 5：ok=False 且 question 为空
+  [PASS] 失败用例 5：error 非空
+  [PASS] 失败用例 5：字段集与成功结果一致
+  [PASS] 失败用例 6：ok=False 且 question 为空
+  [PASS] 失败用例 6：error 非空
+  [PASS] 失败用例 6：字段集与成功结果一致
+  [PASS] 失败用例 7：ok=False 且 question 为空
+  [PASS] 失败用例 7：error 非空
+  [PASS] 失败用例 7：字段集与成功结果一致
+  [PASS] failure() 构造的结果 question 恒为空
+
+[9] 查重算法
+  [PASS] 完全相同 → 1.0
+  [PASS] 标点差异视为相同
+  [PASS] 大小写差异视为相同
+  [PASS] 无关问题 → 低相似度
+  [PASS] 空串 → 0.0
+  [PASS] 相似度在 0-1 之间
+  [PASS] is_duplicate_question：命中历史
+  [PASS] is_duplicate_question：未命中历史
+  [PASS] is_duplicate_question：空问题不算重复
+  [PASS] is_duplicate_question：空历史不算重复
+  [PASS] is_duplicate_question：支持对象形态的历史记录
+  [PASS] 等长近似问题的相似度落在 (0.6, 0.7)
+  [PASS] 阈值 0.7 时不算重复
+  [PASS] 阈值 0.6 时算重复
+  [PASS] 默认阈值 0.85 下该近似问题不算重复
+
+[9b] validate_question 各分支
+  [PASS] 全部合法 → None
+  [PASS] 空 question → 报错
+  [PASS] 缺 question 键 → 报错
+  [PASS] 空 topic → 报错
+  [PASS] 非法 difficulty → 报错
+  [PASS] 空 difficulty → 报错（不会静默通过）
+  [PASS] 重复问题 → 报错
+  [PASS] 可注入自定义难度白名单
+
+[10] 边界与降级
+  [PASS] 变量数量为 question.txt 要求的 10 个
+  [PASS] current_stage 取自 context
+  [PASS] interview_type 取自 plan
+  [PASS] priority_topics 在计划载荷中
+  [PASS] asked_questions 归一为文本列表
+  [PASS] 无计划时回落默认面试类型
+  [PASS] 无计划时回落默认难度
+  [PASS] 无简历时填（无简历）
+  [PASS] 无岗位时填（未指定岗位）
+  [PASS] 无岗位描述时填占位
+  [PASS] 无 stage 时回落 introduction
+  [PASS] 空列表变量为空数组
+  [PASS] 无计划/无简历/无岗位仍可生成
+  [PASS] 降级后 Prompt 仍无残留占位符
+  [PASS] 支持 ORM 对象作为输入
+  [PASS] ORM 的 current_stage 被读取
+  [PASS] ORM 的简历正文被读取
+  [PASS] ORM 的岗位字段被读取
+  [PASS] 对象形态的历史问题参与查重
+
+[10b] 职责边界
+  [PASS] generate_question 不接收 db 会话（本阶段不碰数据库）
+  [PASS] generate_question 是协程函数
+  [PASS] 重试上限为 1（用户要求最多一次修复）
+  [PASS] 未提供评分/追问/报告等越界接口
+
+======================================================================
+结果: 通过 161 项，失败 0 项
+======================================================================

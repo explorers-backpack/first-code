@@ -1,0 +1,187 @@
+======================================================================
+AI 模拟面试 · Interview Planner 自检
+======================================================================
+
+[1] 结构不变量与 Pydantic 契约
+  [PASS] 输出含全部必需字段
+  [PASS] stages 每项含 stage/weight/target_questions
+  [PASS] 阶段权重合计 100
+  [PASS] 阶段题量合计 = total_questions
+  [PASS] 每阶段至少 1 题
+  [PASS] 阶段不重复
+  [PASS] source 默认为 rule
+  [PASS] 可通过 InterviewPlanOut 校验
+
+[2] 基准用例（comprehensive / mid / 30 分钟）
+  [PASS] 总题量为 12
+  [PASS] 各阶段题量与产品示例一致
+  [PASS] 各阶段权重与产品示例一致
+
+[3] 难度影响题量（时长固定 30 分钟）
+  [PASS] junior 30 分钟 → 10 题
+  [PASS] junior 题量分配仍守恒
+  [PASS] mid 30 分钟 → 12 题
+  [PASS] mid 题量分配仍守恒
+  [PASS] senior 30 分钟 → 15 题
+  [PASS] senior 题量分配仍守恒
+
+[4] 时长影响题量（难度固定 mid）
+  [PASS] 15 分钟 → 6 题
+  [PASS] 20 分钟 → 8 题
+  [PASS] 30 分钟 → 12 题
+  [PASS] 45 分钟 → 18 题
+  [PASS] 题量下限 5（5 分钟 junior）
+  [PASS] 极短时长仍每阶段 ≥1 题
+  [PASS] 极短时长题量仍守恒
+  [PASS] 题量上限 20（180 分钟 senior）
+
+[5] 面试类型影响阶段集合与权重
+  [PASS] technical 不含 hr 阶段
+  [PASS] technical 的 technical 权重最高（45）
+  [PASS] technical 题量更集中于技术（>=5）
+  [PASS] behavioral 不含 technical 阶段
+  [PASS] behavioral 含 hr 阶段
+  [PASS] behavioral 的 project 权重最高（30）
+  [PASS] technical 权重合计 100
+  [PASS] technical 题量守恒
+  [PASS] technical 通过 Pydantic 校验
+  [PASS] behavioral 权重合计 100
+  [PASS] behavioral 题量守恒
+  [PASS] behavioral 通过 Pydantic 校验
+  [PASS] comprehensive 权重合计 100
+  [PASS] comprehensive 题量守恒
+  [PASS] comprehensive 通过 Pydantic 校验
+
+[6] 阶段顺序与 models.INTERVIEW_STAGES 一致
+  [PASS] technical 阶段顺序符合推进顺序
+  [PASS] behavioral 阶段顺序符合推进顺序
+  [PASS] comprehensive 阶段顺序符合推进顺序
+
+[7] 确定性（同输入同输出）
+  [PASS] 两次调用结果完全相同
+  [PASS] 与基准用例不同输入结果不同
+
+[8] target_topics 来源与去重
+  [PASS] 含岗位技能 Java
+  [PASS] 含岗位技能 Spring Boot
+  [PASS] 含岗位技能 MySQL
+  [PASS] 含岗位技能 Redis
+  [PASS] 含岗位职责中抽取的技能（分布式系统）
+  [PASS] 含简历技能（Kafka）
+  [PASS] 无重复项（忽略大小写）
+  [PASS] 上限 12
+  [PASS] 简历与岗位都有的 Java 只出现一次
+
+[9] priority_topics 规则
+  [PASS] 是 target_topics 的子集
+  [PASS] 非空
+  [PASS] 上限 5
+  [PASS] mid 时缺口（MySQL）排在简历已具备的 Java 之前
+  [PASS] senior 时交集（Java）排在缺口（MySQL）之前
+  [PASS] 无简历时优先级取自岗位技能
+
+[10] resume_focus_points 抽取
+  [PASS] 抽出电商项目
+  [PASS] 抽出订单系统（同行第二个项目也能识别）
+  [PASS] 抽出支付平台
+  [PASS] 已剥离「负责/主导」等前缀噪声
+  [PASS] 章节标题未被当作重点
+  [PASS] 上限 5
+  [PASS] 支持「项目名称：」显式声明
+  [PASS] 支持【】标注与中台后缀
+  [PASS] 无项目类文本时返回空数组（不编造）
+
+[11] 缺岗位 / 缺简历降级
+  [PASS] 无岗位无简历仍能产出计划
+  [PASS] 无岗位无简历时 target_topics 为空
+  [PASS] 无岗位无简历时 priority_topics 为空
+  [PASS] 无岗位无简历时 resume_focus_points 为空
+  [PASS] 无岗位无简历时计划仍通过 Pydantic 校验
+  [PASS] 无岗位无简历时权重仍守恒
+  [PASS] 仅简历时 target_topics 取简历技能
+  [PASS] 仅简历时 priority_topics 为空（无岗位要求）
+  [PASS] 仅简历时重点仍可抽出
+
+[12] 非法入参兜底
+  [PASS] 未知 interview_type 回落 comprehensive
+  [PASS] 未知 difficulty 回落 mid
+  [PASS] 未知 difficulty 题量按 mid 口径（12）
+  [PASS] 非法 duration 回落 30
+  [PASS] duration 超上限被收敛到 180
+  [PASS] duration 低于下限被收敛到 5
+  [PASS] 非法入参不抛异常且结构合法
+
+[13] 题量边界
+  [PASS] 显式 total_questions=1 被采纳
+  [PASS] total_questions=1 题量守恒
+  [PASS] 显式 total_questions=5 被采纳
+  [PASS] total_questions=5 题量守恒
+  [PASS] 显式 total_questions=8 被采纳
+  [PASS] total_questions=8 题量守恒
+  [PASS] 显式 total_questions=20 被采纳
+  [PASS] total_questions=20 题量守恒
+  [PASS] total_questions=0 收敛到 1
+  [PASS] total_questions=100 收敛到 20
+  [PASS] total_questions 非数字时回落到时长口径
+
+[14] LLM 增强成功路径
+  [PASS] source 标记为 llm
+  [PASS] target_topics 被模型结果替换
+  [PASS] priority_topics 采用模型结果
+  [PASS] resume_focus_points 采用模型结果
+  [PASS] 增强后阶段划分不变
+  [PASS] 增强后通过 Pydantic 校验
+  [PASS] 提示词包含岗位名称
+  [PASS] 提示词包含简历正文
+
+[15] LLM 失败回退
+  [PASS] 哨兵串 API调用失败 → 回退规则计划
+  [PASS] 哨兵串 SparkAPI not available → 回退规则计划
+  [PASS] 哨兵串 AI 回答为空 → 回退规则计划
+  [PASS] 空字符串 → 回退规则计划
+  [PASS] 纯文本无 JSON → 回退规则计划
+  [PASS] JSON 不完整 → 回退规则计划
+  [PASS] JSON 非对象 → 回退规则计划
+  [PASS] JSON 缺少 target_topics → 回退规则计划
+  [PASS] target_topics 为空数组 → 回退规则计划
+  [PASS] target_topics 类型错误 → 回退规则计划
+  [PASS] 调用抛异常 → 回退且不冒泡
+  [PASS] 回退后 source 仍为 rule
+  [PASS] 拿不到 Spark 实例 → 回退规则计划
+  [PASS] 无 Spark 时 source 仍为 rule
+
+[16] LLM 无法改写阶段与题量
+  [PASS] stages 未被模型改写
+  [PASS] total_questions 未被模型改写
+  [PASS] difficulty 未被模型改写
+  [PASS] 被改写后仍通过 Pydantic 校验
+  [PASS] 非 target 子集的 priority 项被过滤
+  [PASS] 模型未给出重点时沿用规则结果
+  [PASS] 模型输出的重复项被去重
+  [PASS] priority 去重后只留一项
+  [PASS] 模型返回的非字符串元素被丢弃
+  [PASS] 重点列表同样只保留字符串
+
+[17] 提示词边界（只规划，不出题）
+  [PASS] 明确要求不要生成题目
+  [PASS] 要求只输出 JSON
+  [PASS] 要求 priority 为 target 子集
+  [PASS] 包含面试配置（难度/时长/题量）
+  [PASS] 无简历时提示词标注（无简历）
+  [PASS] 无岗位时提示词标注（未指定岗位）
+
+[18] build_plan_for 读库路径
+  [PASS] 读库后 job_id 正确回填
+  [PASS] 读库后 resume_id 正确回填
+  [PASS] 读库后取到岗位技能
+  [PASS] 读库后取到简历重点
+  [PASS] 读库结果通过 Pydantic 校验
+  [PASS] 岗位/简历不存在时不报错，按缺省处理
+  [PASS] 岗位/简历不存在时计划仍合法
+  [PASS] use_llm=True 时走增强路径
+  [PASS] use_llm=True 但调用失败 → source=rule
+  [PASS] 读库路径不写库（resume 仍只有 1 行）
+
+======================================================================
+结果: 通过 144 项，失败 0 项
+======================================================================

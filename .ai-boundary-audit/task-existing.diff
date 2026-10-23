@@ -1,0 +1,151 @@
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.ai-boundary-audit\\before\\modules\\ai\\compat.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\modules\\ai\\compat.py"
+index 9a3eb1e..4e31496 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.ai-boundary-audit\\before\\modules\\ai\\compat.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\modules\\ai\\compat.py"
+@@ -23,9 +23,11 @@
+ """
+ 
+ import asyncio
++from dataclasses import replace
+ from typing import Any, Dict, Optional
+ 
+ from modules.ai.errors import (
++    AiBoundaryError,
+     AiAuthError,
+     AiError,
+     AiModeError,
+@@ -35,9 +37,12 @@ from modules.ai.errors import (
+     AiUnavailableError,
+ )
+ from modules.ai.factory import get_call_policy, get_llm_provider
++from modules.ai.boundary import PromptBoundary, build_guarded_prompt
+ from modules.ai.llm import LlmProvider, LlmRequest
++from modules.ai.llm_fake import OfflineLlmProvider
+ from modules.ai.policy import CallPolicy, call_llm
+ from modules.ai.telemetry import CallScope, current_prompt_id, current_scope
++from modules.ai.telemetry import METRICS, METRIC_BOUNDARY_BLOCKS, log_event, new_request_id
+ 
+ __all__ = ["LegacySparkFacade", "build_legacy_spark_facade"]
+ 
+@@ -77,16 +82,28 @@ class LegacySparkFacade:
+ 
+     async def chat_async(self, message: str) -> str:
+         """``str -> str``：成功返回模型文本，失败返回**旧式哨兵串**（不抛异常）。"""
+-        request = LlmRequest(prompt=message, prompt_id=current_prompt_id())
+         scope: Optional[CallScope] = current_scope()
+         try:
++            # 所有生产业务共享此入口；在 Provider 选择/传输之前拒绝越界输入。
++            prompt = build_guarded_prompt(message, PromptBoundary())
++            request = LlmRequest(prompt=prompt, prompt_id=current_prompt_id())
+             provider: LlmProvider = self._provider_getter()
+             policy = self._policy or get_call_policy()
++            if isinstance(provider, OfflineLlmProvider):
++                policy = replace(policy, max_attempts=1)
+             response = await call_llm(provider, request, policy=policy, scope=scope)
+         except BaseException as exc:  # noqa: BLE001 - 旧契约要求"绝不抛"
+-            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++            if isinstance(exc, (KeyboardInterrupt, SystemExit, asyncio.CancelledError)):
+                 raise
+             error = exc if isinstance(exc, AiError) else AiError("%s: %s" % (type(exc).__name__, exc))
++            if not error.request_id:
++                error.request_id = scope.request_id if scope else new_request_id()
++            if isinstance(error, AiBoundaryError):
++                METRICS.incr(METRIC_BOUNDARY_BLOCKS)
++            # 配置/边界错误发生在策略之前，也必须可诊断；不记录 Prompt 正文。
++            if scope is None or scope.error is None:
++                log_event("ai_boundary_failed", error_kind=error.kind,
++                          request_id=error.request_id, prompt_id=current_prompt_id())
+             if scope is not None and scope.error is None:
+                 scope.error = error
+             return self.render_failure(error)
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.ai-boundary-audit\\before\\modules\\ai\\factory.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\modules\\ai\\factory.py"
+index 4cbf0e6..64becc6 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.ai-boundary-audit\\before\\modules\\ai\\factory.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\modules\\ai\\factory.py"
+@@ -140,6 +140,8 @@ def _cache_key(env: Optional[Mapping[str, Any]]) -> tuple:
+ 
+ def get_llm_provider() -> LlmProvider:
+     """取进程内 LLM Provider（按模式缓存，模式变化自动重建）。"""
++    # 缓存不能绕过配置撤销检查（生产模式凭据被移除时立即停止调用）。
++    validate_ai_config()
+     key = _cache_key(None)
+     if _CACHE["provider"] is None or _CACHE["key"] != key:
+         _CACHE["provider"] = build_llm_provider(None)
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.ai-boundary-audit\\before\\modules\\ai\\policy.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\modules\\ai\\policy.py"
+index 78c0e2d..be57918 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.ai-boundary-audit\\before\\modules\\ai\\policy.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\modules\\ai\\policy.py"
+@@ -17,6 +17,7 @@
+ 
+ import asyncio
+ import os
++import math
+ import random
+ from dataclasses import dataclass, replace
+ from typing import Any, Awaitable, Callable, Dict, Mapping, Optional
+@@ -83,7 +84,7 @@ def _read_number(env: Optional[Mapping[str, Any]], key: str, default: float, *,
+         value = float(text)
+     except (TypeError, ValueError):
+         raise AiConfigError("%s 取值非法：%r（应为数字）" % (key, text))
+-    if value < minimum:
++    if not math.isfinite(value) or value < minimum or (integer and not value.is_integer()):
+         raise AiConfigError("%s 取值非法：%r（不得小于 %s）" % (key, text, minimum))
+     return float(int(value)) if integer else value
+ 
+@@ -198,7 +199,7 @@ async def call_llm(
+         try:
+             response = await _invoke(provider, request, policy.timeout_seconds)
+         except BaseException as exc:  # noqa: BLE001 - 全部收敛为 AiError
+-            if isinstance(exc, (KeyboardInterrupt, SystemExit)):
++            if isinstance(exc, (KeyboardInterrupt, SystemExit, asyncio.CancelledError)):
+                 raise
+             error = _normalize(exc, getattr(provider, "name", ""), request_id)
+             last_error = error
+diff --git "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.ai-boundary-audit\\before\\modules\\career\\service.py" "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\modules\\career\\service.py"
+index c3cbded..ac22f06 100644
+--- "a/C:\\Users\\DELL-PC\\Desktop\\career-ai\\.ai-boundary-audit\\before\\modules\\career\\service.py"
++++ "b/C:\\Users\\DELL-PC\\Desktop\\career-ai\\backend\\modules\\career\\service.py"
+@@ -22,10 +22,8 @@
+ 1123-1231 / 1234-1270 行）。除了把 ``spark_api`` 换成参数 ``llm``、
+ 把 ``async_session`` 换成模块级 import 之外，逻辑与文案一行未改。
+ 
+-★ ``chat`` 里的 ``ai_response.startswith("Error")`` 是**已知死代码**：门面
+-失败时返回的是 ``"API调用失败: ..."``，不以 ``"Error"`` 开头。这里**刻意
+-保留**——本轮是结构迁移，不夹带行为修复（修了会让 ``/api/chat`` 的失败
+-文案变化，属另一件事）。已在 ``MODULAR_MONOLITH_REPORT.md`` 登记为遗留项。
++AI 边界接线后，chat 同时识别结构化失败与旧哨兵串，统一返回既有降级文案；
++响应字段与正常回答保持不变，不把供应商故障当作职业建议。
+ """
+ 
+ import json
+@@ -37,7 +35,7 @@ from sqlalchemy import select
+ from database import async_session
+ from models import Job
+ from modules.career.prompts import EMPTY_PROMPT, RAG_PROMPT, RESUME_ANALYSIS_PROMPT
+-from modules.ai import ai_call_scope
++from modules.ai import ai_call_scope, is_legacy_failure
+ from services.job_matching import keyword_match
+ from services.resume_scoring import build_prompt_summary, evaluate_resume
+ 
+@@ -176,14 +174,14 @@ async def chat(data: Any, *, llm: Any) -> Dict[str, Any]:
+             jobs_data = []
+             source_type = "ai"
+ 
+-    try:
+-        ai_response = await llm.chat_async(prompt)
+-    except Exception:
+-        ai_response = "抱歉，暂时无法获取分析结果。"
++    with ai_call_scope("career/chat@v1") as scope:
++        try:
++            ai_response = await llm.chat_async(prompt)
++        except Exception:
++            ai_response = ""
+ 
+-    # ★ 已知死代码（见模块 docstring）：门面失败返回 "API调用失败: ..."。
+-    #   保留是为了不让本轮结构迁移改变失败文案。
+-    if ai_response.startswith("Error"):
++    if (scope.error is not None or is_legacy_failure(ai_response)
++            or not ai_response.strip() or ai_response.startswith("Error")):
+         ai_response = "抱歉，暂时无法获取分析结果。"
+ 
+     return {

@@ -206,8 +206,9 @@ async def run() -> bool:
     main.app.dependency_overrides[get_db] = override_get_db
 
     spark = SpySpark()
-    original_spark = main.spark_api
-    main.spark_api = spark  # type: ignore[assignment]
+    from common.llm import get_llm, configure
+    original_spark = get_llm()
+    configure(spark)
 
     real_builder = knowledge_rag.build_vector_retriever
     spy = BuilderSpy()
@@ -342,7 +343,7 @@ async def run() -> bool:
         )
 
     knowledge_rag.build_vector_retriever = real_builder  # type: ignore[assignment]
-    main.spark_api = original_spark  # type: ignore[assignment]
+    configure(original_spark)
     main.app.dependency_overrides.clear()
     await engine.dispose()
 
@@ -365,7 +366,7 @@ async def run() -> bool:
         ).parameters["use_rag"].default is False,
     )
 
-    api_path = pathlib.Path(__file__).resolve().parents[1] / "api" / "interview.py"
+    api_path = pathlib.Path(__file__).resolve().parents[1] / "modules" / "interview" / "api.py"
     source = api_path.read_text(encoding="utf-8")
     kwargs = _kwargs_of_call(source, "generate_next_question")
     _check("路由确实调用了 generate_next_question", kwargs is not None, str(kwargs))

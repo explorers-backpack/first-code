@@ -1,0 +1,275 @@
+==========================================================================
+InterviewAgent 完整输入验证（一次真实面试问题生成流程）
+==========================================================================
+
+--------------------------------------------------------------------------
+[1] 前置与契约（「不改业务逻辑」是被验证的）
+--------------------------------------------------------------------------
+  [PASS] ★ services/interview_agent.py 源码指纹未变  -> 实际 cbc4b7c33ad5… 期望 cbc4b7c33ad5…
+  [PASS] ★ services/interview_core.py 源码指纹未变  -> 实际 2bd6f6aab04b… 期望 2bd6f6aab04b…
+  [PASS] ★ services/interview_planner.py 源码指纹未变  -> 实际 0da3961aac2d… 期望 0da3961aac2d…
+  [PASS] ★ services/interview_context.py 源码指纹未变  -> 实际 a060ae88d240… 期望 a060ae88d240…
+  [PASS] ★ prompts/interview/question.txt 源码指纹未变  -> 实际 34c522e0b6fd… 期望 34c522e0b6fd…
+  [PASS] ★ prompts/interview/question_knowledge.txt 源码指纹未变  -> 实际 1c141c6b9c86… 期望 1c141c6b9c86…
+  [PASS] 守卫自检：内容变化会改变指纹
+  [PASS] Agent 恰好 6 个形参（4 位置 + 2 keyword-only）  -> ['context', 'plan', 'resume', 'job', 'knowledge_context', 'spark']
+  [PASS] knowledge_context 是 keyword-only（避免位置传参静默错位）
+  [PASS] knowledge_context 默认 None（不用可变默认值）
+  [PASS] Agent 签名里没有 retriever（Agent 不持有检索器、不主动检索）  -> ['context', 'plan', 'resume', 'job', 'knowledge_context', 'spark']
+  [PASS] ★ 用户词汇 interview_plan 的落点是形参 plan（不是 interview_plan）
+  [PASS] ★ 用户词汇 history_questions **不是**形参——它藏在 context 里  -> ['context', 'plan', 'resume', 'job', 'knowledge_context', 'spark']
+  [PASS] ★ 用户词汇 user_profile **不是**形参——它是 resume + job
+  [PASS] ★ 用户词汇 difficulty **不是**形参——它藏在 plan 里  -> ['context', 'plan', 'resume', 'job', 'knowledge_context', 'spark']
+  [PASS] ★ 用户词汇 knowledge_context 是形参且为 keyword-only
+  [PASS] 基础变量恰好 10 个（与 BASE_VARIABLE_NAMES 逐位一致）  -> ('resume_summary', 'job_title', 'job_description', 'interview_type', 'difficulty', 'interview_plan', 'current_stage', 'asked_questions', 'covered_topics', 'weak_topics')
+  [PASS] interview_plan 载荷恰好 7 个键  -> ('interview_type', 'difficulty', 'total_questions', 'stages', 'target_topics', 'priority_topics', 'resume_focus_points')
+
+--------------------------------------------------------------------------
+[2] 真实流程 · Agent 输入结构（捕获真实入参）
+--------------------------------------------------------------------------
+  [PASS] 前置：固定知识 chunk 已入库（1 个切片）  -> status=ok chunks=1
+  [PASS] 前置：priority_topics 恰为 ['MySQL', 'Redis 持久化']（fixture 的确定产出）  -> ['MySQL', 'Redis 持久化']
+  [PASS] 前置：current_topic 取到 'Redis 持久化'（首项 MySQL 已覆盖 ⇒ 顺延次项）  -> Redis 持久化
+  [PASS] 真实流程出题成功（ok=True）  -> errors=[] error=None
+  [PASS] errors / warnings 均为空  -> errors=[] warnings=[]
+  [PASS] ★ 包装器恰好被调用 1 次（一次流程 = 一次 Agent 调用）  -> 1
+  [PASS] ★ 包装器签名与原函数逐位一致（包装没有改变契约）
+  [PASS] ★ 包装器转发后真实实现仍只调 1 次模型（未产生额外请求）  -> 1
+  [PASS] ★ context 是流程读出的真实上下文（含种子历史问题）  -> ['请做一下自我介绍，并说明你最近一段工作的主要职责。']
+  [PASS] ★ plan 与 Planner 的产出**逐键相等**（Core 未裁剪/未替换）
+  [PASS] ★ resume 是数据库里的 Resume 行（按 session.resume_id 加载）  -> type=Resume id=1
+  [PASS] ★ job 是数据库里的 Job 行（按 session.job_id 加载）  -> type=Job id=1
+  [PASS] ★ knowledge_context 是**检索器的原样输出**（1 条真实 KnowledgeChunk）  -> <class 'list'>
+  [PASS] ★ 且该条内容 == 固定知识正文（逐字节）
+  [PASS] ★ 检索器收到的 topic == plan.priority_topics[1]（Core 的 current_topic）  -> ['Redis 持久化']
+  [PASS] Agent 侧变量集合恰好 10 个  -> ('resume_summary', 'job_title', 'job_description', 'interview_type', 'difficulty', 'interview_plan', 'current_stage', 'asked_questions', 'covered_topics', 'weak_topics')
+  [PASS] ★ 五个用户字段在变量层全部有落点（无遗漏、无多余）
+
+  ── Agent 形参（真实流程实际传入）──
+  形参                类型                    值摘要
+  context           dict                  dict，12 键；current_stage=technical、asked_questions=1 条
+  plan              dict                  dict，11 键；source=rule、priority_topics=['MySQL', 'Redis 持久化']
+  resume            Resume                Resume#1，content 110 字
+  job               Job                   Job#1，后端开发工程师
+  knowledge_context list                  list[1]（KnowledgeChunk，score=0.1857）
+
+  ── 派生变量（Agent 内部看到的输入结构）──
+  #  变量名               值摘要
+  1  resume_summary    '3 年后端开发经验，负责订单中台与缓存体系建设。\n项目名称：订单中台\n技术栈：Python、MySQL、Re…
+  2  job_title         '后端开发工程师'
+  3  job_description   '技能要求：Redis 持久化,MySQL；岗位职责：负责缓存与持久化方案设计'
+  4  interview_type    'technical'
+  5  difficulty        'senior'
+  6  interview_plan    {'interview_type': 'technical', 'difficulty': 'senior', '…
+  7  current_stage     'technical'
+  8  asked_questions   ['请做一下自我介绍，并说明你最近一段工作的主要职责。']
+  9  covered_topics    ['MySQL']
+  10 weak_topics       ['缓存击穿']
+  +  knowledge_context list[1]（仅在非空时注入；空知识时**不产生**该变量）
+
+--------------------------------------------------------------------------
+[3] 五个字段逐一核对（值来自源头、且不是默认值）
+--------------------------------------------------------------------------
+  [PASS] ★ [interview_plan] 是 dict 且恰好 7 个键（顺序一致）  -> ('interview_type', 'difficulty', 'total_questions', 'stages', 'target_topics', 'priority_topics', 'resume_focus_points')
+  [PASS] ★ [interview_plan] 是**按会话配置制定**的计划（非空、非默认模板）  -> type=technical diff=senior total=5
+  [PASS] ★ [interview_plan] 的 stages 覆盖 5 个阶段且题量合计 == total_questions  -> ['introduction', 'resume', 'technical', 'project', 'scenario']
+  [PASS] ★ [interview_plan] 的 target_topics 来自 DB 里的 Job.skills + Resume 正文  -> ['Redis 持久化', 'MySQL', '中台', 'Python', 'Redis', '中间件']
+  [PASS] ★ [interview_plan] 的 resume_focus_points 来自 Resume 正文的项目名  -> ['订单中台']
+  [PASS] ★ [interview_plan] 与 Planner 产出逐键相等（Core 未改写计划）
+  [PASS] ★ [history_questions] == 数据库上下文里的 asked_questions  -> ['请做一下自我介绍，并说明你最近一段工作的主要职责。']
+  [PASS] ★ [history_questions] 不是空列表（否则「传没传」无从判断）  -> 1
+  [PASS] ★ [user_profile] resume_summary == Resume.content（逐字节，未截断）  -> 长度 110 vs 110
+  [PASS] ★ [user_profile] job_title == Job.job_name  -> '后端开发工程师'
+  [PASS] ★ [user_profile] job_description 由 Job.skills + Job.duty 拼成  -> '技能要求：Redis 持久化,MySQL；岗位职责：负责缓存与持久化方案设计'
+  [PASS] ★ [difficulty] == 会话配置的 difficulty（senior）  -> 'senior'
+  [PASS] ★ [difficulty] **不是**默认值 mid ⇒ 证明它确实被传下去了  -> senior vs 默认 mid
+  [PASS] ★ [knowledge_context] 非空（1 条）且被 Agent 收到  -> 1
+  [PASS] ★ [knowledge_context] 归一后恰好 1 行、且内联来源  -> ['Redis 持久化提供 RDB 与 AOF 两种机制：RDB 是某一时刻的全量快照，通过 fork 子进程写盘，文件紧凑、恢复快，但两次快照之间的写入会丢失
+  [PASS] ★ 知识正文**逐字节**出现在模型实际收到的 Prompt 里
+  [PASS] ★ 检索分数不渗进 Prompt（score 只在 metadata 里）
+  [PASS] ★ 五字段全部**未**退化为默认值（difficulty/stage/type 三项对照）  -> senior / technical / technical
+  [PASS] ★ 出题流程不写库（asked_questions 未被追加，仍只有 1 条）  -> ['请做一下自我介绍，并说明你最近一段工作的主要职责。']
+  [PASS] 出题流程不推进题号（current_question_no 保持 1）  -> 1
+  [PASS] 出题成功（本节的比对前提）  -> None
+
+--------------------------------------------------------------------------
+[4] Prompt 最终内容（每个变量落在正确小节）
+--------------------------------------------------------------------------
+  [PASS] ★ 模型实际收到的是**变体模板**（有知识 ⇒ question_knowledge）
+  [PASS] ★ 无未渲染占位符（{{ 已全部替换）
+  [PASS] ★ 知识小节位于「本场面试计划」与「本场进度」之间
+  [PASS] ★ [interview_type] 落在「面试类型」行  -> 'technical'
+  [PASS] ★ [difficulty] 落在「面试难度」行（senior，不是默认 mid）  -> 'senior'
+  [PASS] ★ [current_stage] 落在「当前阶段」行  -> 'technical'
+  [PASS] ★ [job_title] 落在「岗位名称」行
+  [PASS] ★ [job_description] 落在「岗位描述」行（含 skills 与 duty）
+  [PASS] ★ [resume_summary] 落在「简历摘要」小节，且与 DB 行逐字节相同
+  [PASS] 简历未触发截断标记（内容 < 1200 字）
+  [PASS] ★ [interview_plan] 以**逐字节相同的 JSON** 落在「本场面试计划」小节  -> 小节 748 字符 vs 期望 748 字符
+  [PASS]   └ 计划载荷的 'priority_topics' 出现在 Prompt 里
+  [PASS]   └ 计划载荷的 'target_topics' 出现在 Prompt 里
+  [PASS]   └ 计划载荷的 'resume_focus_points' 出现在 Prompt 里
+  [PASS]   └ 计划载荷的 'stages' 出现在 Prompt 里
+  [PASS]   └ 计划里的 priority_topics 值逐字出现（'Redis 持久化'）
+  [PASS] ★ [knowledge_context] 渲染为恰好 1 个项目符号行  -> 1
+  [PASS] ★ 该行 == '- 正文（来源：…）'（逐字节）  -> '- Redis 持久化提供 RDB 与 AOF 两种机制：RDB 是某一时刻的全量快照，通过 fork 子进程写盘，文件紧凑、恢复快，但两次'
+  [PASS] 知识正文在整个 Prompt 里只出现 1 次（未重复注入）  -> 1
+  [PASS] ★ [history_questions] 落在「已提问问题」下（逐字节，带 '- ' 前缀）
+  [PASS] ★ [covered_topics] 落在「已覆盖知识点」下  -> ['MySQL']
+  [PASS] ★ [weak_topics] 落在「薄弱知识点（优先补强）」下  -> ['缓存击穿']
+  [PASS]   └ 三个列表互不串位（历史问题不出现在「已覆盖知识点」下）
+  [PASS] ★ 10 个变量全部有落点、且 Prompt 内无重复注入（知识正文 1 次）  -> resume=1 job=1 hist=1
+  [PASS] 出题成功（本节的比对前提）  -> None
+
+  最终 Prompt 长度：2729 字符（模型实际收到的那一份）
+  小节长度分布：
+    一、面试配置             50 字符
+    二、目标岗位             63 字符
+    三、简历摘要            113 字符
+    四、本场面试计划          751 字符
+    四·五、参考知识          311 字符
+    五、本场进度             75 字符
+
+--------------------------------------------------------------------------
+[5] 反向对照（默认值只在源头为空时出现）
+--------------------------------------------------------------------------
+  [PASS] 无 resume ⇒ resume_summary 取兜底串  -> '（无简历）'
+  [PASS] 无 job ⇒ job_title 取兜底串  -> '（未指定岗位）'
+  [PASS] 无 job ⇒ job_description 取兜底串  -> '（未提供岗位描述）'
+  [PASS] 无 plan ⇒ difficulty 取默认 mid / interview_type 取默认 comprehensive  -> mid / comprehensive
+  [PASS] 无 context ⇒ current_stage 取默认 introduction  -> 'introduction'
+  [PASS] 无 context ⇒ 三个列表为空  -> [] / [] / []
+  [PASS] 无 plan ⇒ 计划载荷的 5 个列表/标量为空（total_questions 为 None）  -> {'interview_type': 'comprehensive', 'difficulty': 'mid', 'total_questions': None, 'stages': [], 'target_topics': [], 'priority_topics': [], 'resume_focus_points': []}
+  [PASS] 前置：会话的 job_id / resume_id 均为 None  -> job=None resume=None
+  [PASS] 前置：无 job/resume ⇒ Planner 的 priority_topics 为空  -> []
+  [PASS] 无 profile 的真实流程仍出题成功  -> errors=[]
+  [PASS] ★ 无 profile ⇒ 三个兜底串**全部**出现在 Prompt 里  -> []
+  [PASS] ★ 且 resume_summary / job_title / job_description 恰为兜底串  -> （未指定岗位） / （未提供岗位描述）
+  [PASS] ★ difficulty 仍来自会话配置（senior）⇒ 与 profile 无关  -> 'senior'
+  [PASS] 无 profile ⇒ 无知识 ⇒ 走原模板（不含参考知识小节）
+  [PASS] 无 profile 时也无未渲染占位符
+  [PASS] ★ 对照：有 profile 的真实流程里，兜底串**一个都不出现**  -> []
+
+--------------------------------------------------------------------------
+[6] history_questions 真的被用上（不只是渲染进 Prompt）
+--------------------------------------------------------------------------
+  [PASS] ★ 与历史重复的候选被拒绝 ⇒ 发起了一次修复（共 2 次模型调用）  -> 2
+  [PASS] ★ 第一次 Prompt（含历史）确实发出去了
+  [PASS] ★ 修复请求里也带上了历史问题（question_repair.txt 的 asked_questions）  -> 's`：字符串数组（3-6 个采分点关键词，仅供内部评分）\n   - `reason`：非空的一句话出题理由\n4. 如果确实无法生成有效问题，输出：\n\n{\n  "question": "",\n  "error": "说明无法生成的原因"\n}\n'
+  [PASS] ★ 修复后出题成功（历史只在「重复」时拦人，不阻断流程）  -> errors=[]
+  [PASS] 最终题目 == 修复回复里的问题（未被历史顶掉）  -> '在订单中台的缓存体系里，你会如何设计 Redis 持久化策略'
+  [PASS] ★ 对照：非重复回复只需 1 次模型调用（查重不误伤）  -> 1
+  [PASS] ★ 历史问题经 validate_question 判定为「高度重复」  -> 与历史问题高度重复（相似度 100%）：请做一下自我介绍，并说明你最近一段工作的主要职责。
+
+==========================================================================
+Prompt 最终内容（一次真实面试问题生成流程 · 模型实际收到的那一份）
+==========================================================================
+# 任务：生成下一道面试问题
+
+你正在主持一场面试，请根据下面的配置、岗位、简历与进度，生成**下一道**面试问题。
+
+## 一、面试配置
+
+- 面试类型：technical
+- 面试难度：senior
+- 当前阶段：technical
+
+## 二、目标岗位
+
+- 岗位名称：后端开发工程师
+- 岗位描述：技能要求：Redis 持久化,MySQL；岗位职责：负责缓存与持久化方案设计
+
+## 三、候选人简历摘要
+
+3 年后端开发经验，负责订单中台与缓存体系建设。
+项目名称：订单中台
+技术栈：Python、MySQL、Redis 持久化、消息队列
+主导 Redis 持久化方案选型（RDB 与 AOF 混合），支撑日均 2 亿次读写。
+
+## 四、本场面试计划
+
+{
+  "interview_type": "technical",
+  "difficulty": "senior",
+  "total_questions": 5,
+  "stages": [
+    {
+      "stage": "introduction",
+      "weight": 10,
+      "target_questions": 1
+    },
+    {
+      "stage": "resume",
+      "weight": 10,
+      "target_questions": 1
+    },
+    {
+      "stage": "technical",
+      "weight": 45,
+      "target_questions": 1
+    },
+    {
+      "stage": "project",
+      "weight": 25,
+      "target_questions": 1
+    },
+    {
+      "stage": "scenario",
+      "weight": 10,
+      "target_questions": 1
+    }
+  ],
+  "target_topics": [
+    "Redis 持久化",
+    "MySQL",
+    "中台",
+    "Python",
+    "Redis",
+    "中间件"
+  ],
+  "priority_topics": [
+    "MySQL",
+    "Redis 持久化"
+  ],
+  "resume_focus_points": [
+    "订单中台"
+  ]
+}
+
+## 四·五、参考知识（外部检索结果，可选）
+
+参考知识：
+- Redis 持久化提供 RDB 与 AOF 两种机制：RDB 是某一时刻的全量快照，通过 fork 子进程写盘，文件紧凑、恢复快，但两次快照之间的写入会丢失；AOF 记录每条写命令，appendfsync 可取 always / everysec / no，everysec 是生产常见折中，最多丢 1 秒数据，重写时用 BGREWRITEAOF。（来源：handbook://redis/persistence）
+
+出题时请把这些知识融入问题的场景与追问点，但不得整段照抄进 `question`，
+也不得把知识中的结论直接写进 `question`（`expected_points` 可参考）。
+
+## 五、本场进度（用于避免重复）
+
+已提问问题：
+- 请做一下自我介绍，并说明你最近一段工作的主要职责。
+
+已覆盖知识点：
+- MySQL
+
+薄弱知识点（优先补强）：
+- 缓存击穿
+
+  …（此处省略「六、生成要求」与「七、输出格式」两节，共 2729 字符）
+
+==========================================================================
+结果
+==========================================================================
+  链路：InterviewSession/Job/Resume/InterviewContext（真实 DB 行）
+        → interview_planner.build_plan_for（真实规则计划）
+        → VectorKnowledgeRetriever（真实 RAG）
+        → interview_core.generate_next_question
+        → interview_agent.generate_question（入参被捕获核对）
+        → prompts/interview/question_knowledge.txt
+  五字段落点：interview_plan→plan / history_questions→context.asked_questions
+              user_profile→resume+job / difficulty→plan.difficulty
+              knowledge_context→keyword-only 形参
+  保护文件指纹：6 个（4 业务模块 + 2 Prompt 模板，全部未改）
+  改动：只新增本测试文件（未修改业务逻辑，未新增生产路径日志）
+  断言：通过 104 项，失败 0 项
+==========================================================================

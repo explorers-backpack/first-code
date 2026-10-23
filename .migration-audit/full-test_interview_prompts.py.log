@@ -1,0 +1,224 @@
+======================================================================
+AI 模拟面试 · Prompt 加载 / 注入 / JSON 解析 自检
+======================================================================
+
+[A1] 加载五个 Prompt 文件
+  [PASS] system.txt 可加载
+  [PASS] system.txt 内容长度 > 200
+  [PASS] question.txt 可加载
+  [PASS] question.txt 内容长度 > 200
+  [PASS] question_knowledge.txt 可加载
+  [PASS] question_knowledge.txt 内容长度 > 200
+  [PASS] question_repair.txt 可加载
+  [PASS] question_repair.txt 内容长度 > 200
+  [PASS] planner.txt 可加载
+  [PASS] planner.txt 内容长度 > 200
+  [PASS] list_prompts 返回全部五个
+  [PASS] list_prompts 不存在的分组返回空列表
+
+[A2] 缺失与非法名称
+  [PASS] 不存在的 prompt 抛 PromptNotFoundError
+  [PASS] 空名称抛 PromptNotFoundError
+  [PASS] None 名称抛 PromptNotFoundError
+  [PASS] 路径分隔符被拒（目录穿越）
+  [PASS] 上跳名称被拒
+  [PASS] 子目录穿越被拒
+  [PASS] 非法分组被拒
+  [PASS] 异常类型继承自 FileNotFoundError
+  [PASS] 异常类型继承自 PromptError
+
+[A3] 缓存行为（用临时根目录验证真实读盘）
+  [PASS] 首次读取拿到 v1
+  [PASS] 命中缓存，仍是 v1（未重新读盘）
+  [PASS] use_cache=False 时读到最新 v2
+  [PASS] clear_cache 后读到最新 v2
+  [PASS] 空文件抛 PromptError
+  [PASS] list_prompts 只列出 .txt
+  [PASS] 临时根目录已还原
+
+[A4] 占位符提取
+  [PASS] question.txt 声明了全部 10 个输入变量（无缺无多）
+  [PASS] question.txt 变量数量恰为 10
+  [PASS] question.txt 无重复占位符
+  [PASS] planner.txt 提取到 8 个变量
+  [PASS] system.txt 无占位符（纯角色定义）
+  [PASS] question_knowledge.txt = question.txt 的 10 个变量 + knowledge_context
+  [PASS]   └ 变量数量恰为 11
+  [PASS]   └ question.txt 未被污染（仍不含 knowledge_context）
+
+[B1] 完整注入
+  [PASS] 渲染后无残留占位符
+  [PASS] 注入简历摘要
+  [PASS] 注入岗位名称
+  [PASS] 注入岗位描述
+  [PASS] 注入面试类型
+  [PASS] 注入当前阶段
+  [PASS] 列表变量渲染成项目符号
+  [PASS] dict 变量渲染成 JSON
+  [PASS] 单花括号的 JSON 示例未被当作占位符
+  [PASS] 渲染结果仍是长文本
+
+[B2] 严格模式双向校验
+  [PASS] 缺变量抛 PromptRenderError
+  [PASS] 多传未使用变量抛 PromptRenderError
+  [PASS] 异常继承自 ValueError
+  [PASS] 非严格模式下缺变量保留原占位符
+  [PASS] 非严格模式下未提供的变量保持原样
+  [PASS] 非严格模式下多传变量被忽略
+
+[B3] 单次替换，不递归展开
+  [PASS] 变量值中的占位符不被二次展开
+  [PASS] system.txt 无变量时可空注入渲染
+  [PASS] system.txt 传了变量会报错（严格模式）
+
+[B4] 取值归一 stringify
+  [PASS] None → （无）
+  [PASS] 空列表 → （无）
+  [PASS] True → true
+  [PASS] False → false
+  [PASS] 整数 → 字符串
+  [PASS] 字符串原样
+  [PASS] 标量列表 → 项目符号
+  [PASS] 嵌套列表 → JSON
+  [PASS] dict → JSON
+  [PASS] 空 dict 仍可序列化
+
+[C1] 正常解析
+  [PASS] 纯 JSON
+  [PASS] markdown 围栏（json 标注）
+  [PASS] markdown 围栏（无标注）
+  [PASS] JSON 前有解释文字
+  [PASS] JSON 后有解释文字
+  [PASS] 前后都有文字
+  [PASS] 嵌套对象
+  [PASS] 字符串值内含花括号
+  [PASS] 返回多个对象时取第一个
+  [PASS] 中文未被转义为 \u
+
+[C2] 非法输入
+  [PASS] 空字符串 → PromptJSONError
+  [PASS] 纯空白 → PromptJSONError
+  [PASS] 纯自然语言 → PromptJSONError
+  [PASS] JSON 数组（非对象） → PromptJSONError
+  [PASS] JSON 标量 → PromptJSONError
+  [PASS] JSON 被截断 → PromptJSONError
+  [PASS] 只有左花括号 → PromptJSONError
+  [PASS] None → PromptJSONError
+  [PASS] 非字符串（dict） → PromptJSONError
+  [PASS] Spark 失败哨兵串 → PromptJSONError
+  [PASS] 异常继承自 ValueError
+  [PASS] 错误信息含输出片段（便于排查）
+
+[C3] 代码块围栏剥离
+  [PASS] 剥离 ```json
+  [PASS] 剥离 ```
+  [PASS] 无围栏时原样返回
+
+[D1] 成功形状
+  [PASS] ok=True
+  [PASS] question 解析正确
+  [PASS] question_type 解析正确
+  [PASS] topic 解析正确
+  [PASS] difficulty 解析正确
+  [PASS] expected_points 解析为 4 项
+  [PASS] reason 解析正确
+  [PASS] error 为 None
+
+[D2] 失败形状
+  [PASS] 显式 error → ok=False
+  [PASS] error 原因被保留
+  [PASS] 失败时 question 为空字符串
+  [PASS] question 为空白 → ok=False
+  [PASS] question 为空白时给出可读原因
+  [PASS] 非法 JSON → ok=False
+  [PASS] 非法 JSON 时 error 非空
+  [PASS] Spark 哨兵串 → ok=False
+  [PASS] 哨兵串不产生任何问题文本
+
+[D3] 字段归一与容错
+  [PASS] 仅 question 时 ok=True
+  [PASS] 缺失字段回落为空字符串
+  [PASS] 缺失 expected_points 回落为空数组
+  [PASS] question 首尾空白被 strip
+  [PASS] question_type 首尾空白被 strip
+  [PASS] expected_points 丢弃空串与非字符串、去重
+  [PASS] expected_points 结构性截断到上限
+  [PASS] expected_points 非数组时回落为空数组
+
+[D4] 只做结构归一，不做业务校验
+  [PASS] 未知 question_type 不被拦截（业务枚举由业务层判断）
+  [PASS] 未知 difficulty 不被拦截
+  [PASS] 多余字段被忽略而不报错
+  [PASS] 成功与失败结果的字段集一致
+
+[E1] system.txt 覆盖 9 条面试官约束
+  [PASS] 约束「专业」已定义
+  [PASS] 约束「自然」已定义
+  [PASS] 约束「根据简历提问」已定义
+  [PASS] 约束「根据岗位提问」已定义
+  [PASS] 约束「不连续重复问题」已定义
+  [PASS] 约束「不提前泄露答案」已定义
+  [PASS] 约束「不进行无关聊天」已定义
+  [PASS] 约束「不虚构候选人经历」已定义
+  [PASS] 约束「不直接修改面试状态」已定义
+  [PASS] 约束「输出严格结构化结果」已定义
+  [PASS] 明确「一次只问一个问题」
+  [PASS] 明确 JSON 之外不得有字符
+  [PASS] 防简历内提示词注入
+
+[E2] question.txt 的输入变量与输出契约
+  [PASS] 声明输入变量 resume_summary
+  [PASS] 声明输入变量 job_title
+  [PASS] 声明输入变量 job_description
+  [PASS] 声明输入变量 interview_type
+  [PASS] 声明输入变量 difficulty
+  [PASS] 声明输入变量 interview_plan
+  [PASS] 声明输入变量 current_stage
+  [PASS] 声明输入变量 asked_questions
+  [PASS] 声明输入变量 covered_topics
+  [PASS] 声明输入变量 weak_topics
+  [PASS] 输出字段 question 已约定
+  [PASS] 输出字段 question_type 已约定
+  [PASS] 输出字段 topic 已约定
+  [PASS] 输出字段 difficulty 已约定
+  [PASS] 输出字段 expected_points 已约定
+  [PASS] 输出字段 reason 已约定
+  [PASS] 约定失败分支含 error 字段
+  [PASS] 要求严格 JSON
+  [PASS] 禁止泄露答案
+  [PASS] 要求语义不重复
+  [PASS] 覆盖全部 7 个阶段
+  [PASS] Prompt 中不含数据库操作描述
+  [PASS] Prompt 中不引用讯飞 / RAG
+
+[E3] planner.txt 与调用点变量一致
+  [PASS] planner.txt 无残留单花括号占位符风险
+  [PASS] 调用点注入集与模板变量集完全一致（严格模式未报错）
+  [PASS] planner 提示词含岗位名
+  [PASS] planner 提示词含难度标签
+  [PASS] planner 提示词含时长与题量
+  [PASS] planner 提示词声明不出题
+  [PASS] planner 提示词声明 priority 为子集
+  [PASS] 无简历时注入（无简历）
+  [PASS] 无岗位时注入（未指定岗位）
+
+[E4] 目录结构
+  [PASS] backend/prompts/interview 目录存在
+  [PASS] system.txt 存在于 prompts/interview/
+  [PASS] question.txt 存在于 prompts/interview/
+  [PASS] question_repair.txt 存在于 prompts/interview/
+  [PASS] planner.txt 存在于 prompts/interview/
+  [PASS] loader 与 interview 分组分离（资产与代码不混放）
+
+[E5] question_repair.txt 契约（供 Interview Agent 一次性修复使用）
+  [PASS] 声明 3 个变量（error / raw_output / asked_questions）
+  [PASS] 要求只输出 JSON
+  [PASS] 给出失败分支形状
+  [PASS] 列出全部合法 difficulty
+  [PASS] 强调不得与已提问问题重复
+  [PASS] 修复提示词可渲染且无残留占位符
+  [PASS] 修复提示词带上历史问题
+
+======================================================================
+结果: 通过 177 项，失败 0 项
+======================================================================

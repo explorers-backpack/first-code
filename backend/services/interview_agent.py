@@ -234,11 +234,11 @@ def _is_spark_failure(raw: Any) -> bool:
 
 
 def _default_spark() -> Any:
-    """延迟获取全局 Spark 实例，避免 services → main 的模块级循环导入。"""
+    """获取装配层注册的 LLM 门面，不导入应用入口。"""
     try:
-        from main import spark_api  # noqa: PLC0415 - 刻意延迟导入
+        from common.llm import get_llm
 
-        return spark_api
+        return get_llm()
     except Exception:  # noqa: BLE001 - 环境不完整时视为不可用
         return None
 
