@@ -1,0 +1,132 @@
+====================================================================
+讯飞数字人完整交互闭环自检（提问 → 播报 → ASR → 评分 → 下一题）
+====================================================================
+
+[1] 契约：通道结果状态 / 信封键集 / 异常档位
+  [PASS] 通道结果状态集恒定（7 个，含 unsupported）
+  [PASS] 可重试状态 = {empty, unavailable}（其余重试无用）
+  [PASS] capture_answer 信封 = 恒定 8 键
+  [PASS] ensure_ready 信封 = 恒定 7 键
+  [PASS] INTEGRATIONS：asr / tts 标为已具备（虚拟人**内置**能力）
+  [PASS] 通道层 __all__ 里每个名字都真实存在
+  [PASS] 通道层 __all__ 暴露预检 / ASR / 分类
+  [PASS] 编排层 ASR 结果键集 = 恒定 7 键
+  [PASS] 编排层 __all__ 里每个名字都真实存在
+  [PASS] 编排层 __all__ 暴露闭环入口
+  [PASS] ★ 新增异常档位：SessionExpiredError 继承 ResponseError（既有调用方行为不变）
+  [PASS]   └ 且在 avatar_provider.__all__ 里公开
+  [PASS]   └ expired 与 unavailable 是**兄弟**（处置完全不同，不可互相捕获）
+
+[2] 异常分类（classify_error + 失效码映射位）
+  [PASS] SessionExpiredError → expired（**优先于** ResponseError 判定）
+  [PASS] UnavailableError → unavailable
+  [PASS] ConfigError → disabled（部署问题，不该重试）
+  [PASS] 普通 ResponseError → failed
+  [PASS] 未知异常 → failed（兜底，不静默）
+  [PASS] ★ 全部分类结果都落在 CHANNEL_STATES 内（无越界值）
+  [PASS]   └ 且 ConfigError 不会被 ResponseError 分支抢走（顺序敏感）
+  [PASS] ★ Mock 未知会话抛 SessionExpiredError（仍可被 ResponseError 捕获）
+  [PASS] ★ SESSION_EXPIRED_CODES 默认为空（不配 = 默认 = 行为不变）
+  [PASS]   └ 默认：非 0 code → 普通 ResponseError（**不**升级为 expired）
+  [PASS] ★ 注入失效码后：同一 code 升级为 SessionExpiredError（映射**真的接线**）
+
+[3] ensure_ready —— Avatar 启动（预检 / 初始化）
+  [PASS] 成功 ⇒ ok=True / status=ok / 拿到 avatar_session_id + stream_url
+  [PASS]   └ 信封键集恒定（= READY_FIELDS）
+  [PASS]   └ 链路 = create_session + initialize
+  [PASS]   └ 幂等：再次预检不再 initialize（复用同一场会话）
+  [PASS] ★ 初始化失败（网络类）⇒ ok=False / status=unavailable / retryable=True
+  [PASS]   └ 失败信封与成功信封**同键集**（调用方无需判键存在性）
+  [PASS] ★ 建会话失败 ⇒ 同样如实上报（不静默吞掉）
+  [PASS] ★ provider 配置非法 ⇒ status=disabled（部署问题，别重试）
+  [PASS] ★ 非数字人会话 ⇒ status=unsupported（不误建数字人会话）
+
+[4] capture_answer —— 讯飞虚拟人 ASR 取文本
+  [PASS] ready ⇒ ok=True / status=ok / text = ASR 识别文本 / audio_url 非空
+  [PASS]   └ 信封键集恒定（= CAPTURE_FIELDS）
+  [PASS]   └ 链路 = create_session + initialize + fetch_answer（**未**新增 ASR Provider）
+  [PASS] ★ ASR 空结果 ⇒ status=empty / ok=False / **retryable=True**（让用户重说）
+  [PASS]   └ 与成功信封同键集
+  [PASS] ★ 网络异常 ⇒ status=unavailable / retryable=True
+  [PASS] ★ 会话失效 ⇒ status=expired / **retryable=False**（重试无用，需重建会话）
+  [PASS] ★ 非数字人会话 ⇒ status=unsupported
+  [PASS]   └ 四种失败信封与成功信封**键集完全一致**
+
+[5] Service 层包装（唯一接触 DB 处 + 归属校验）
+  [PASS] interview_service 暴露两个闭环能力
+  [PASS] ensure_avatar ⇒ 信封键集 = READY_FIELDS 且 ok=True
+  [PASS] capture_avatar_answer ⇒ 信封键集 = CAPTURE_FIELDS 且 text = ASR 文本
+  [PASS] ★ 归属 / 存在性校验沿用既有口径（不存在 ⇒ 404，不泄露他人会话）
+  [PASS]   └ ensure_avatar 同样 404
+
+[6] 完整闭环端到端（数字人模式，逐段取证）
+  [PASS] ① 创建 Session → 状态 waiting_question / 库状态 created
+  [PASS]   └ 此时尚未碰 provider（只建库记录）
+  [PASS] ② Avatar 启动 ⇒ ok=True / stream_url 拿到 / 状态仍 waiting_question
+  [PASS]   └ provider 序列 = create_session + initialize
+  [PASS] ③ 生成问题 + 数字人播报第一题 ⇒ 状态 avatar_speaking
+  [PASS]   └ ★ 播报的正是第一题原文（Core 出的题 → provider.speak）
+  [PASS]   └ 整场题目一次性落库（total=2）
+  [PASS] ④ 播报结束 → waiting_answer
+  [PASS] ⑤ ASR 取到文本 ⇒ ok=True / source=asr / text 即识别结果
+  [PASS]   └ ★ ASR 文本**原样落库**（answer_text 与识别结果逐字相等）
+  [PASS]   └ 评分完成（分数 + 反馈）
+  [PASS]   └ ★ 评分完成后**生成下一题**（next_question 题号 2）
+  [PASS]   └ 状态 → avatar_speaking（下一题已交付播报）
+  [PASS]   └ ASR 结果键集恒定（= ASR_RESULT_FIELDS）
+  [PASS]   └ 第 2 题同样闭环：ASR → 提交 → all_answered=True / 状态 finished
+  [PASS]   └ 两次作答都真实落库
+  [PASS] ⑥ 结束 + 报告生成
+  [PASS] ★★ 闭环全程 provider 调用序列与预期**逐项相等**
+  [PASS]   └ 全程只有**一场**数字人会话（create_session 幂等，未重复新建）
+  [PASS] text 会话全程 **零** provider 调用（闭环不影响默认路径）
+
+[7] 异常分支（4 类故障的处置）
+  [PASS] ★ ASR 网络失败 ⇒ ok=False / status=unavailable / retryable=True
+  [PASS]   └ ★★ **绝不调用** submit_answer（不会写入空答案）
+  [PASS]   └ 状态保持不变（仍 waiting_answer，可重试）
+  [PASS]   └ 未落库任何作答
+  [PASS] ★ ASR 空结果 ⇒ status=empty / retryable=True，**不提交**
+  [PASS]   └ 语义红线：empty ≠「用户没回答」——不据此提交空答案
+  [PASS] ★ ASR 失败但给了兜底文本 ⇒ source=fallback，文本被 strip 后提交
+  [PASS]   └ ASR 信封仍如实上报失败（不掩盖）
+  [PASS] ★ 顺序不对（还在播报就取 ASR）⇒ 状态机**先**报错
+  [PASS]   └ ★★ 报错发生在**调 provider 之前**（零新增 provider 调用）
+  [PASS]   └ 状态未被污染（仍 avatar_speaking）
+  [PASS] ★ 数字人会话失效 ⇒ status=expired / retryable=False（重试无用）
+  [PASS]   └ 状态保持不变（等待重建后重试）
+  [PASS]   └ ★ 重建 provider（换一场会话）后同一调用即恢复成功
+  [PASS] ★ 面试会话不存在 ⇒ 沿用服务层口径抛 404（不吞异常、不静默降级）
+  [PASS] ★ text 会话被误调 ASR ⇒ status=unsupported，**不提交**、不打 provider
+
+[8] 边界守卫（AST：分层单向 / 不新增 Provider）
+  [PASS] 编排层顶层依赖**不变**（标准库 + services，无 fastapi / schemas / models）
+  [PASS] ★ 编排层**未新增分层边**：顶层 services.* 仍是 interview_core / interview_service
+  [PASS]   └ 编排层**不**直接依赖通道层（ASR 经 Service 包装，不越界）
+  [PASS]   └ ``schemas`` 只在函数体内延迟导入（不破坏顶层依赖约定）
+  [PASS] services/avatar_interview.py 不反向 import 编排层
+  [PASS] services/interview_service.py 不反向 import 编排层
+  [PASS] services/avatar_provider.py 不反向 import 编排层
+  [PASS] services/avatar_provider_iflytek.py 不反向 import 编排层
+  [PASS] services/interview_core.py 不反向 import 编排层
+  [PASS] modules/interview/api.py 不反向 import 编排层
+  [PASS] main.py 不反向 import 编排层
+  [PASS] Service 仍经通道层调用数字人（未直接 import provider）
+  [PASS] 通道层不 import 模型层 / 编排层（判据用 CHANNEL 常量，不加新边）
+  [PASS] ★ 未新增独立 ASR / TTS Provider 文件（复用虚拟人内置能力）
+  [PASS]   └ services/avatar_interview.py 未 import 任何 asr / tts 独立模块
+  [PASS]   └ services/avatar_provider.py 未 import 任何 asr / tts 独立模块
+  [PASS]   └ services/avatar_provider_iflytek.py 未 import 任何 asr / tts 独立模块
+  [PASS]   └ services/interview_service.py 未 import 任何 asr / tts 独立模块
+  [PASS]   └ services/interview_orchestrator.py 未 import 任何 asr / tts 独立模块
+
+====================================================================
+结果: 通过 102 项，失败 0 项
+====================================================================
+数字人会话初始化失败：[mock] 注入的失败：initialize
+数字人会话初始化失败：[mock] 注入的失败：create_session
+数字人 provider 解析失败：AVATAR_PROVIDER 取值非法：'bogus'，允许 mock / iflytek
+取语音回答（ASR）失败：[mock] 注入的失败：fetch_answer
+取语音回答（ASR）失败：会话已过期，请重新创建
+取语音回答（ASR）失败：[mock] 注入的失败：fetch_answer
+取语音回答（ASR）失败：会话已过期，请重新创建

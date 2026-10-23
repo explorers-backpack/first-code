@@ -1,0 +1,96 @@
+========================================================================
+向量后端运行状态上报 / 规模告警 / 切换验证自检
+========================================================================
+
+[1] 形状契约（固定 3 键）
+  [PASS] 键集恰好为 3 键
+  [PASS] 成功时 error is None
+  [PASS] ann 是**真 bool**（不是 0 / 不是字符串）
+  [PASS] backend 是 str
+
+[2] 未配置档 ⇒ sql（**这就是以前完全静默的全表扫描**）
+  [PASS] ★ backend == sql
+  [PASS] ★ ann is False（没有 ANN 索引）
+  [PASS] error is None（未配置**不是**配置错误）
+  [PASS] 空白取值也按未配置处理
+
+[3] chroma 档 ⇒ ann=True（含取值别名）
+  [PASS] ★ backend == chroma
+  [PASS] ★ ann is True
+  [PASS] error is None
+  [PASS]   └ 别名 'CHROMA' 也归一到 chroma
+  [PASS]   └ 别名 'chromadb' 也归一到 chroma
+  [PASS]   └ 别名 ' chroma ' 也归一到 chroma
+
+[4] 配置非法档 ⇒ 错误可见、但**不抛异常**
+  [PASS] ★ 不抛异常（健康检查永远不该 500）
+  [PASS] error 非空
+  [PASS] backend is None
+  [PASS] ann is None（未知，不伪装成 False）
+  [PASS] 键集仍为 3 键
+  [PASS] 错误里带得出具体原因
+
+[5] 规模告警纯函数（不读库、可单测）
+  [PASS] ★ sql + 未达阈值 ⇒ None
+  [PASS] ★ sql + 恰好达阈值 ⇒ 有文案（含等号）
+  [PASS] ★ sql + 超阈值 ⇒ 文案含实际切片数
+  [PASS] ★ chroma + 超阈值 ⇒ None（已是 ANN，无需告警）
+  [PASS] ★ 切片数未知（None）⇒ None（不误报）
+  [PASS] ★ 文案点明「建议切 chroma」
+
+[6] 启动日志（全表扫描 + 规模超阈值必须告警）
+  [PASS] 常规：含 backend=sql 与 ann=False
+  [PASS] 常规：含实测切片数
+  [PASS] 常规：不误报 WARN
+  [PASS] ★ 超阈值：含 WARN
+  [PASS] ★ 超阈值：点明全表扫描的代价
+  [PASS] ★ 超阈值：给出可执行建议（VECTOR_STORE=chroma）
+  [PASS] chroma：含 ann=True 且**无** WARN
+  [PASS] 配置非法：走 ERROR 分支（不静默）
+
+[7] GET /api/health 回带 vector（且向后兼容）
+  [PASS] 状态码 200
+  [PASS] ★ 既有键 status 未变
+  [PASS] ★ 既有键 service 未变
+  [PASS] ★ 既有键 embedding 仍在且是 dict
+  [PASS] ★ 新增键 vector 存在
+  [PASS] vector 键集为 3 键
+  [PASS] vector 与 vector_status() 同源（逐键相等）
+  [PASS] 未配置环境下报 sql / ann=False
+  [PASS] ★ 切到 chroma 后 health 如实变化（配置是请求期读取的）
+
+[8] 组装器同源与阈值常量
+  [PASS] ★ describe_vector_backend() 与 health.vector_status() 逐键相等
+  [PASS] ★ FULL_SCAN_WARN_CHUNKS 是正整数（且不是 bool）
+  [PASS] ★ 常量已进 knowledge_rag.__all__（对外契约）
+  [PASS] ★ describe_vector_backend 已进 knowledge_rag.__all__
+  [PASS] ★ 只读配置：describe_vector_backend 不会把 chromadb 拉起来
+
+[9] ★ 切换验证：同一份权威行，sql → chroma 全链路
+  [PASS]   └ 阶段 A：未配置 ⇒ 组装器选 sql
+  [PASS]   └ 管线默认 store 来自组装器（sql）
+  [PASS]   └ 入库成功且切成多片
+  [PASS]   └ 权威行都在 knowledge_chunk（含向量）
+  [PASS]   └ 读侧组装出的 store 也是 sql
+  [PASS]   └ sql 后端检索命中自身（score≈1.0）
+  [PASS]   └ 阶段 B：VECTOR_STORE=chroma ⇒ ann=True
+  [PASS]   └ 读侧组装出的 store 换成 ChromaVectorStore
+  [PASS]   ★ 切后端后**未重建**派生索引 ⇒ 检索静默返回 0 条（权威行与向量都在，坑就在这）
+  [PASS]   └ rebuild_index(purge=True) 从权威行重建派生索引
+  [PASS]   └ 重建扫描到的就是那 n 条权威行
+  [INFO] purge 丢弃并重建集合 ⇒ 旧实例已失效（RetrieverUnavailableError）；生产里检索器每次新建，故不受影响
+  [PASS]   ★ 重建后 chroma 检索命中自身（与 sql 后端一致）
+  [PASS]   └ interview_core.resolve_retriever(use_rag=True) 拿到真实检索器
+  [PASS]   └ 它用的后端就是 chroma（环境变量贯通到面试链路）
+  [PASS]   ★ 面试链路在 chroma 后端下同样检索到知识
+  [INFO] 临时索引目录未能删除（chroma 句柄未释放）：C:\Users\DELL-PC\AppData\Local\Temp\career_ai_chroma_switch_lf44af1o
+
+[10] 源码守卫（AST）：main.py 顶层不 import 向量/Embedding 组装器
+  [PASS] ★ 顶层**不**出现 services.knowledge_rag（必须函数内延迟导入）
+  [PASS] 顶层不出现 chromadb（可选依赖不能被启动路径拉起）
+  [PASS] 顶层不出现 services.vector_store_chroma
+  [PASS] 守卫自检：顶层 import 时判据确实会命中
+
+========================================================================
+通过 67 / 67
+========================================================================

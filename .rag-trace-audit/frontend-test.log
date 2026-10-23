@@ -1,0 +1,142 @@
+
+> frontend@0.0.0 test
+> node tests/test_interview_mode.js
+
+====================================================================
+前端 · AI 面试间「面试模式 + 实时通道」自检
+====================================================================
+
+[1] 协议常量
+  [PASS] 服务端事件集恒定（9 个，与后端同序）
+  [PASS] 客户端消息集恒定（6 个）
+  [PASS] 作答方式 = {asr, text}
+  [PASS] answer 事件结果 = {submitted, rejected}
+  [PASS] 关闭码用 4xxx
+  [PASS] 编排状态 5 态
+  [PASS] ★ 5 个编排状态**每个**都有中文文案（漏一个界面就会出现原始英文码）
+  [PASS] ★ 通道层 7 档 status **每个**都有中文文案
+  [PASS] 重连次数上限为正整数
+
+[2] WebSocket URL 拼装
+  [PASS] 路径模板与后端 WS_PATH 一致
+  [PASS] URL = ws(s)://host/api/interview/{id}/ws?ticket=…（凭证只走 ticket）
+  [PASS] ticket 做了 URL 编码（否则含 + / = 会被截断）
+  [PASS] ★ 无 ticket 时**抛 SocketTicketError**，不再退回长期 token
+  [PASS] ★ 显式传空 ticket 同样抛错（空串不等于「用 token 顶一下」）
+  [PASS] ★ 源码里**没有**任何 `?token=` 拼装分支（已登录也不拼）
+
+[3] InterviewSocket：连接 / 发消息 / 收事件
+  [PASS] ★ 无 token 时**不发请求**，抛 SocketAuthError（区别于「连接失败」）
+  [PASS] connect() 创建了一个 WebSocket
+  [PASS] ★ URL 用的是**一次性 ticket**（不是长期 token）
+  [PASS] ★ URL 里没有 `token=`（长期凭证不进 query）
+  [PASS] 未 open 前 connected=false
+  [PASS] open 后 connected=true 且回调了 onOpen
+  [PASS] start() 发 {'type':'start'}
+  [PASS] speechDone() 发 {'type':'speech_done'}
+  [PASS] answerByVoice() 发 {'type':'answer','mode':'asr'}
+  [PASS] answerByText(t) 发 {'type':'answer','mode':'text','text':t}
+  [PASS] answerByText(null) 归一成空串（不把 null 发出去）
+  [PASS] finish() 发 {'type':'finish'}
+  [PASS] snapshot() 发 {'type':'snapshot'}
+  [PASS] ping() 发 {'type':'ping'}
+  [PASS] onEvent 逐条派发（4 条事件 → 4 次回调，顺序不变）
+  [PASS] 事件体原样透传（未被改写）
+  [PASS] ★ 非 JSON 消息 → onError（不静默丢弃，否则界面永远停在「等待」）
+  [PASS] 解析失败不污染事件流
+  [PASS] close() 关闭底层连接并置 connected=false
+  [PASS] close() 被记为「用户主动关闭」（不再自动重连）
+  [PASS] 主动关闭后 close 回调仍被调用（含正常关闭码 1000）
+  [PASS] 未连接时 send() 返回 false 且**不抛异常**
+
+[3b] 凭证获取失败：fail closed（绝不回退 ?token=）
+  [PASS] ★ 503 ⇒ 抛 SocketTicketError（不是「已连接」）
+  [PASS] ★ 503 ⇒ **一个 WebSocket 都没建**（fail closed 的硬证据）
+  [PASS] 错误消息含状态码（可据此排查，但不含任何凭据）
+  [PASS] 标记为可重试
+  [PASS] ★ 网络不可达（status 0）⇒ SocketTicketError 且不建连
+  [PASS] ★ 凭证端点挂住 ⇒ 超时后抛 SocketTicketError 且不建连（不会永远 pending）
+  [PASS] ★ 200 但响应体无 ticket ⇒ SocketTicketError 且不建连
+  [PASS] ★ 401 ⇒ SocketAuthError（登录问题，区别于凭证服务故障）
+  [PASS] ★ 403 ⇒ SocketAuthError 且提示「无权」
+  [PASS] ★ 失败路径只请求过 ws-ticket 端点，且请求 URL 不含任何凭证
+  [PASS] ★ 错误对象里**不携带** ticket / token（提示会进 UI 与错误上报）
+
+[3c] connectWithRetry：退避重试
+  [PASS] 退避参数合理（基数 >0、上限 ≥ 基数、抖动 ∈ (0,1)）
+  [PASS] ★ 抖动区间恒定：实际等待 ∈ [名义/2, 名义]（rand=0 / rand=1 卡两端）
+  [PASS] ★ 指数增长且封顶（不会无限增长）
+  [PASS] ★ 抖动是随机的（同参数多次取值不全相等，否则等于没抖动）
+  [PASS] 负 / 非数字 attempt 不会算出 NaN（防御性）
+  [PASS] ★ 首次 503、第二次成功 ⇒ 最终连上（重试真的生效）
+  [PASS] onRetry 被回调一次（attempt 从 1 开始）
+  [PASS] onRetry 给出的等待时长在抖动区间内
+  [PASS] ★ 重试成功后用的仍是 ticket（不是 token）
+  [PASS] ★ 一直 503 ⇒ 用尽 maxAttempts 后抛 SocketTicketError
+  [PASS] ★ 重试次数有上限（= maxAttempts，不是无限）
+  [PASS] ★ 全程没有建过 WebSocket
+  [PASS] ★ 401 ⇒ 立刻放弃、**不重试**（重试只会重复被拒）
+  [PASS] ★ close() 打断退避等待：Promise 不会永挂，且不再建连
+
+[4] 断线重连策略
+  [PASS] ★ 异常断开（1006）会安排重连
+  [PASS] ★ 4401（未登录）**不重连** —— 重试多少次都不会成功
+  [PASS] ★ 4404（会话不存在）**不重连**
+  [PASS] 用户主动关闭会清掉待执行的重连定时器
+  [PASS] 重连次数耗尽 → 通过 onError 上报（不无限重试）
+
+[5] InterviewRoom.vue：面试模式与 mode 透传
+  [PASS] ★ 未新建独立视频页面（用户明确要求复用 AI 面试间）
+  [PASS] App.vue 仍挂载 InterviewRoom（入口未变）
+  [PASS] 模式常量 MODE_TEXT='text'
+  [PASS] 模式常量 MODE_AVATAR='avatar'
+  [PASS] ★ 配置区提供「文字面试 / 视频面试」两个选项
+  [PASS] ★ 模板里有模式下拉（v-model 绑到 form.mode）
+  [PASS] ★ 建会话时把模式传出去（body 里 mode: form.mode）
+  [PASS] 默认模式是文字面试（不选即与改造前一致）
+
+[6] InterviewRoom.vue：实时通道接线
+  [PASS] 引入 InterviewSocket（唯一 WS 入口）
+  [PASS] 模式判定以会话字段为准（不是 form.mode）
+  [PASS] ★ 9 类服务端事件**每一类**都有分支（含 pong）
+  [PASS] ★ 未知事件不静默丢弃（走 default 分支给出提示）
+  [PASS] avatar 状态：区分「未探测」与「探测失败」
+  [PASS] 回答状态：submitted / rejected 都处理
+  [PASS] 面试状态用编排层文案表
+  [PASS] score 结果被接住并展示
+  [PASS] 关闭码按语义分开提示（4401 / 4403 / 4404）
+  [PASS] ★ 4401/4403/4404 不跳转、不清 token（只提示）
+
+[7] InterviewRoom.vue：视频模式 UI（用户要求的五项）
+  [PASS] ① 数字人展示区域
+  [PASS] ② 视频流播放器（<video> 绑 stream_url，不可播协议降级为占位区）
+  [PASS] ③ 当前问题显示（复用同一 question 形状 + 考察点）
+  [PASS] ④ 回答状态区
+  [PASS] ⑤ 面试状态区
+  [PASS] 作答操作齐全：语音(ASR) / 打字兜底 / 播报完毕 / 结束
+  [PASS] ★ 作答按钮受**编排状态闸门**约束（只有 waiting_answer 能提交）——这是真机端到端跑出来的：答完一题状态回到 avatar_speaking，此时提交只会拿 state_error
+  [PASS] ★「数字人播报完毕」只在 avatar_speaking 时可点（否则会推出非法顺序）
+  [PASS] 界面把编排状态翻译成「当前该做什么」（不让用户猜按钮为什么是灰的）
+  [PASS] ★ 视频模式**不调** HTTP /start（题目由通道的 start 触发）
+  [PASS] 通道断开时提供「重新连接」入口
+
+[8] 文字面试路径未被破坏
+  [PASS] ★ 文字作答区仍以 `!isCreated` 为主条件（仅多一个 isAvatarMode 排除项）
+  [PASS] 文字模式的四个动作函数仍在（submitAnswer / endInterview / askNextQuestion / beginCreatedSession）
+  [PASS] 文字模式的 HTTP 调用未改（/answer 仍走 apiClient.post）
+  [PASS] 文字模式仍传 interview_type / difficulty / total_questions
+  [PASS] ★ 组件卸载时断开通道（否则离开页面后客户端还在自动重连）
+  [PASS] 「重新开始」也会断开通道
+
+[9] 开发环境代理
+  [PASS] ★ vite 代理开了 ws: true（否则 /api 下的 WS 升级请求根本不会到后端）
+  [PASS] HTTP 代理目标未变（仍指向 127.0.0.1:5000）
+
+====================================================================
+结果: 通过 104 项，失败 0 项
+====================================================================
+npm notice
+npm notice New major version of npm available! 10.9.4 -> 12.2.1
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.1
+npm notice To update run: npm install -g npm@12.2.1
+npm notice

@@ -1,0 +1,115 @@
+====================================================================
+Interview Orchestrator 自检（状态机 + 编排 + 复用取证）
+====================================================================
+
+[1] 契约：状态 / 事件 / 转移表 / 评分直通
+  [PASS] 5 个状态，顺序 = 生命周期顺序
+  [PASS]   └ 状态字面量符合需求原文
+  [PASS] 初始态 = waiting_question（新会话尚未拿题）
+  [PASS] 终态集合 = {finished}
+  [PASS] 6 个事件
+  [PASS] 转移表恰好 10 条（5 条生命周期边 + 5 个 finish 逃生舱）
+  [PASS]   └ 5 条生命周期边逐条正确
+  [PASS]   └ 5 个 finish 逃生舱（任意状态 → finished，终态幂等）
+  [PASS] 转移表的目标态全部是合法状态
+  [PASS] ★ 评分直通：orchestrator.score_answer **就是** interview_core.score_answer（未重造）
+  [PASS] __all__ 里每个名字都真实存在
+  [PASS] __all__ 覆盖全部对外契约名
+  [PASS] OrchestratorStateError 是 OrchestratorError 的子类（可分级捕获）
+
+[2] 纯函数 transition（脱离 DB）
+  [PASS] avatar_speaking --finish--> finished
+  [PASS] avatar_speaking --speech_done--> waiting_answer
+  [PASS] finished --finish--> finished
+  [PASS] processing_answer --all_answered--> finished
+  [PASS] processing_answer --finish--> finished
+  [PASS] processing_answer --scored--> avatar_speaking
+  [PASS] waiting_answer --answer_submitted--> processing_answer
+  [PASS] waiting_answer --finish--> finished
+  [PASS] waiting_question --finish--> finished
+  [PASS] waiting_question --question_ready--> avatar_speaking
+  [PASS] can_transition 对合法边为 True
+  [PASS] can_transition 对非法组合为 False（**不抛错**）
+  [PASS] is_valid_state / is_terminal
+  [PASS] ★ 转移表之外的全部组合（30 - 10 = 20 组）都报错，无静默通过
+  [PASS] 未知状态 → OrchestratorStateError
+  [PASS] 未知事件 → OrchestratorStateError
+  [PASS] 非法转移的报错信息含「该状态只接受」提示（可诊断）
+
+[3] 进程内状态表（不落库）
+  [PASS] clear 后无记录：get_state 返回 None
+  [PASS]   └ 可指定 default
+  [PASS] set_state 置位并回读
+  [PASS] set_state 非法状态 → 报错
+  [PASS] apply_event 在已记录状态上推进
+  [PASS] apply_event 未知事件 → 报错
+  [PASS] reset_state 删除记录
+  [PASS] ★ 无记录时 apply_event **直接报错**（不猜初始态）
+  [PASS] states_snapshot 是**副本**（改它不影响内部状态）
+  [PASS] clear_states 清空全部
+
+[4] 端到端编排（数字人模式，SQLite 内存库）
+  [PASS] ① 创建 Session → 状态 waiting_question
+  [PASS]   └ 会话状态仍是 created（尚未开始）
+  [PASS] ② 开始面试 → 状态 avatar_speaking（数字人正在播报）
+  [PASS]   └ ③ 第一题已生成（question_no=1 且题目非空）
+  [PASS]   └ 会话状态 ongoing（整场题目已一次性落库）
+  [PASS]   └ 播报态允许的事件 = speech_done / finish
+  [PASS] ④ 播报结束 → waiting_answer
+  [PASS] ⑤ 回答提交 → 评分落库（answer 含分数与反馈）
+  [PASS]   └ ⑦ 下一题流程：next_question 非空、题号推进到 2
+  [PASS]   └ 状态 → avatar_speaking（下一题已交付播报）
+  [PASS]   └ 全部答完 → all_answered=True 且状态 finished
+  [PASS]   └ 两次作答都真实落库
+  [PASS] ⑧ 结束面试 → 报告生成、状态 finished
+  [PASS]   └ finish 幂等（重复调用返回既有报告，状态仍 finished）
+  [PASS]   └ 终态下 allowed_events 只剩 finish
+  [PASS] status() 标记 tracked / terminal
+  [PASS] 未登记的会话：status() 返回 state=None / tracked=False / 无合法事件
+  [PASS] text 模式走同一套编排（无分支）：start → avatar_speaking → 答完 finished
+
+[5] 复用取证（spy：编排器确实走了既有入口）
+  [PASS] ★ 复用 interview_service.start_session（1 次）
+  [PASS] ★ 复用 interview_service.submit_answer（2 次，每题一次）
+  [PASS] ★ 复用 interview_service.end_session（1 次）
+  [PASS] ★ 复用 interview_core.score_answer（2 次，与提交次数一致）
+  [PASS]   └ 规则出题流程**不**触碰 generate_next_question（按需通道默认不启用）
+  [PASS] ★ 复用 interview_service.generate_next_question（1 次）
+  [PASS] preview_score 与 interview_core.score_answer 同输入同输出（直通、不落库）
+
+[6] generate_question（按需出题）
+  [PASS] ok=True → 题目已就绪，状态推进到 avatar_speaking
+  [PASS]   └ 确实调用了注入的 Spark
+  [PASS]   └ 出参含恒定字段集 + state（在 Core 契约上**追加** state）
+  [PASS] ok=False → 出题失败，状态**不变**（仍 waiting_question）
+  [PASS]   └ 失败以 ok=False 返回，**不抛异常**（便于前端分支）
+  [PASS] 前置：该会话已 finished
+  [PASS] ★ 终态下出题失败**不会**把 finished 降级回 waiting_question
+
+[7] 健壮性：回滚 / 自愈 / 顺序守卫
+  [PASS] ★ 服务层拒绝（空答案 400）→ 异常向上抛，状态**回滚**到 waiting_answer
+  [PASS] ★ 顺序不对（avatar_speaking 就提交）→ 状态机先报错，不打到服务层
+  [PASS]   └ 报错后状态仍是 avatar_speaking（未被污染）
+  [PASS] 前置：内存无记录，但库里有会话
+  [PASS] ★ 无记录时 start 自愈：状态从初始态起算并推进到 avatar_speaking
+  [PASS] ★ 自愈**不放松合法性**：无记录时应用 scored 仍报错
+
+[8] 边界守卫（AST：依赖单向）
+  [PASS] 编排层顶层只依赖标准库 + services 包（无第三方 / 无 models / 无 database）
+  [PASS]   └ 顶层 import 的 services.* 恰好是 interview_core / interview_service
+  [PASS]   └ 确实 import 了 interview_service（复用而非重造）
+  [PASS]   └ 确实 import 了 interview_core（评分直通）
+  [PASS]   └ 不 import 任何向量 / Embedding / 知识库模块
+  [PASS] services/interview_core.py 不反向 import 编排层
+  [PASS] services/interview_service.py 不反向 import 编排层
+  [PASS] services/avatar_interview.py 不反向 import 编排层
+  [PASS] services/avatar_provider.py 不反向 import 编排层
+  [PASS] services/avatar_provider_iflytek.py 不反向 import 编排层
+  [PASS] modules/interview/api.py 不反向 import 编排层
+  [PASS] main.py 不反向 import 编排层
+  [PASS] ★ 编排层没有自己定义 score_answer（只做名字绑定）
+  [PASS]   └ score_answer 是 `interview_core.score_answer` 的名字绑定
+
+====================================================================
+结果: 通过 92 项，失败 0 项
+====================================================================

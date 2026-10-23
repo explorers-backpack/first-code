@@ -1,0 +1,102 @@
+====================================================================
+AI 模拟面试 · API 层自检（HTTP 全链路）
+====================================================================
+
+[1] 鉴权（未登录应 401）
+  [PASS] 无 token 创建会话返回 401
+  [PASS] 无 token 查询会话返回 401
+  [PASS] 无 token 读报告返回 401
+
+[2] POST /create
+  [PASS] 状态码 200
+  [PASS] 返回 session 对象
+  [PASS] 初始状态 created
+  [PASS] 回传 job_name
+
+  -- 入参校验（422）--
+  [PASS] 非法 interview_type 返回 422
+  [PASS] total_questions 越界返回 422
+  [PASS] job_id 小于 1 返回 422
+
+  -- 业务校验（400）--
+  [PASS] 不存在的岗位返回 400
+  [PASS] 错误信息可读
+
+[3] POST /{session_id}/start
+  [PASS] 状态码 200
+  [PASS] 状态变为 ongoing
+  [PASS] 返回第一题
+  [PASS] 第一题为 intro
+  [PASS] expected_points 已序列化
+  [PASS] 重复 start 返回 400
+
+[4] GET /{session_id}
+  [PASS] 状态码 200
+  [PASS] questions 数量正确
+  [PASS] answers 初始为空
+  [PASS] answered_count 为 0
+  [PASS] 不存在的会话返回 404
+
+[5] GET /{session_id}/question
+  [PASS] 状态码 200
+  [PASS] 返回第 1 题
+  [PASS] answered 为 False
+  [PASS] all_answered 为 False
+
+[6] POST /{session_id}/answer
+  [PASS] 状态码 200
+  [PASS] 返回评分
+  [PASS] 返回 feedback
+  [PASS] audio_url 为空（预留字段）
+  [PASS] 返回下一题
+  [PASS] all_answered 为 False
+        得分 76，下一题「Python」
+  [PASS] 空回答返回 422
+
+[7] 完成全部题目
+  [PASS] 全部作答后 all_answered 为 True
+  [PASS] question 为 None
+  [PASS] 超量作答返回 400
+
+[8] POST /{session_id}/end
+  [PASS] 状态码 200
+  [PASS] 状态变为 finished
+  [PASS] 报告含 total_score
+  [PASS] 报告含 technical_score
+  [PASS] 报告含 project_score
+  [PASS] 报告含 logic_score
+  [PASS] 报告含 expression_score
+  [PASS] 报告含 communication_score
+  [PASS] 报告含 adaptability_score
+  [PASS] 报告含 job_match_score
+  [PASS] strengths 为数组
+  [PASS] weaknesses 为数组
+  [PASS] suggestions 为文本
+        总分 78（技术 69 / 岗位匹配 80）
+
+[9] GET /{session_id}/report
+  [PASS] 状态码 200
+  [PASS] 总分一致
+
+[10] 状态机拦截（HTTP 层）
+  [PASS] created 状态 end 返回 400
+  [PASS] 无报告时读报告返回 404
+  [PASS] 未开始时取题返回 200 且带提示
+  [PASS] 提示文案可读
+  [PASS] 未开始作答返回 400
+
+[11] OpenAPI 文档
+  [PASS] openapi.json 可生成
+  [PASS] 文档含 /api/interview/create
+  [PASS] 文档含 /api/interview/{session_id}/start
+  [PASS] 文档含 /api/interview/{session_id}
+  [PASS] 文档含 /api/interview/{session_id}/question
+  [PASS] 文档含 /api/interview/{session_id}/answer
+  [PASS] 文档含 /api/interview/{session_id}/end
+  [PASS] 文档含 /api/interview/{session_id}/report
+  [PASS] 既有路由未被破坏（/api/chat）
+  [PASS] 既有路由未被破坏（/api/resume/analyze）
+
+====================================================================
+结果: 通过 67 项，失败 0 项
+====================================================================

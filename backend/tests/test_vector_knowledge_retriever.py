@@ -665,8 +665,9 @@ async def run() -> bool:
     src = (BACKEND_DIR / "services" / "vector_knowledge_retriever.py").read_text(encoding="utf-8")
     all_imports = _imported_modules(src)
     top_level = {m.split(".")[0] for m in all_imports}
-    _check("★ 零第三方依赖（顶层只有 __future__ / collections / math / typing / services）",
-           top_level == {"__future__", "collections", "math", "typing", "services"},
+    _check("★ 零第三方依赖（允许标准库、services 与纯标准库 common.rag_trace）",
+           top_level == {"__future__", "collections", "math", "typing", "services", "common"}
+           and all(m == "common.rag_trace" or m.startswith("common.rag_trace.") for m in all_imports if m.startswith("common")),
            str(sorted(top_level)))
     _check("  └ 不 import 任何具体后端 / 数据库 / 框架",
            not ({"sqlalchemy", "models", "database", "fastapi", "pydantic", "main",

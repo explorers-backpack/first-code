@@ -1,0 +1,24 @@
+ M backend/api/knowledge.py
+ M backend/modules/ai/compat.py
+ M backend/modules/ai/llm_spark.py
+ M backend/modules/ai/policy.py
+ M backend/services/interview_agent.py
+ M backend/services/interview_core.py
+ M backend/services/interview_followup.py
+ M backend/services/interview_followup_agent.py
+ M backend/services/interview_next_agent.py
+ M backend/services/knowledge_import_pipeline.py
+ M backend/services/knowledge_rag.py
+ M backend/services/vector_knowledge_retriever.py
+ M backend/services/vector_store_sql.py
+ M backend/tests/test_agent_full_input.py
+ M backend/tests/test_agent_no_knowledge.py
+ M backend/tests/test_backend_boundary_consistency.py
+ M backend/tests/test_interview_eval_benchmark.py
+ M backend/tests/test_rag_into_agent_prompt.py
+ M backend/tests/test_rag_retriever_config.py
+ M backend/tests/test_vector_knowledge_retriever.py
+?? .rag-trace-audit/
+?? RAG_EXECUTION_TRACE_REPORT.md
+?? backend/common/rag_trace.py
+?? backend/tests/test_rag_execution_trace.py

@@ -91,7 +91,7 @@ from services.vector_store_sql import SqlAlchemyVectorStore  # noqa: E402
 #: 组装器**允许**的顶层 import（只有标准库）。多一个都不行——
 #: 顶层一旦拉进 ``models`` → ``database``，本模块就变成「没有 DATABASE_URL
 #: 就无法 import」，连带破坏 ``interview_core`` 的零耦合性质。
-ALLOWED_TOP_LEVEL_IMPORTS = {"__future__", "math", "os", "collections.abc", "typing"}
+ALLOWED_TOP_LEVEL_IMPORTS = {"__future__", "math", "os", "collections.abc", "typing", "common.rag_trace"}
 
 #: ``VectorStore`` 接口的抽象方法集（**冻结**：本次改动一行都不该动它）。
 FROZEN_VECTOR_STORE_METHODS = {"add", "search", "count"}

@@ -85,6 +85,7 @@
 """
 
 from __future__ import annotations
+from common.rag_trace import observed, span, context_ready
 
 import re
 from typing import (
@@ -1150,6 +1151,7 @@ async def _build_session_plan(db: Any, session: Any) -> Dict[str, Any]:
     )
 
 
+@observed("outcome")
 async def generate_next_question(
     db: Any,
     session_id: int,

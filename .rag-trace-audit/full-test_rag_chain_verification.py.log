@@ -1,0 +1,145 @@
+==========================================================================
+AI 面试 · 真实 RAG 检索链路端到端验证（SQL 后端 vs Chroma ANN 后端）
+==========================================================================
+
+[0] 前置：默认 Embedding 实现（决定「相关」的含义）
+  [PASS] 未配置 EMBEDDING_* → 默认是离线哈希占位 HashEmbeddingService
+  [PASS]   └ 它是零依赖离线实现（不联网、不需要密钥）
+        ⇒ 因此 [3]~[7] 的「相关」是**词面（token 共享）相关**；真语义由 [8] 单独取证。
+
+[1] 完整调用链取证：query → Embedding → search → select_matches → Retriever
+  [PASS] VectorKnowledgeRetriever 实现自 KnowledgeRetriever 接口
+  [PASS]   └ retrieve 是 async（接口签名已提前异步化）
+  [PASS]   └ retrieve 签名与基类逐字一致 (job_info, topic, context)
+  [PASS] ① build_query 取到 topic（只取一个来源，不拼接）
+  [PASS] ② embed 的产出**原样**传给 store.search（同一条 query 向量）
+  [PASS] ③ search 的 model 过滤 = embedder.name（不同模型的向量不可比）
+  [PASS] ④ search 收到 top_k / min_score（来自检索器配置，不是硬编码）
+  [PASS] ⑤ 空库 → []（「没有候选」不是异常）
+  [PASS]   └ 空库也会真的走完 embed + search（不是提前 return）
+  [PASS] ⑥ select_matches 是后端共用的排序口径（手算 == 结果）
+
+[2] 插入真实知识 Chunk（走 KnowledgeImportPipeline：文档→切片→向量→落库）
+  [PASS] 5 篇文档全部入库成功（status=ok）
+  [PASS]   └ 每篇都真的产出了切片
+  [PASS]   └ 切片数 == 新建切片数（首次入库，无复用）
+  [PASS]   └ 每片都写入了向量（embedded_chunks == chunk_count）
+  [PASS] 文档表真的落了 5 行
+  [PASS] 切片表真的落了 ≥5 行（长文档被切成多片）
+  [PASS]   └ 每行切片都带 embedding + embedding_model + embedding_dim
+  [PASS]   └ embedding IS NULL 的行数为 0（没有「半截数据」）
+  [PASS] 向量库 count() == 已向量化切片数
+  [PASS] 能按 source 追溯到切片（面试场景必须可溯源）
+  [PASS] 长文档确实被切成了多片（验证多切片文档）
+  [PASS] load_records 能按主键回读全部权威行（含向量）
+
+[3] 使用相关 query 检索（测试要求 2）
+  [PASS] query='MySQL 索引优化' → 检索到知识（非空）
+  [PASS]   └ 排名第 1 的切片来自期望文档 'manual://handbook/mysql-index'
+  [PASS]   └ 结果形如 KnowledgeChunk(content/source/metadata)
+  [PASS]   └ source 被提升为顶层字段（= 'manual://handbook/mysql-index'）
+  [PASS]   └ score 落在 metadata['score']（不渗进 Prompt）
+  [PASS]   └ 检索器记录了实际构造出的 query 文本
+  [PASS] query='Redis 持久化 RDB AOF' → 检索到知识（非空）
+  [PASS]   └ 排名第 1 的切片来自期望文档 'manual://handbook/redis-persistence'
+  [PASS]   └ 结果形如 KnowledgeChunk(content/source/metadata)
+  [PASS]   └ source 被提升为顶层字段（= 'manual://handbook/redis-persistence'）
+  [PASS]   └ score 落在 metadata['score']（不渗进 Prompt）
+  [PASS]   └ 检索器记录了实际构造出的 query 文本
+  [PASS] query='Kafka 重复消费 幂等' → 检索到知识（非空）
+  [PASS]   └ 排名第 1 的切片来自期望文档 'manual://handbook/kafka-idempotent'
+  [PASS]   └ 结果形如 KnowledgeChunk(content/source/metadata)
+  [PASS]   └ source 被提升为顶层字段（= 'manual://handbook/kafka-idempotent'）
+  [PASS]   └ score 落在 metadata['score']（不渗进 Prompt）
+  [PASS]   └ 检索器记录了实际构造出的 query 文本
+  [PASS] 无查询线索（topic/stage/岗位名全空）→ [] 且**不发起**任何外部调用
+
+[4] 验证 score 排序（测试要求 3）
+  [PASS] 结果按 score **降序**排列
+  [PASS]   └ 排名第 1 的就是与 query 最相关的切片（MySQL 索引）
+  [PASS]   └ 第 1 名的 score 严格高于第 2 名（不是并列）
+  [PASS]   └ 每条 score 与**独立手算**的 cosine_similarity 逐位一致
+  [PASS]   └ 命中自己（同一条向量）时 score ≈ 1.0
+  [PASS] 同分时按候选顺序稳定排序（SQL = 主键升序）→ 同输入同输出
+  [PASS]   └ 两条同分切片 score 完全相等
+  [PASS]   └ 同分探针跑在独立引擎上，未污染主语料
+
+[5] 验证 top_k（测试要求 4）
+  [PASS] top_k=1 → 恰好返回 1 条
+  [PASS] top_k=2 → 恰好返回 2 条
+  [PASS] top_k=3 → 恰好返回 3 条
+  [PASS] top_k 超过候选数 → 返回全部候选（不报错）
+  [PASS]   └ 前 k 条就是全量结果的前 k 条（截断不改顺序）
+  [PASS] top_k=0 → 报错（不静默收敛成 1，避免藏 bug）
+  [PASS] top_k=True → 报错（bool 是 int 子类，必须显式挡）
+
+[6] 验证 min_score 过滤（测试要求 5）
+  [PASS] min_score=None → 与不过滤一致（全量）
+  [PASS] 阈值卡在 1/2 名之间（0.194551）→ 只留第 1 名
+  [PASS]   └ 阈值是「≥」而不是「>」（等于阈值的结果保留）
+  [PASS] 阈值 > 1.0（余弦上界）→ 空结果
+  [PASS]   └ 高阈值返回 [] 是「没到线」，不是异常（与维度错区分开）
+  [PASS] min_score=0.0 → 只留非负相似度
+  [PASS]   └ 过滤只减不增、且保持降序（不重排）
+
+[7] SQL 后端 vs Chroma ANN 后端：结果规则一致性
+  [PASS] chroma 后端接受同一批权威记录（add 返回条数）
+  [PASS]   └ 索引条数 == 权威行条数（索引是权威行的镜像）
+  [PASS]   └ 索引内容取自权威行（正文逐字一致）
+  [PASS] ★ 15 组 (query, top_k, min_score) 组合下，两后端「命中集合 + 分数 + 排序」规则一致
+  [PASS]   └ score 最大偏差 1.43e-08 ≤ 1e-06（float32 回读漂移，实测 ~1e-9 量级）
+  [PASS]   └ 真正有意义的排序（分数差 >> 容差）逐位一致：top-1 完全相同
+  [PASS]   └ 正文逐字一致（top-2，按 chunk_id 对齐）
+  [PASS]   └ metadata 逐键一致（category / source 等保真还原）
+  [PASS]   └ 两后端都按同一降序口径（select_matches 唯一）
+  [PASS] 检索器层一致：query='MySQL 索引优化' 的 (chunk_id, score) 规则相同
+  [PASS]   └ 共同命中部分的 content / source 完全相同
+  [PASS]   └ top-1（分数最高、必然不并列）两后端完全相同
+  [PASS] 检索器层一致：query='Redis 持久化 RDB AOF' 的 (chunk_id, score) 规则相同
+  [PASS]   └ 共同命中部分的 content / source 完全相同
+  [PASS]   └ top-1（分数最高、必然不并列）两后端完全相同
+  [PASS] 检索器层一致：query='Kafka 重复消费 幂等' 的 (chunk_id, score) 规则相同
+  [PASS]   └ 共同命中部分的 content / source 完全相同
+  [PASS]   └ top-1（分数最高、必然不并列）两后端完全相同
+  [PASS] 维度不符时两后端都**抛错**（不是静默返回空）
+  [PASS]   └ 抛的是同一个异常类型 VectorStoreDimensionError
+  [PASS] ★ ANN 索引是**派生**数据：权威副本始终在 knowledge_chunk
+        注 1：本语料 6 条候选、oversample=4 ⇒ 召回即全量，两后端**规则**逐位一致；
+              候选数超过 top_k×4 后 ANN 召回是**近似**的——排序口径一致，但可能漏掉个别候选。
+        注 2：ANN 索引按 **float32** 存取向量，回读重算的余弦有 ~1e-9 漂移；
+              对「分数在数值上等于 0」的近似并列项，顺序可能互换（规则本身一致）。
+
+[8] 语义能力验证（确定性概念 Embedding：query 与目标零 token 重叠）
+  [PASS] 前置：query='如何提升慢查询性能' 与目标切片**没有一个公共 token**
+  [PASS] ★ 零词面重叠的 query 仍然命中了「数据库性能」那条切片（排第 1）
+  [PASS]   └ 它的 score ≈ 1.0（同概念轴 → 同方向）
+  [PASS]   └ 其余 3 条（不同概念轴）score 为 0.0（正交）
+  [PASS]   └ 结论：检索层是**语义就绪**的，瓶颈只在 Embedding 模型本身
+
+[9] 端到端：Core → Retriever → Agent，知识正文进入 Prompt
+  [PASS] Core 出题成功（ok=True，走的是注入的真实检索器）
+  [PASS]   └ 检索失败/无知识都不进 errors（检索是可选增强）
+  [PASS]   └ Agent 被调用恰好 1 次（每题只给一次 LLM 调用）
+  [PASS] Prompt 里出现「参考知识：」小节（知识真的传到了 Agent）
+  [PASS]   └ 检索到的**切片正文**原样出现在 Prompt 中
+  [PASS]   └ 来源也一起渲染（「（来源：…）」）——可溯源
+  [PASS]   └ 溯源 metadata **没有**渗进 Prompt（chunk_id 不外泄）
+  [PASS]   └ 非空知识走的是**变体模板**（与无知识模板不是同一个）
+  [PASS] 对照：不注入 retriever → 仍能出题（不注入就不接，默认路径不变）
+  [PASS]   └ 基线 Prompt **不含**「参考知识」（空知识走原模板）
+  [PASS]   └ 两版 Prompt 的题目字段完全一致（知识只影响参考小节）
+
+[10] 边界取证：本轮未改动 InterviewCore / Agent 接口 / Validator
+  [PASS] InterviewCore 顶层不含向量层（RAG 仍是函数内延迟导入）
+  [PASS]   └ 顶层不含数据层（仍能脱离 DATABASE_URL 被 import）
+  [PASS]   └ 唯一的第三方顶层 import 是**已知例外** fastapi.HTTPException
+  [PASS]   └ 已知例外是刻意的（build_report 沿用旧行为，非本轮引入）
+  [PASS] Agent 顶层不 import 任何 Retriever / 向量库（知识由调用方注入）
+  [PASS]   └ Agent 只依赖 models（difficulty 词汇表）+ prompts（模板）
+  [PASS] Validator 顶层仍零第三方依赖（纯标准库）
+  [PASS]   └ 守卫本身有效（点号全名匹配，不是恒真的假守卫）
+  [PASS]   └ Agent 的 knowledge_context 仍是 keyword-only（签名未变）
+
+==========================================================================
+结果: 通过 111 项，失败 0 项
+==========================================================================

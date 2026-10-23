@@ -39,6 +39,7 @@
 """
 
 from __future__ import annotations
+from common.rag_trace import observed, span, context_ready
 
 from typing import Any, Optional
 
@@ -131,6 +132,7 @@ async def import_knowledge_document(
         "解析是 CPU 密集动作，已丢到线程池执行，不阻塞事件循环。"
     ),
 )
+@observed("request")
 async def upload_knowledge_document(
     file: UploadFile = File(..., description="待导入的文件（multipart/form-data）"),
     category: str = Form(..., description="知识分类：job / technical / company / project"),
@@ -148,7 +150,9 @@ async def upload_knowledge_document(
     # 「二进制 → 文本」是解析器的职责（见 services/document_parser 模块文档）。
     # 解析是同步 CPU 动作，丢线程池以免阻塞事件循环。
     try:
-        parsed = await run_in_threadpool(document_parser.parse_document, filename, data)
+        with span("parse") as diagnostic:
+            parsed = await run_in_threadpool(document_parser.parse_document, filename, data)
+            diagnostic["chars"] = parsed.chars
     except document_parser.FileTooLargeError as exc:
         raise HTTPException(status_code=413, detail=str(exc)) from exc
     except document_parser.DocumentParseError as exc:

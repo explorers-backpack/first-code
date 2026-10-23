@@ -97,7 +97,7 @@ from services.vector_store_sql import SqlAlchemyVectorStore  # noqa: E402
 #: 用**源码文本**而非 AST——``ast.dump`` 随 Python 版本变化，换解释器会假失败。
 FROZEN_SOURCES: Tuple[Tuple[str, str], ...] = (
     ("services/interview_core.py",
-     "2bd6f6aab04bdd3c8eaf9e03c64f37d99a8e52dd1047d711779616845ff8e5e8"),
+     "299436f145e1ae7ad9b946ebbf476358f8b5874589579e2d2c3acaeefd348a2e"),
     ("services/question_validator.py",
      "b23e6957edf39696fcc4803b4b627fbdc90c1548de86535bc804f4acc1c7e53b"),
 )

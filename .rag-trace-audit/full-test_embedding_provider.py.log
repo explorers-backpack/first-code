@@ -1,0 +1,164 @@
+======================================================================
+AI 面试知识库 · 真实 Embedding Provider 自检
+======================================================================
+
+[1] 模块可导入 + 配置解析
+  [PASS] services.embedding_provider 可导入
+  [PASS] ★ EmbeddingProvider 是 EmbeddingService 的子类（换模型不换调用方式）
+  [PASS]   └ 没有未实现的抽象方法（可直接实例化）
+  [PASS] OpenAICompatibleEmbeddingProvider 是同一对象的别名
+  [PASS] ★ EmbeddingProviderConfigError 同时是 ValueError（配置错，重试没用）
+  [PASS] EmbeddingTransport 是抽象基类（必须实现 post_json）
+  [PASS] __all__ 导出配置项 / 工厂 / 实现 / 常量
+  [PASS] ★ 空环境 → provider=hash（离线占位，默认行为不变）
+  [PASS]   └ is_remote=False
+  [PASS]   └ 默认 base_url / model / timeout / batch_size
+  [PASS]   └ 默认 dimension=0（不校验维度）
+  [PASS]   └ api_key 为空
+  [PASS] ★ 只配 EMBEDDING_API_KEY → 自动 provider=openai（配置即替换）
+  [PASS]   └ EMBEDDING_PROVIDER='hash' → hash
+  [PASS]   └ EMBEDDING_PROVIDER='local' → hash
+  [PASS]   └ EMBEDDING_PROVIDER='offline' → hash
+  [PASS]   └ EMBEDDING_PROVIDER='mock' → mock
+  [PASS]   └ EMBEDDING_PROVIDER='openai' → openai
+  [PASS]   └ EMBEDDING_PROVIDER='openai-compatible' → openai
+  [PASS]   └ EMBEDDING_PROVIDER='OPENAI' → openai
+  [PASS]   └ hash 模式下即使配了密钥也保持 hash（显式优先）
+  [PASS] ★ 非法 provider 取值 → EmbeddingProviderConfigError
+  [PASS] ★ openai 却没给密钥 → 构造期就报（不伪装成「检索不到」）
+  [PASS]   └ 报错信息点明该配哪个变量
+  [PASS] ★ 非法配置被拒：维度非整数
+  [PASS] ★ 非法配置被拒：维度为负
+  [PASS] ★ 非法配置被拒：超时为 0
+  [PASS] ★ 非法配置被拒：超时为负
+  [PASS] ★ 非法配置被拒：超时非数字
+  [PASS] ★ 非法配置被拒：批次大小为 0
+  [PASS] ★ 非法配置被拒：批次大小为负
+  [PASS]   └ EMBEDDING_DIMENSION=0 合法（0 = 不校验）
+  [PASS] ★ 完整配置逐项生效
+  [PASS]   └ base_url 末尾的 / 被去掉（拼 endpoint 不会出现 //）
+  [PASS] ★ config 的 repr 不含密钥（dataclass 默认会把所有字段打出来）
+  [PASS]   └ 只显示打码形式（保留末 4 位）
+  [PASS]   └ 短密钥整体打码（不泄露长度以外的信息）
+  [PASS] config 不可变（frozen dataclass）
+  [PASS] ★ 工厂：hash → HashEmbeddingService（离线占位）
+  [PASS] ★ 工厂：mock → MockEmbeddingService（测试替身）
+  [PASS] ★ 工厂：openai → EmbeddingProvider（真实模型）
+  [PASS]   └ 工厂读环境变量（env 缺省 = os.environ）
+  [PASS] ★ 不做全局单例（每次返回新对象）
+  [PASS] ★ 工厂收到非法 config 类型 → 明确报错
+  [PASS] ★ 用 hash 配置构造 EmbeddingProvider → 构造期拒绝
+  [PASS]   └ openai 配置但没有密钥 → 拒绝
+  [PASS]   └ transport 缺 post_json → 拒绝（错误信息说明契约）
+
+[2] 单文本向量生成（要求 1）
+  [PASS] ★ embed(text) 未被重写 —— 接口不变
+  [PASS]   └ 签名与基类逐字相同
+  [PASS]   └ 参数恰为 (self, text)
+  [PASS] ★ embed_batch 被覆盖（厂商原生批量接口是真实性能来源）
+  [PASS] ★ embed 返回 list[float]
+  [PASS] ★ 维度 == 声明的 dimension
+  [PASS]   └ 值来自上游响应（不是占位）
+  [PASS] ★ 恰好发出 1 次请求
+  [PASS]   └ URL = base_url + /embeddings
+  [PASS]   └ 请求体含 model 与 input=[text]
+  [PASS]   └ 头里带 Bearer 密钥
+  [PASS]   └ 头里带 Content-Type: application/json
+  [PASS]   └ 超时按配置传入
+  [PASS] ★ name 记录「哪次编码产生的」（写进 embedding_model）
+  [PASS]   └ 自定义 base_url / model 生效
+  [PASS] ★ 拒绝入参：空串
+  [PASS] ★ 拒绝入参：纯空白
+  [PASS] ★ 拒绝入参：None
+  [PASS] ★ 拒绝入参：整数
+
+[3] 批量生成向量（要求 2）
+  [PASS] ★ 返回条数与入参一致
+  [PASS] ★ 每条形如单条 embed 的结果（维度一致）
+  [PASS] ★ 顺序与入参一致（逐条对应文本长度）
+  [PASS] ★ 按 batch_size=2 分批 → 5 条 = 3 次请求
+  [PASS]   └ 每批的 input 是正确切片
+  [PASS]   └ 单批不超 batch_size
+  [PASS]   └ batch_size=1 时逐条请求
+  [PASS]   └ batch_size 大于条数时只发 1 次
+  [PASS]   └ tuple 入参同样可用
+  [PASS] ★ 空批次 → [] 且**不发起请求**
+  [PASS] ★ 上游 data 乱序但带 index → 按 index 还原顺序
+  [PASS] ★ 拒绝批量入参：None
+  [PASS] ★ 拒绝批量入参：整数
+  [PASS] ★ 拒绝批量入参：含 None 元素
+  [PASS] ★ 拒绝批量入参：含空文本元素
+  [PASS] ★ 把**单个字符串**传进批量接口被拒（否则会被逐字符拆开）
+  [PASS]   └ 元素级错误指出是第几条
+
+[4] 异常处理（要求 3）
+  [PASS] ★ transport 抛服务级异常 → 原样向上传播（不被吞掉 / 不换类型）
+  [PASS]   └ 批量路径同样传播
+  [PASS] ★ 2xx 但结构不对 → EmbeddingDimensionError：非对象
+  [PASS] ★ 2xx 但结构不对 → EmbeddingDimensionError：缺 data
+  [PASS] ★ 2xx 但结构不对 → EmbeddingDimensionError：data 是字符串
+  [PASS] ★ 2xx 但结构不对 → EmbeddingDimensionError：条数不符
+  [PASS] ★ 2xx 但结构不对 → EmbeddingDimensionError：元素缺 embedding
+  [PASS] ★ 2xx 但结构不对 → EmbeddingDimensionError：向量是字符串
+  [PASS] ★ 2xx 但结构不对 → EmbeddingDimensionError：向量含 bool
+  [PASS] ★ 2xx 但结构不对 → EmbeddingDimensionError：向量含字符串元素
+  [PASS] ★ 2xx 但结构不对 → EmbeddingDimensionError：空向量
+  [PASS] ★ 上游维度与 EMBEDDING_DIMENSION 声明不符 → EmbeddingDimensionError
+  [PASS]   └ 报错点明「换模型要同步改 dimension」
+  [PASS]   └ dimension=0 时不校验维度（按上游返回）
+  [PASS] ★ 2xx 但响应体带 error → EmbeddingUnavailableError（不是当成正常结果）
+  [PASS] ★ 走真实 httpx 客户端路径也能取到向量（MockTransport，不联网）
+  [PASS] ★ HTTP 401 → EmbeddingUnavailableError（带状态码）
+  [PASS]   └ HTTP 401 的报错**不含密钥**（上游回显也要打码）
+  [PASS] ★ HTTP 403 → EmbeddingUnavailableError（带状态码）
+  [PASS]   └ HTTP 403 的报错**不含密钥**（上游回显也要打码）
+  [PASS] ★ HTTP 404 → EmbeddingUnavailableError（带状态码）
+  [PASS]   └ HTTP 404 的报错**不含密钥**（上游回显也要打码）
+  [PASS] ★ HTTP 429 → EmbeddingUnavailableError（带状态码）
+  [PASS]   └ HTTP 429 的报错**不含密钥**（上游回显也要打码）
+  [PASS] ★ HTTP 500 → EmbeddingUnavailableError（带状态码）
+  [PASS]   └ HTTP 500 的报错**不含密钥**（上游回显也要打码）
+  [PASS] ★ HTTP 503 → EmbeddingUnavailableError（带状态码）
+  [PASS]   └ HTTP 503 的报错**不含密钥**（上游回显也要打码）
+  [PASS]   └ 401 的报错提示检查 EMBEDDING_API_KEY
+  [PASS]   └ 404 的报错提示检查 EMBEDDING_BASE_URL
+  [PASS] ★ HTTP 200 但响应不是 JSON → EmbeddingDimensionError
+  [PASS] ★ 网络失败 → EmbeddingUnavailableError（可重试/降级）
+  [PASS] ★ 超时 → EmbeddingUnavailableError 且消息点明超时
+  [PASS] ★ 三类异常互不误捕（入参错不是 RuntimeError，服务错不是 ValueError）
+  [PASS]   └ 用 EmbeddingError 能一把捕获配置错与上游错
+
+[5] Mock 模式仍可用（要求 4）
+  [PASS] ★ MockEmbeddingService 仍可直接使用（返回固定向量）
+  [PASS]   └ 记录每次调用的文本（按被调次数断言，不比对数值）
+  [PASS]   └ 批量可用且顺序一致
+  [PASS] ★ 经工厂按配置选 Mock（EMBEDDING_PROVIDER=mock）
+  [PASS]   └ Mock 抛异常时原样传播（测异常路径用）
+  [PASS] ★ 离线哈希占位实现行为不变（确定性，同文本同向量）
+  [PASS]   └ 未联网、未使用密钥即可工作
+
+[6] 边界与守卫（AST 取证）
+  [PASS] ★ 模块顶层只有标准库 + services（真实实现不把 HTTP 客户端拉进顶层）
+  [PASS] ★ httpx 是**延迟导入**（只在 post_json 函数体内）
+  [PASS]   └ 未 import 数据层 / FastAPI / 向量层 / 面试侧
+  [PASS]   └ 只从 embedding_service 取接口与校验（复用同一处校验口径）
+  [PASS]   └ 无全局单例（无模块级 EmbeddingService 实例）
+  [PASS] ★ embedding_service 仍**零第三方依赖**（接口模块一行未改）
+  [PASS] ★ embedding_service 的消费者是已知闭集（实现方 + 真实检索器）
+  [PASS]   └ 组装器不再直接依赖具体实现（经工厂选实现，换模型只改配置）
+  [PASS] ★ 无 DATABASE_URL 也能 import（顶层不碰数据层）
+  [PASS]   └ 子进程里 httpx 也未被导入（延迟导入确实生效）
+  [PASS]   └ 子进程成功取到类属性（证明真的导入成功，不是「导入失败所以没泄漏」）
+
+[7] 与组装器联动：knowledge_rag.default_embedder() 按配置选实现
+  [PASS] ★ 未配置 → 离线占位 HashEmbeddingService（默认行为逐字节不变）
+  [PASS] ★ 配好密钥 → 真实 Provider（整条链路换模型只改配置）
+  [PASS]   └ 端点由配置拼出
+  [PASS]   └ 显式 mock → 测试替身（离线单测仍可跑整条链路）
+  [PASS] ★ openai 但缺密钥 → 构造期报错（读侧会静默降级为「无知识」，不伪装成检索不到）
+  [PASS]   └ 每次调用返回新对象（组装器也不做单例）
+  [PASS] ★ 组装器仍是延迟导入（模块顶层不拉 embedding_provider / SQLAlchemy）
+
+======================================================================
+结果: 通过 143 项，失败 0 项
+======================================================================

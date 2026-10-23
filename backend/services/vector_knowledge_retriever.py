@@ -87,6 +87,7 @@ embedder / 向量库「不可用」或其他故障         :class:`RetrieverUnav
 """
 
 from __future__ import annotations
+from common.rag_trace import observed, span, context_ready
 
 import math
 from collections.abc import Mapping
@@ -371,6 +372,7 @@ class VectorKnowledgeRetriever(KnowledgeRetriever):
     # --------------------------------------------------------
     # 接口实现（签名与基类完全一致）
     # --------------------------------------------------------
+    @observed("retrieval")
     async def retrieve(
         self,
         job_info: Any,
@@ -397,6 +399,7 @@ class VectorKnowledgeRetriever(KnowledgeRetriever):
         matches = self._apply_ratio_filter(matches)
         return self._to_chunks(matches)
 
+    @observed("filter")
     def _apply_ratio_filter(self, matches: List[Any]) -> List[Any]:
         """相对阈值过滤：``score >= α × top1``（``α=None`` 或空结果 ⇒ 原样返回）。
 
@@ -414,6 +417,7 @@ class VectorKnowledgeRetriever(KnowledgeRetriever):
     # --------------------------------------------------------
     # 内部：两段外部调用，各自收敛异常
     # --------------------------------------------------------
+    @observed("query_embedding")
     async def _embed(self, query: str) -> List[float]:
         """调 embedder 把 query 变成向量，并把异常收敛成两类。"""
         try:
@@ -451,6 +455,7 @@ class VectorKnowledgeRetriever(KnowledgeRetriever):
                 f"EmbeddingService 返回了非法向量（{_preview(query)}）：{exc}"
             ) from exc
 
+    @observed("search")
     async def _search(self, vector: List[float], query: str) -> List[VectorMatch]:
         """调向量库取相似切片，并把异常收敛成两类。"""
         try:

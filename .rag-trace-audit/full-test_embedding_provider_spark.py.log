@@ -1,0 +1,198 @@
+======================================================================
+AI 面试知识库 · 讯飞星火 Embedding Provider 自检
+======================================================================
+
+[1] 模块可导入 + 配置解析
+  [PASS] services.embedding_provider_spark 可导入
+  [PASS] ★ SparkEmbeddingProvider 是 EmbeddingService 的子类（换模型不换调用方式）
+  [PASS]   └ 没有未实现的抽象方法（可直接实例化）
+  [PASS] ★ SparkEmbeddingProviderConfigError 是 ValueError + EmbeddingError
+  [PASS] SparkEmbeddingTransport 实现了 EmbeddingTransport（同一个可注入接缝）
+  [PASS] PROVIDER_SPARK 与本模块的取值一致（两处不能各写一份）
+  [PASS] ★ role → domain 映射只有一张表（厂商词汇不散落）
+  [PASS] __all__ 导出配置 / 实现 / 协议纯函数 / 常量
+  [PASS] ★ 默认 model / dimension / timeout / domain
+  [PASS] ★ 默认维度是实测值 2560（而不是 0 = 不校验）
+  [PASS] ★ 默认模型名与离线占位区分开（否则入库会误判「已有可用向量」）
+  [PASS]   └ 默认 base_url 是讯飞 embedding 端点（不含 query）
+  [PASS] is_remote=True（本类只表示远程配置）
+  [PASS] ★ config 的 repr 不含 api_key / api_secret（dataclass 默认会全打出来）
+  [PASS]   └ 只显示打码形式（保留末 4 位）
+  [PASS]   └ 短凭据整体打码
+  [PASS] config 不可变（frozen dataclass）
+  [PASS] ★ 三项凭据齐备 → 配置读全
+  [PASS]   └ 缺省 role=document → domain=para
+  [PASS]   └ role=query → domain=query
+  [PASS]   └ ENV_DOMAIN 可显式覆盖 role 映射（排障逃生口）
+  [PASS] ★ 凭据不全被拒：缺 APP_ID
+  [PASS] ★ 凭据不全被拒：缺 API_KEY
+  [PASS] ★ 凭据不全被拒：缺 API_SECRET
+  [PASS]   └ 纯空白也算缺失（不把空白当有效凭据）
+  [PASS] ★ 只配回落组 SPARK_* → 取到的就是 SPARK_* 的值（既有部署行为不变）
+  [PASS] ★ 两组都配 → 专用组优先（Embedding 用自己那组，不与文本模型串味）
+  [PASS]   └ 只补一个专用变量 → **逐项**回落（AppId 用专用、Key/Secret 用 SPARK_*）
+  [PASS] ★ 专用名与回落名不互为子串（防「因错误的原因通过」）
+  [PASS] ★ 两组都缺 → 报错同时点明专用名与回落名（排障不用翻源码）
+  [PASS] ★ 非法配置被拒：domain 取值非法
+  [PASS] ★ domain 大小写/空白已归一（应合法）
+  [PASS] ★ 非法配置被拒：维度为负
+  [PASS] ★ 非法配置被拒：维度非整数
+  [PASS] ★ 非法配置被拒：超时为 0
+  [PASS] ★ 非法配置被拒：超时非数字
+  [PASS] ★ 非法配置被拒：超时超过上游上限 60s
+  [PASS] ★ 非法配置被拒：base_url 不是绝对地址
+  [PASS]   └ 空串 base_url → 退回默认端点（不是报错，与 EMBEDDING_* 既有口径一致）
+  [PASS]   └ EMBEDDING_TIMEOUT=60 恰好合法（边界闭）
+  [PASS] ★ 未知 role → 报错（不静默退回默认：那会表现为「召回莫名变差」）
+  [PASS] ★ 通用旋钮（base_url/model/dimension/timeout）逐项生效
+  [PASS]   └ base_url 末尾的 / 被去掉（拼 path 不会出现 //）
+  [PASS] ★ 非 SparkEmbeddingConfig → 构造期拒绝
+  [PASS]   └ 缺 app_id → 拒绝（错误信息点明变量）
+  [PASS]   └ transport 缺 post_json → 拒绝（错误信息说明契约）
+
+[2] HMAC-SHA256 签名（用测试自己写的公式独立复算）
+  [PASS] ★ 签名 URL 恰好带 authorization / date / host 三个参数
+  [PASS]   └ host 参数 = base_url 的 host
+  [PASS]   └ path 为 /（base_url 末尾的 / 被归一成 /）
+  [PASS] ★ date 是 RFC1123（本地时刻 → GMT，服务端允许 ±300s）
+  [PASS] ★ authorization = base64(api_key=…, algorithm=…, headers=…, signature=…)
+  [PASS]   └ signature 与独立复算逐字符相同（HMAC 口径没写歪）
+  [PASS]   └ headers 声明含 request-line（少一项服务端会拒）
+  [PASS] ★ 同一 now 同一输入 → 同一 URL（可复现，便于排障与回归）
+  [PASS]   └ now 变 → date 与 signature 都变
+  [PASS]   └ api_secret 变 → signature 变（密钥真的参与了签名）
+  [PASS]   └ api_key 变 → authorization 变
+  [PASS]   └ 原始 api_key 不出现在 URL 里（只以 base64 形式内嵌）
+  [PASS] ★ base_url 带子路径时 path 参与签名（不是写死 /）
+  [PASS]   └ host 相同但 path 不同 ⇒ 只有签名不同（其余参数不受影响）
+  [PASS]   └ base_url 不是绝对地址 → 明确报错
+
+[3] 请求体（header / parameter.emb.domain / base64(JSON)）
+  [PASS] ★ header.app_id / uid / status 齐全
+  [PASS] ★ parameter.emb.domain 按入参（query / para 由用途决定）
+  [PASS]   └ feature 三项 encoding/compress/format 固定为 utf8/raw/plain
+  [PASS] ★ payload.messages 是 base64(JSON)，且格式声明为 json
+  [PASS]   └ 解出来恰是 messages[0] = {content: 原文, role: user}
+  [PASS]   └ 中文不被转义成 \uXXXX（ensure_ascii=False，字节数可控）
+  [PASS] ★ 真正发出的请求体：domain 取自 config、app_id 取自 config
+  [PASS]   └ 请求头只有 Content-Type（凭据在 query，不在头里）
+  [PASS]   └ 超时按配置传入
+  [PASS]   └ 实际请求的 URL 已签名（含 authorization）
+
+[4] 单条 / 批量编码
+  [PASS] ★ embed(text) 未被重写 —— 接口不变
+  [PASS]   └ 签名与基类逐字相同
+  [PASS]   └ 参数恰为 (self, text)
+  [PASS] ★ embed_batch 被覆盖（上游只接受单条，覆盖点在于「先整体校验再逐条发」）
+  [PASS] ★ embed 返回 list[float]
+  [PASS] ★ 维度 == 声明的 dimension（2560）
+  [PASS]   └ 值来自上游响应（不是占位）
+  [PASS] ★ 恰好发出 1 次请求
+  [PASS] ★ name 记录「哪次编码产生的」（写进 embedding_model）
+  [PASS]   └ dimension 属性 == 配置声明值
+  [PASS]   └ endpoint 是**未签名**地址（可安全打印）
+  [PASS]   └ describe_embedding 认它是语义实现
+  [PASS]   └ 自定义 model 生效（写进 embedding_model 的就是它）
+  [PASS] ★ 拒绝入参：空串
+  [PASS] ★ 拒绝入参：纯空白
+  [PASS] ★ 拒绝入参：None
+  [PASS] ★ 拒绝入参：整数
+  [PASS] ★ 批量返回条数与入参一致
+  [PASS] ★ 顺序与入参一致（逐条对应文本长度）
+  [PASS] ★ 上游只接受单条 ⇒ N 条 = N 次请求（逐条串行，不打并发）
+  [PASS]   └ 每次请求体里装的确实是那一条文本
+  [PASS]   └ tuple 入参同样可用
+  [PASS] ★ 空批次 → [] 且**不发起请求**
+  [PASS] ★ 拒绝批量入参：None
+  [PASS] ★ 拒绝批量入参：整数
+  [PASS] ★ 拒绝批量入参：含 None 元素
+  [PASS] ★ 拒绝批量入参：含空文本元素
+  [PASS] ★ 把**单个字符串**传进批量接口被拒（否则会被逐字符拆开）
+  [PASS]   └ 元素级错误指出是第几条（复用基类同一处校验）
+
+[5] 响应解析（base64 → 小端 float32）
+  [PASS] ★ 小端解析：float32 的 1.0 / -2.5 / 0.25 逐位还原
+  [PASS] ★ 大端字节流解出来**不是**同一组数（证明真的按小端解）
+  [PASS]   └ 维度 = 字节数 / 4
+  [PASS] ★ 非法 feature.text 被拒：None
+  [PASS] ★ 非法 feature.text 被拒：空串
+  [PASS] ★ 非法 feature.text 被拒：纯空白
+  [PASS] ★ 非法 feature.text 被拒：非 base64（解出 0 字节）
+  [PASS] ★ 非法 feature.text 被拒：字节数不是 4 的倍数
+  [PASS] ★ 2xx 但结构不对 → EmbeddingDimensionError：非对象
+  [PASS] ★ 2xx 但结构不对 → EmbeddingDimensionError：缺 payload
+  [PASS] ★ 2xx 但结构不对 → EmbeddingDimensionError：缺 feature
+  [PASS] ★ 2xx 但结构不对 → EmbeddingDimensionError：缺 feature.text
+  [PASS] ★ 2xx 但结构不对 → EmbeddingDimensionError：feature 是字符串
+  [PASS] ★ 上游维度与 EMBEDDING_DIMENSION 声明不符 → EmbeddingDimensionError
+  [PASS]   └ 报错点明「换模型要同步改 dimension」
+  [PASS]   └ dimension=0 时不校验维度（按上游返回）
+  [PASS] ★ 2xx 但 header.code=10313 → EmbeddingUnavailableError（不当成成功）
+  [PASS]   └ code=10313 附排查提示（点明该查什么）
+  [PASS] ★ 2xx 但 header.code=11200 → EmbeddingUnavailableError（不当成成功）
+  [PASS]   └ code=11200 附排查提示（点明该查什么）
+  [PASS] ★ 2xx 但 header.code=11202 → EmbeddingUnavailableError（不当成成功）
+  [PASS]   └ code=11202 附排查提示（点明该查什么）
+  [PASS] ★ 2xx 但 header.code=10139 → EmbeddingUnavailableError（不当成成功）
+  [PASS]   └ code=10139 附排查提示（点明该查什么）
+  [PASS]   └ 未知错误码不臆测原因，只回显 message
+  [PASS]   └ 缺 header 也算失败（不把「没写 code」当 code=0）
+
+[6] 密钥安全（异常消息 / 日志 / repr）
+  [PASS] ★ 传输层把签名 URL 的 query string 整段抹掉（凭据可逆，不能进消息）
+  [PASS]   └ 未签名部分（base_url）保留 —— 抹的是凭据不是整条消息
+  [PASS]   └ 异常**类型**不变（调用方的 except 仍然有效）
+  [PASS]   └ 原始异常仍挂在 __cause__ 上（排障不丢信息）
+  [PASS]   └ 消息里也不出现明文 api_key / api_secret
+  [PASS]   └ 消息里没有可抹的东西时**原样抛出**（不无谓换异常对象）
+  [PASS] ★ provider 的 repr 不含凭据
+  [PASS] ★ 走真实 httpx 客户端路径也能取到向量（MockTransport，不联网）
+  [PASS]   └ 真实路径下请求 URL 确实带了签名参数（不是只拼了 base_url）
+  [PASS] ★ HTTP 500 → EmbeddingUnavailableError（可重试/降级）
+  [PASS]   └ 该消息里不含 query string / 凭据
+  [PASS] ★ 网络失败 → EmbeddingUnavailableError
+  [PASS] ★ HTTP 200 但响应不是 JSON → EmbeddingDimensionError
+
+[7] 边界与守卫（AST 取证）
+  [PASS] ★ 模块顶层只有标准库 + services（HTTP 客户端不在顶层）
+  [PASS]   └ 未 import 数据层 / FastAPI / 向量层 / 面试侧 / 组装器
+  [PASS]   └ 只从 embedding_service 取接口与校验 + 从 embedding_provider 取传输与常量
+  [PASS]   └ 无全局单例（无模块级 EmbeddingService 实例）
+  [PASS] 守卫自检：凭据正则能区分「有」与「无」
+  [PASS] ★ 源码里没有硬编码凭据
+  [PASS] ★ backend/.env 里的真实凭据（两组都查）未出现在源码 / .env.example 中
+  [PASS] ★ .env.example 的 SPARK_APP_ID 只放变量名 / 空值（不带真实凭据）
+  [PASS] ★ .env.example 的 SPARK_API_KEY 只放变量名 / 空值（不带真实凭据）
+  [PASS] ★ .env.example 的 SPARK_API_SECRET 只放变量名 / 空值（不带真实凭据）
+  [PASS] ★ .env.example 的 SPARK_EMBEDDING_APP_ID 只放变量名 / 空值（不带真实凭据）
+  [PASS] ★ .env.example 的 SPARK_EMBEDDING_API_KEY 只放变量名 / 空值（不带真实凭据）
+  [PASS] ★ .env.example 的 SPARK_EMBEDDING_API_SECRET 只放变量名 / 空值（不带真实凭据）
+  [PASS] ★ .env.example 的 EMBEDDING_API_KEY 只放变量名 / 空值（不带真实凭据）
+  [PASS] ★ 无 DATABASE_URL 也能 import（顶层不碰数据层）
+  [PASS]   └ 子进程里 httpx 也未被导入（它只在 embedding_provider 的传输里延迟导入）
+  [PASS]   └ 子进程真的导入成功（不是「导入失败所以没泄漏」）
+
+[8] 工厂分派 / role 映射 / 默认行为不变
+  [PASS] ★ EMBEDDING_PROVIDER=spark → SparkEmbeddingProvider
+  [PASS]   └ 缺省 role → domain=para（写侧：知识原文）
+  [PASS] ★ role=query → domain=query（读侧：用户问题）
+  [PASS]   └ 别名 iflytek / xinghuo / XFYUN 都归到 spark
+  [PASS]   └ 不做全局单例（每次返回新对象）
+  [PASS]   └ 非法 role 在工厂层就被拒（不静默退回默认）
+  [PASS]   └ 缺凭据在构造期就报（读侧会静默降级为「无知识」，不伪装成检索不到）
+  [PASS] ★★ 只配 SPARK_*（无 EMBEDDING_PROVIDER）→ 仍是离线占位（默认行为逐字节不变）
+  [PASS] ★ 空环境 → 离线占位
+  [PASS]   └ 配 EMBEDDING_API_KEY → 仍是 openai 兼容实现（没被 spark 抢走）
+  [PASS] ★ load_embedding_config 明确拒绝 spark（别拿 OpenAI 字段装 spark 的配置）
+  [PASS]   └ 显式传 provider=spark 的 config 也会被工厂分派到 spark 实现
+  [PASS] ★ default_embedder() 未配置 → 离线占位（role 被忽略，无副作用）
+  [PASS]   └ 对称实现下 role=query 也不改变实现（传了不会炸）
+  [PASS] ★★ 读侧 build_vector_retriever 确实按 role='query' 取 embedder（运行时取证：非对称实现必须配 query，配错只是掉召回、不报错）
+  [PASS]   └ 拿到的正是这个 embedder（没有被悄悄换成默认值）
+  [PASS]   └ 显式注入 embedder 时不再调 default_embedder（注入优先）
+  [PASS]   └ 写侧入库 Pipeline 用默认 role（document），与读侧区分开
+  [PASS] ★ 组装器仍不在顶层 import 任何具体实现（经工厂取实现）
+
+======================================================================
+结果: 通过 175 项，失败 0 项
+======================================================================

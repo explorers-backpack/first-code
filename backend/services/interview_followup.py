@@ -39,6 +39,7 @@
 """
 
 from __future__ import annotations
+from common.rag_trace import observed, span, context_ready
 
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -408,6 +409,7 @@ async def load_last_answered_question(db: Any, session: Any) -> Any:
 # ============================================================
 # 六、全链：生成追问
 # ============================================================
+@observed("outcome")
 async def generate_followup(
     db: Any,
     session_id: int,

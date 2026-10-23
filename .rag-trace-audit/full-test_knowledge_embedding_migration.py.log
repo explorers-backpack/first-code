@@ -1,0 +1,98 @@
+
+[1] 契约：出参键集合 / 常量 / needs_migration 真值表
+  [PASS] 报告键集合恰好是 MIGRATION_RESULT_FIELDS（16 键）
+  [PASS]   └ _new_report 的键与顺序完全一致（调用方无分支取值）
+  [PASS]   └ 空白报告默认是「无事可做」的 skipped / ok
+  [PASS] 四个状态互不重复
+  [PASS] 阶段常量互不重复且含 embed / persist
+  [PASS] 默认值：batch_size=8 / pace=0 / retries=0（不引入额外等待）
+  [PASS] needs_migration 真值表（无向量/换模型/维度不符 → 迁移；同模型同维度 → 跳过）
+  [PASS]   └ target_dim<=0（实现不声明维度）时不按维度判定
+
+[2] 构造期校验（配置问题当场报，不伪装成「跑完发现没迁」）
+  [PASS] db=None → MigrationConfigError
+  [PASS] embedder 没有 embed → 报错
+  [PASS] embedder 的 name 为空 → 报错（embedding_model 是唯一重算依据）
+  [PASS] target_model 空串 → 报错
+  [PASS] batch_size=True → 报错（bool 是 int 子类，项目老坑）
+  [PASS] batch_size=0 → 报错
+  [PASS] pace_seconds=-1 / NaN → 报错
+  [PASS] retries=True → 报错
+  [PASS] 默认 target_model/target_dim 取自 embedder
+
+[3] dry-run：只扫描、不编码、不写库
+  [PASS] dry-run 报告 status=ok（有待迁移）+ dry_run=True
+  [PASS]   └ 扫描 3 片、待迁移 3 片、迁移 0 片
+  [PASS] ★ dry-run **一次都没有编码**（不花上游配额）
+  [PASS] ★ dry-run 一条都没写向量库
+  [PASS] ★ dry-run 后切片行与向量完全未变
+
+[4] 迁移正确性：向量已换，切片本体逐字节不变
+  [PASS] 报告 status=ok / ok=True / stage=done
+  [PASS]   └ 扫描 3 / 待迁移 3 / 已迁移 3 / 跳过 0 / 失败 0
+  [PASS]   └ target_model / target_dim 如实上报
+  [PASS]   └ 3 片 = 1 批（batch_size=8）
+  [PASS] ★ 每行向量都换成了新模型算出来的那个（逐值相等）
+  [PASS] ★ embedding_model 全部更新为 target_model
+  [PASS] ★ embedding_dim 全部更新为新维度
+  [PASS] ★ 行数不变（迁移是覆盖写，不新建/不删除切片）
+  [PASS] ★ 切片正文 / 元数据 / 文档归属**逐字节不变**
+  [PASS]   └ chunk_index 也未漂移
+
+[5] 幂等：复跑是空操作（一次编码都不发生）
+  [PASS] 复跑 status=skipped / ok=True（成功的空操作，不是失败）
+  [PASS]   └ 待迁移 0 / 已迁移 0 / 跳过 3
+  [PASS] ★ 复跑**一次编码都没发生**（幂等判据在编码之前生效）
+  [PASS]   └ 向量仍是上一次那批（没被重写）
+
+[6] 判定边界：维度不符 / 无向量 各自触发迁移
+  [PASS] 模型对但维度不符 → 迁移（同模型换维度也要重算）
+  [PASS]   └ 该两片现在都是新模型新维度
+  [PASS]   └ 新文档的切片归属正确（未被挪到别的文档）
+
+[7] 失败恢复①：单片编码失败 → 记明细 + 同批其它片照常迁移
+  [PASS] status=partial / ok=False（不假装成功）
+  [PASS]   └ 已迁移 3 / 失败 1 / 跳过 5（前两节累计已迁移的 5 片）
+  [PASS]   └ 失败明细带 chunk_id / stage=embed / 原始异常类名
+  [PASS]   └ error 字段非空（第一条失败的可读信息）
+  [PASS]   └ 同批里**没失败的那片**照常迁移（失败被隔离在单片）
+  [PASS] ★ 失败那片的**旧向量与正文都完好**（没写坏数据）
+  [PASS] ★ 复跑（chunk_ids 精确指定）只补那一片：迁移 1 / 跳过 0
+  [PASS]   └ 该片现在已是新模型新维度
+
+[8] 失败恢复②：整批写回失败 → 回滚且旧向量未被破坏 → 下一批继续
+  [PASS] 整批写回失败 → status=failed（一条都没成功）
+  [PASS]   └ 该批**全部**切片记进失败明细（不是只记一条）
+  [PASS]   └ errors 里有批次级可读信息
+  [PASS] ★ 回滚生效：切片行与旧向量**完全未变**
+  [PASS] ★ 会话回滚后仍可用：第 2 批成功（部分恢复）
+  [PASS]   └ 再跑一次把剩下的补齐（幂等 + 断点续做）
+  [PASS]   └ 最终全部是新模型新维度
+
+[9] 失败恢复③：max_failures 提前停止 + limit 小样本
+  [PASS] max_failures=2 → 只跑了 1 批就停，stopped_early=True
+  [PASS]   └ 只记 2 条失败（剩余 4 片未尝试）
+  [PASS] document_id + limit=2 → 只扫描该文档前 2 片、只迁移 2 片
+  [PASS]   └ 第 3 片仍是旧模型（limit 是「取前 N 片」而不是「只迁 N 片」的错觉）
+
+[10] 隔离守卫（AST 取证：不改接口、不碰具体后端）
+  [PASS] ★ 只消费 VectorStore / Retriever 的**既有接口**（一行未改）
+  [PASS] ★ 不认识任何具体向量后端（经组装器取后端）
+  [PASS]   └ 经组装器拿 embedder / store（换模型/换后端只改配置）
+  [PASS] ★ 不 import embedding_service（其消费者是已知闭集）
+  [PASS]   └ 异常一律按 Exception 收敛成报告，不 import 异常基类
+  [PASS]   └ 不 import fastapi / pydantic（不是 HTTP 层）
+  [PASS]   └ 顶层不 import httpx（本模块不自己发请求）
+  [PASS]   └ services/vector_store.py 不反向依赖迁移模块（无循环）
+  [PASS]   └ services/vector_knowledge_retriever.py 不反向依赖迁移模块（无循环）
+  [PASS]   └ services/knowledge_retriever.py 不反向依赖迁移模块（无循环）
+  [PASS]   └ services/knowledge_rag.py 不反向依赖迁移模块（无循环）
+  [PASS]   └ services/knowledge_import_pipeline.py 不反向依赖迁移模块（无循环）
+  [PASS]   └ services/knowledge_maintenance.py 不反向依赖迁移模块（无循环）
+  [PASS] ★ VectorStore 接口签名未变（add / search / count）
+  [PASS] ★ Retriever 接口签名未变
+  [PASS] 便捷入口 migrate_embeddings 与类入口同源（同一份实现）
+
+======================================================================
+结果: 通过 74 项，失败 0 项
+======================================================================

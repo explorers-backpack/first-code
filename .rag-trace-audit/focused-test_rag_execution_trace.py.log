@@ -1,0 +1,22 @@
+..F..生成下一题：rag_state=failed degraded=True chunks=0 code=knowledge_retrieval_failed RAG 检索失败，已降级为「无知识」继续出题 session_id=1 use_rag=True
+....
+======================================================================
+FAIL: test_followup_uses_real_retrieval_context (__main__.RagTraceTests)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\unittest\async_case.py", line 64, in _callTestMethod
+    self._callMaybeAsync(method)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\unittest\async_case.py", line 87, in _callMaybeAsync
+    return self._asyncioTestLoop.run_until_complete(fut)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\asyncio\base_events.py", line 649, in run_until_complete
+    return future.result()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\unittest\async_case.py", line 101, in _asyncioLoopRunner
+    ret = await awaitable
+  File "C:\Users\DELL-PC\Desktop\career-ai\backend\tests\test_rag_execution_trace.py", line 162, in test_followup_uses_real_retrieval_context
+    self.assertGreater(self.events('retrieval')[-1]['count'],0)
+AssertionError: 0 not greater than 0
+
+----------------------------------------------------------------------
+Ran 9 tests in 35.049s
+
+FAILED (failures=1)

@@ -1,0 +1,125 @@
+==========================================================================
+AI 面试 RAG 测试数据集 · 可用性自检
+数据集：backend\scripts\interview_knowledge.json
+切片默认：size=500, overlap=80
+==========================================================================
+
+--------------------------------------------------------------------------
+[1] 数据集结构契约
+--------------------------------------------------------------------------
+  [PASS] 数据集文件存在
+  [PASS] 是合法 JSON 且顶层是对象
+  [PASS] documents 是非空列表
+  [PASS] 每篇文档恰好 4 个键 ('title', 'content', 'category', 'source')
+  [PASS] 四个键的取值都是字符串
+  [PASS] title / content 去空白后非空
+  [PASS] source 非空（便于溯源）
+  [PASS] category 全部合法（('job', 'technical', 'company', 'project')）
+  [PASS] 文档自然键 (title+source+category) 无重复
+  [PASS] 顶层 category_labels 与 models 口径一致
+
+--------------------------------------------------------------------------
+[2] 测试 1 · 数据可以入库（真实 KnowledgeImportPipeline）
+--------------------------------------------------------------------------
+  使用的 Embedding 实现：HashEmbeddingService (name='hash-local', dimension=256)
+  使用的切片器：size=500, overlap=80
+  [PASS] 报告键集恒为 IMPORT_RESULT_FIELDS（13 键）
+  [PASS] 全部 22 篇 status 均为 'ok'
+  [PASS] 全部报告 ok=True
+  [PASS] 全部报告 stage 跑到 DONE
+  [PASS] 全部报告 errors 为空
+  [PASS] 全部报告拿到 document_id
+  [PASS] 全部报告 reused_document=False（首次入库全是新建）
+  [PASS] knowledge_document 表实际行数 == 22
+  [PASS] knowledge_chunk 表实际行数 == 报告 chunk_count 之和
+
+--------------------------------------------------------------------------
+[3] 测试 2 · Chunk 正常生成
+--------------------------------------------------------------------------
+  [PASS] 每篇 chunk_count >= 1
+  [PASS] saved_chunks == chunk_count（落库数与切片数一致）
+  [PASS] skipped_chunks == 0（首次入库没有跳过）
+  [PASS] 确实存在被切成多片的文档（多片路径被真实走到）
+  多片文档：10 篇 / 共 22 篇
+  [PASS] 每篇切片 chunk_index 连续 0..n-1、正文非空、单片 <= chunk_size
+
+--------------------------------------------------------------------------
+[4] 测试 3 · Embedding 正常生成
+--------------------------------------------------------------------------
+  [PASS] 每篇 embedded_chunks == chunk_count（逐片都编码了）
+  [PASS] failed_index 全为 None（没有一片编码失败）
+  [PASS] knowledge_chunk 中 embedding IS NULL 的行数为 0
+  [PASS] embedding_model 全部 == 本次 embedder.name
+  [PASS] embedding_dim 全部 == embedder.dimension
+  [PASS] 每条向量都是长度 256 的数值数组（无 bool / 无嵌套）
+  [PASS] 没有全零向量（编码确实产生了信息）
+  [PASS] 不同切片正文对应不同向量（非常量输出）
+
+--------------------------------------------------------------------------
+[5] 幂等复跑（重复执行不重复写）
+--------------------------------------------------------------------------
+  [PASS] 复跑全部 status == 'skipped'
+  [PASS] 复跑 ok=True（skipped 是成功的空操作，不是失败）
+  [PASS] 复跑 reused_document=True（按自然键复用了既有文档）
+  [PASS] 复跑 skipped_chunks == chunk_count
+  [PASS] 复跑后 knowledge_document 行数不变
+  [PASS] 复跑后 knowledge_chunk 行数不变
+
+--------------------------------------------------------------------------
+[6] 隔离守卫（本轮只准备数据，不动生产代码）
+--------------------------------------------------------------------------
+  [PASS] 守卫自检：子串检查能区分「有」与「无」
+  [PASS] 生产代码（Core / Agent / Retriever）不引用本数据集
+  [PASS] 数据集是纯数据（无 'import ' / 'def ' / 'lambda' 等代码痕迹）
+  [PASS] 本套件顶层未 import 受保护的面试模块
+  [PASS] 本套件顶层只 import 数据集链路所需模块（含 models / database / services.*）
+
+==========================================================================
+一、测试数据规模
+==========================================================================
+  文档总数            : 22
+    - job        (岗位知识) : 3 篇
+    - technical  (技术知识) : 12 篇
+    - company    (公司知识) : 3 篇
+    - project    (项目经验知识) : 4 篇
+  正文字符总数        : 10575
+  最短 / 最长正文     : 266 / 827 字符
+  切片总数            : 32
+    - job        : 3 片
+    - technical  : 21 片
+    - company    : 3 片
+    - project    : 5 片
+  被切成多片的文档    : 10 篇
+  切片长度 min/avg/max: 144 / 354.8 / 493 字符
+
+==========================================================================
+二、数据结构
+==========================================================================
+  文件                : backend/scripts/interview_knowledge.json
+  顶层键              : ['category_labels', 'documents', 'format', 'name', 'purpose', 'version']
+  documents[] 每项    : ('title', 'content', 'category', 'source')（恰好 4 键）
+  category 取值       : ('job', 'technical', 'company', 'project')
+  category_labels     : {'job': '岗位知识', 'technical': '技术知识', 'company': '公司知识', 'project': '项目经验知识'}
+  文档自然键          : (title, source, category)
+  source 命名空间     :
+    - company://   3 条
+    - handbook://  12 条
+    - jd://        3 条
+    - resume://    4 条
+  落库目标            : knowledge_document（主表）+ knowledge_chunk（切片）
+
+==========================================================================
+三、入库结果
+==========================================================================
+  入库方式            : KnowledgeImportPipeline(db).import_document()
+  Embedding 实现      : HashEmbeddingService(hash-local)   ← 离线哈希占位（无语义）
+  向量维度            : 256
+  knowledge_document  : 22 行
+  knowledge_chunk     : 32 行（全部已向量化）
+  embedding 已写入    : 32 行
+  embedding IS NULL   : 0 行（无待处理）
+  入库失败            : 0 篇（status 全为 'ok'）
+  幂等复跑            : 22 篇全部 'skipped'，行数不变
+==========================================================================
+结果: 通过 43 项，失败 0 项
+==========================================================================

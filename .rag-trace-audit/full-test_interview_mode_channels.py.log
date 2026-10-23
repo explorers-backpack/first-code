@@ -1,0 +1,40 @@
+====================================================================
+AI 模拟面试 · 交互模式「通道覆盖」自检
+====================================================================
+
+[1] avatar 会话：四个交互入口都经过数字人通道
+  [PASS] 通道入口被调用恰好 5 次（1 start + 1 current + 2 answer + 1 end）
+  [PASS]   └ 每次传入的都是 (db, session, payload) 三元组
+  [PASS]   └ 第 1 次（start）payload 键集正确
+  [PASS]   └ 第 2 次（current-question）payload 键集正确
+  [PASS]   └ 第 3~4 次（answer）payload 键集正确
+  [PASS]   └ 末次（end）payload 键集正确
+  [PASS]   └ 传入的 session 行就是本场 avatar 会话
+  [PASS] 流程未被分流阻塞（末步为结束、报告已生成）
+
+[2] text 会话：四个交互入口都不进通道
+  [PASS] 通道入口一次都没被调用
+  [PASS]   └ text 流程正常跑完（报告已生成）
+
+[3] 交付内容逐字段等价（text vs avatar，忽略 id / 时间戳 / 模式字段）
+  [PASS] step 数一致
+  [PASS]   └ step 0 交付内容逐字段相同
+  [PASS]   └ step 1 交付内容逐字段相同
+  [PASS]   └ step 2 交付内容逐字段相同
+  [PASS]   └ step 3 交付内容逐字段相同
+  [PASS]   └ step 4 交付内容逐字段相同
+  [PASS] 两种模式唯一差异字段是 interview_mode
+
+[4] 只读投影（get_session_detail / get_report）不分流
+  [PASS] get_session_detail 未触发通道入口
+  [PASS]   └ 仍能正常返回会话详情
+  [PASS]   └ 仍能正常返回报告
+
+[5] 边界（core 不被触碰）
+  [PASS] interview_core 源码不含 avatar_interview（未反向依赖通道层）
+  [PASS] Service 只经通道层调用数字人（import 了 services.avatar_interview）
+  [PASS] Service 仍不直接 import Agent / Validator（既有约束未被破坏）
+
+====================================================================
+结果: 通过 23 项，失败 0 项
+====================================================================

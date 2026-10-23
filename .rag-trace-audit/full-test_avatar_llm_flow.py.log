@@ -1,0 +1,97 @@
+======================================================================
+AI 模拟面试 · 数字人 LLM 单题出题链路自检（方案 A）
+======================================================================
+
+[1] 开关语义：INTERVIEW_AVATAR_LLM_QUESTIONS
+  [PASS] [1.1] 开关名已声明
+  [PASS] [1.4] ★ 回归环境已把它钉成 '0'（防数字人闭环套件真打星火）
+  [PASS] [1.2] 未配置 ⇒ **开启**（默认）
+  [PASS]   └ 空串 ⇒ 开启（空串等价未配置）
+  [PASS]   └ '1' ⇒ 打开
+  [PASS]   └ 'true' ⇒ 打开
+  [PASS]   └ 'TRUE' ⇒ 打开
+  [PASS]   └ 'yes' ⇒ 打开
+  [PASS]   └ 'on' ⇒ 打开
+  [PASS]   └ ' 1 ' ⇒ 打开
+  [PASS]   └ '0' ⇒ 关闭（显式关闭回到旧行为）
+  [PASS]   └ 'false' ⇒ 关闭（显式关闭回到旧行为）
+  [PASS]   └ 'NO' ⇒ 关闭（显式关闭回到旧行为）
+  [PASS]   └ 'off' ⇒ 关闭（显式关闭回到旧行为）
+[interview][ERROR] INTERVIEW_AVATAR_LLM_QUESTIONS='maybe' 取值非法，已按默认（开启）处理；允许：1/true/yes/on/0/false/no/off
+  [PASS] [1.3] 非法值 ⇒ 按默认（**开启**）处理，不抛异常（有 ERROR 日志）
+
+[2] 显式关闭（INTERVIEW_AVATAR_LLM_QUESTIONS=0）⇒ 数字人面试行为零变化
+  [PASS] [2.1] 数字人开场仍**整场**落库（3 道）
+  [PASS]   └ 题目 == build_question_plan 逐字段
+  [PASS] [2.2] 答题后下一题**仍从库里取**（question_no=2，规则题）
+  [PASS]   └ 库里仍是整场 3 道（没有被改写）
+
+[3] 默认态（未配置 ⇒ 开启）：数字人开场只落第 1 题，text 不受影响
+  [PASS] [3.1] 数字人开场**只落第 1 题**
+  [PASS]   └ 第 1 题是规则题（与整场落库的第 1 题逐字段一致）
+  [PASS]   └ 交付的第一题就是它（题号 1）
+  [PASS]   └ 会话仍标记整场题量（total_questions=3，结束条件不变）
+  [PASS] [3.2] text 会话**仍整场落库**（开关对文字面试无影响）
+
+[4] 打开后：答题 ⇒ LLM 生成下一题并落库
+  [PASS] [4.1] 答题后 LLM 题已**落库**（库里 2 道）
+  [PASS]   └ 题号连续（1, 2）
+  [PASS]   └ 第 2 题内容来自模型（不是规则模板）
+  [PASS]   └ 交付的 next_question 就是刚落库的那道（已带 id）
+  [PASS]   └ 未答完（all_answered=False）
+  [PASS] [4.2] 第 2 题答完后同样补出第 3 题
+  [PASS] [4.3] 第 3 题答完 ⇒ all_answered / next_question=None
+  [PASS]   └ 没有多出题（库里恰好 3 道）
+  [PASS] [4.4] 可正常结束并出报告（报告口径未变）
+
+[5] 打开后：LLM 失败 ⇒ 规则兜底（第 k 项）
+  [PASS] [5.1] 面试**没有被打断**（答题仍成功、下一题仍在）
+  [PASS]   └ 兜底题 == 规则计划第 2 项（逐字段同源）
+  [PASS]   └ 兜底题已落库
+  [PASS] [5.2] 幂等：题号已存在 ⇒ source=existing，不重复插题
+
+[6] 打开后：LLM 与规则兜底都失败 ⇒ 如实上报
+  [PASS] [6.1] submit_answer **不抛异常**（答题与评分照常完成）
+  [PASS]   └ 失败不留脏数据（库里仍只有第 1 题）
+  [PASS] [6.2] 直接调用：ok=False / source=failed / 稳定错误码
+  [PASS]   └ 键集恒定（= NEXT_QUESTION_FIELDS）
+
+[7] 契约与守卫
+  [PASS] [7.1] generate_and_persist_next 是协程函数
+  [PASS]   └ 恒定键集已声明（5 键）
+  [PASS] [7.2] 非本人 ⇒ 404
+  [PASS]   └ 未开始（created）⇒ 400
+  [PASS] [7.3] Service **不 import** 出题策略层（策略只从编排层进入）
+  [PASS]   └ submit_answer 在「库里没有下一题」时才补题
+  [PASS] [7.4] 默认路径未动：start_session 仍直调 build_question_plan
+  [PASS]   └ start_session 源码不含策略层模块名
+  [PASS] [7.5] text 会话在开关打开时**逐字段不变**（仍整场规则出题）
+
+[8] 历史回答注入（有历史 vs 无历史）
+  [PASS] [8.1] ★ 端到端：送进模型的 Prompt 带着**第 1 题的题干**（历史回答已注入）
+  [PASS]   └ 也带着候选人的作答内容
+  [PASS]   └ 走的是新的 Prompt 组（含「历史回答」小节标题）
+  [PASS] [8.2] 有历史 ⇒ Prompt 含问答行；无历史 ⇒ 含占位串
+  [PASS]   └ ★ 字节级：两个 Prompt **只差历史小节**
+  [PASS]   └ 严格模式未报错（变量集与调用点一致）
+  [PASS] [8.3] ★★ 同一个假模型：有历史 ⇒ 出的题不同（历史**真的**影响了出题）
+  [PASS]   └ 恒真自检：同一 Prompt 两次 ⇒ 结果一致（分支确由 Prompt 决定）
+  [PASS]   └ 无历史时不会带出「深挖上一题」那类问题
+
+[9] 新 Prompt 组契约与漂移守卫
+  [PASS] [9.1] prompts/interview_next 恰好 2 个模板
+  [PASS]   └ prompts/interview 仍**恰好** 5 个（未被污染）
+  [PASS] [9.2] question.txt 声明 11 个变量（顺序 = 首次出现顺序）
+  [PASS]   └ 变体 = 原 11 + knowledge_context，插在 interview_plan 之后
+  [PASS] [9.3] 原模板不含知识小节
+  [PASS]   └ 变体含且**仅含一次**
+  [PASS]   └ ★ 去掉知识小节后与 question.txt **逐字节相同**（防两模板分叉）
+  [PASS]   └ 行尾符也一致（CRLF 计数相等）
+  [PASS] [9.4] 空知识 ⇒ 走原模板
+  [PASS]   └ 非空知识 ⇒ 走变体
+  [PASS]   └ ★ 空知识时 Prompt 里没有「参考知识」小节（行为一致）
+  [PASS]   └ 非空知识时知识正文进了 Prompt
+
+======================================================================
+结果: 通过 71 项，失败 0 项
+======================================================================

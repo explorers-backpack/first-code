@@ -1,0 +1,90 @@
+====================================================================
+AI 模拟面试 · InterviewAgent 外部知识上下文 自检
+====================================================================
+
+[1] normalize_knowledge_context（宽松接受、确定性归一）
+  [PASS] None → []
+  [PASS] [] → []
+  [PASS] 空字符串 → []
+  [PASS] 空白字符串 → []
+  [PASS] str → 单条
+  [PASS] dict（KnowledgeChunk.to_dict() 形态）→ 取 content，附来源
+  [PASS]   └ 无 source 时不附来源
+  [PASS]   └ 缺 content 的 dict 被丢弃
+  [PASS] 带 content 属性的对象（鸭子类型）→ 取 content
+  [PASS] 单个 str 与单个 dict 都可直接传（不必包成列表）
+  [PASS] 混合列表逐条归一
+  [PASS] 去重且保序
+  [PASS] tuple 也可（Sequence）
+  [PASS] set 先排序 → 确定性
+  [PASS] 数字等标量 → 空串被剔除（不会把 repr 塞进 Prompt）
+  [PASS] 同输入同输出（纯函数）
+  [PASS] 不修改入参
+
+[2] 无知识时行为完全一致（要求 1）
+  [PASS] question.txt 仍只有原来的 10 个变量（模板未被污染）
+  [PASS] 不传（None） → 用原模板 question
+  [PASS]   └ Prompt 与改动前逐字节相同
+  [PASS]   └ 不含知识痕迹
+  [PASS] 显式空列表 [] → 用原模板 question
+  [PASS]   └ Prompt 与改动前逐字节相同
+  [PASS]   └ 不含知识痕迹
+  [PASS] 空元组 () → 用原模板 question
+  [PASS]   └ Prompt 与改动前逐字节相同
+  [PASS]   └ 不含知识痕迹
+  [PASS] 空字符串 → 用原模板 question
+  [PASS]   └ Prompt 与改动前逐字节相同
+  [PASS]   └ 不含知识痕迹
+  [PASS] 全空元素的列表 → 用原模板 question
+  [PASS]   └ Prompt 与改动前逐字节相同
+  [PASS]   └ 不含知识痕迹
+  [PASS] 无知识时生成正常（ok=True）
+  [PASS]   └ 问题 / 知识点 / 难度正常
+  [PASS]   └ 只调用一次模型
+  [PASS]   └ 实际发给模型的 Prompt 与改动前逐字节相同
+  [PASS]   └ 返回字段集与改动前一致（8 键）
+  [PASS] 显式传 knowledge_context=[] 与不传完全等价
+
+[3] 有知识时 Prompt 包含知识（要求 2）
+  [PASS] 切到变体模板 question_knowledge
+  [PASS]   └ 含「参考知识：」标签
+  [PASS]   └ 含第 1 条知识正文
+  [PASS]   └ 含第 2 条知识正文
+  [PASS]   └ 含来源标注
+  [PASS]   └ 不再出现未渲染的占位符
+  [PASS]   └ 仍保留原 10 个变量的内容（岗位名等）
+  [PASS]   └ 与无知识 Prompt 不同（确实注入了知识）
+  [PASS]   └ 无知识 Prompt 是该 Prompt 的前缀改写来源（去掉小节后同源）
+  [PASS]   └ 知识正文只出现一次（未重复注入）
+  [PASS] 有知识时生成正常（ok=True）
+  [PASS]   └ 实际发给模型的 Prompt 含知识
+  [PASS]   └ 返回字段集与无知识时一致（调用方无分支）
+  [PASS] 从 Retriever 直接接线的写法可用（List[KnowledgeChunk] 鸭子类型）
+
+[4] 模板漂移守卫（question_knowledge.txt vs question.txt）
+  [PASS] 原模板 question.txt 不含知识小节
+  [PASS] 变体模板包含知识小节且仅一次
+  [PASS] ★ 去掉知识小节后与 question.txt 逐字节相同（防止两模板分叉）
+  [PASS]   └ 字节级同样成立（含行尾符一致，防 CRLF/LF 悄悄分叉）
+  [PASS]   └ 变体模板 = 原 10 变量 + knowledge_context（集合一致）
+  [PASS]   └ knowledge_context 恰好插在 interview_plan 与 asked_questions 之间
+
+[5] 不调用 Retriever（要求 2）
+  [PASS] Agent 未 import knowledge_retriever（知识由调用方传入）
+  [PASS]   └ 未 import 向量库 / Embedding 相关包
+  [PASS] 签名无 retriever / chunks 参数（Agent 不持有检索器）
+  [PASS] knowledge_context 是 keyword-only
+  [PASS]   └ 默认值为 None（不用可变默认值 []，避免共享状态）
+  [PASS]   └ 既有 4 个位置参数顺序未变（既有调用方不受影响）
+  [PASS]   └ spark 仍是 keyword-only 且默认 None
+
+[6] 修复路径不受影响
+  [PASS] question_repair.txt 未引入 knowledge_context
+  [PASS] 有知识时非法 JSON 仍能修复成功
+  [PASS]   └ 共 2 次调用（首次 + 1 次修复）
+  [PASS]   └ 首次请求含知识
+  [PASS]   └ 修复请求不含知识（修复模板未变）
+
+====================================================================
+结果: 通过 71 项，失败 0 项
+====================================================================

@@ -51,6 +51,7 @@ LLM / 检索 / DB         不调检索、不读库、不写库          同上
 """
 
 from __future__ import annotations
+from common.rag_trace import observed, span, context_ready
 
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
 
@@ -243,6 +244,7 @@ def build_followup_variables(
     }
 
 
+@observed("context")
 def render_followup_prompt(
     variables: Mapping[str, Any],
     knowledge_context: Any = None,
@@ -260,6 +262,7 @@ def render_followup_prompt(
     那就不再是「行为一致」了。两个模板的一致性由漂移守卫锁死。
     """
     lines = format_knowledge_context(knowledge_context)
+    context_ready(lines)
     if not lines:
         return PROMPT_FOLLOWUP, render_prompt(
             PROMPT_FOLLOWUP, variables, group=PROMPT_GROUP

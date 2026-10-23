@@ -1,0 +1,146 @@
+====================================================================
+管理员账号与用户角色逻辑 · 自检
+====================================================================
+
+[1] create_admin.py：不存在 -> 创建 role=admin
+========================================================================
+创建 / 校验管理员账号
+========================================================================
+目标 email    : admin@career.ai
+目标 username : admin
+目标 role     : admin  （由脚本固定，不接受外部输入）
+密码哈希机制  : bcrypt（security.hash_password，与注册/登录一致）
+密码          : 已通过 --password / ADMIN_PASSWORD 提供（不打印明文）
+
+[创建] 未找到 email='admin@career.ai'，将新建管理员账号。
+       [OK] 已创建 id=1 username='admin' email='admin@career.ai' role='admin'
+       可用该邮箱 + 密码调用 POST /api/auth/login 获取 token。
+  [PASS] 退出码 0
+  [PASS] 已创建且 role='admin'（实际 'admin'）
+  [PASS] 密码使用 bcrypt 且可校验
+
+[2] create_admin.py：已存在且 admin -> 幂等跳过，不改凭据
+========================================================================
+创建 / 校验管理员账号
+========================================================================
+目标 email    : admin@career.ai
+目标 username : admin
+目标 role     : admin  （由脚本固定，不接受外部输入）
+密码哈希机制  : bcrypt（security.hash_password，与注册/登录一致）
+密码          : 已通过 --password / ADMIN_PASSWORD 提供（不打印明文）
+
+[已存在] id=1 username='admin' email='admin@career.ai' role='admin'
+       密码与给定值一致: False
+       [警告] role 已是 admin，但密码与给定值不一致。
+              **未修改密码**（不静默改动凭据）。如需重置请显式加 --reset-password。
+  [PASS] 退出码 0
+  [PASS] role 仍为 admin
+  [PASS] 密码未被静默修改
+
+[3] create_admin.py：已存在但 role=user -> 拒绝，不静默提权
+========================================================================
+创建 / 校验管理员账号
+========================================================================
+目标 email    : bob@example.com
+目标 username : bob
+目标 role     : admin  （由脚本固定，不接受外部输入）
+密码哈希机制  : bcrypt（security.hash_password，与注册/登录一致）
+密码          : 已通过 --password / ADMIN_PASSWORD 提供（不打印明文）
+
+[已存在] id=2 username='bob' email='bob@example.com' role='user'
+       密码与给定值一致: False
+       [拒绝] 该账号 role='user'，不是 admin。
+              脚本**不会静默提权普通账号**。若确认要提升，请显式执行：
+                  python scripts/create_admin.py --promote-existing
+  [PASS] 退出码 1（明确失败，不假装成功）
+  [PASS] role 保持 'user' 未被提权（实际 'user'）
+
+[4] create_admin.py：显式 --promote-existing 才提权
+========================================================================
+创建 / 校验管理员账号
+========================================================================
+目标 email    : bob@example.com
+目标 username : bob
+目标 role     : admin  （由脚本固定，不接受外部输入）
+密码哈希机制  : bcrypt（security.hash_password，与注册/登录一致）
+密码          : 已通过 --password / ADMIN_PASSWORD 提供（不打印明文）
+
+[已存在] id=2 username='bob' email='bob@example.com' role='user'
+       密码与给定值一致: False
+       [OK] 已按显式 --promote-existing 将 role 提升为 admin。
+              注意：权限判定读取的是 user_session.role，请让该账号**重新登录**以获取 admin 会话。
+  [PASS] 退出码 0
+  [PASS] role 已提权为 'admin'（实际 'admin'）
+
+[5] create_admin.py：--dry-run 不写库
+========================================================================
+创建 / 校验管理员账号（DRY RUN，不写库）
+========================================================================
+目标 email    : dry@example.com
+目标 username : dryuser
+目标 role     : admin  （由脚本固定，不接受外部输入）
+密码哈希机制  : bcrypt（security.hash_password，与注册/登录一致）
+密码          : 已通过 --password / ADMIN_PASSWORD 提供（不打印明文）
+
+[创建] 未找到 email='dry@example.com'，将新建管理员账号。
+       DRY RUN：未写库。
+  [PASS] 退出码 0
+  [PASS] dry-run 未创建任何用户
+
+[6] 登录：admin 返回 role=admin（需求 A/B）
+  [PASS] HTTP 200
+  [PASS] user.role == 'admin'（实际 'admin'）
+  [PASS] 返回 token
+
+[7] 注册：role 固定为 user（需求 C）
+  [PASS] HTTP 200
+  [PASS] 响应 user.role == 'user'（实际 'user'）
+  [PASS] DB role == 'user'
+
+[8] 注册时传 role=admin 不得成为管理员（需求 D）
+  [PASS] HTTP 200（越权字段被忽略而非报错）
+  [PASS] 响应 role 仍为 'user'（实际 'user'）
+  [PASS] DB role 仍为 'user'（实际 'user'）
+
+[9] UserRegister 模型不含 role 字段（需求 3）
+  [PASS] 字段集合 == {username, email, password}
+  [PASS] extra == 'ignore'
+
+[10] 登录：未知邮箱返回 401，且不自动创建账号
+  [PASS] HTTP 401
+  [PASS] detail 为统一文案
+  [PASS] DB 中未创建该账号
+
+[11] admin 可访问 /api/admin/*（需求 E）
+  [PASS] GET /api/admin/user-logs -> 200（实际 200）
+  [PASS] POST /api/admin/add-job -> 200（实际 200）
+
+[12] user 访问 /api/admin/* 返回 403（需求 F）
+  [PASS] 普通注册用户 GET -> 403（实际 403）
+  [PASS] 普通注册用户 POST -> 403（实际 403）
+  [PASS] 越权注册账号 GET -> 403（实际 403）
+  [PASS] 越权注册账号 POST -> 403（实际 403）
+
+[13] 无 token / 伪造 token -> 401
+  [PASS] 无 Authorization -> 401
+  [PASS] 伪造 token -> 401
+  [PASS] 格式错误的头 -> 401
+
+[13b] 三个管理员端点统一鉴权与踢下线 404 契约
+  [PASS] /api/admin/user-logs 缺失凭证 -> 401
+  [PASS] /api/admin/user-logs 伪造凭证 -> 401
+  [PASS] /api/admin/user-logs 普通用户凭证 -> 403
+  [PASS] /api/admin/add-job 缺失凭证 -> 401
+  [PASS] /api/admin/add-job 伪造凭证 -> 401
+  [PASS] /api/admin/add-job 普通用户凭证 -> 403
+  [PASS] /api/admin/users/999999/kick 缺失凭证 -> 401
+  [PASS] /api/admin/users/999999/kick 伪造凭证 -> 401
+  [PASS] /api/admin/users/999999/kick 普通用户凭证 -> 403
+  [PASS] 管理员踢不存在的用户 -> 404 原文案
+
+[14] 普通用户登录保持 role=user（需求 7）
+  [PASS] role == 'user'（实际 'user'）
+
+====================================================================
+结果: 通过 46 项，失败 0 项
+====================================================================

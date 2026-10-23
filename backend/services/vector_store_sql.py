@@ -43,6 +43,7 @@
 """
 
 from __future__ import annotations
+from common.rag_trace import observed, span, context_ready
 
 from typing import Any, List, Optional, Tuple
 
@@ -177,6 +178,7 @@ class SqlAlchemyVectorStore(VectorStore):
     # --------------------------------------------------------
     # 检索
     # --------------------------------------------------------
+    @observed("vector_search")
     async def search(
         self,
         query_vector: Any,
@@ -209,9 +211,13 @@ class SqlAlchemyVectorStore(VectorStore):
                 continue
             candidates.append(record)
 
-        return select_matches(
-            candidates, query, top_k=top_k, min_score=min_score, store_name=self.name,
-        )
+        with span("candidate_filter") as diagnostic:
+            diagnostic["candidates"] = len(candidates)
+            matches = select_matches(
+                candidates, query, top_k=top_k, min_score=min_score, store_name=self.name,
+            )
+            diagnostic["count"] = len(matches)
+            return matches
 
     # --------------------------------------------------------
     # 权威行读回（给「镜像到 ANN 索引」的后端用）

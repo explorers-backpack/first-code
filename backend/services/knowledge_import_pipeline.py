@@ -132,6 +132,7 @@
 """
 
 from __future__ import annotations
+from common.rag_trace import observed, span, context_ready
 
 from collections.abc import Mapping
 from typing import Any, Dict, List, Optional, Tuple
@@ -336,6 +337,7 @@ class KnowledgeImportPipeline:
     # --------------------------------------------------------
     # 主入口
     # --------------------------------------------------------
+    @observed("import")
     async def import_document(self, document: Any) -> Dict[str, Any]:
         """把 ``document`` 完整导入知识库，返回报告（恒为 ``IMPORT_RESULT_FIELDS``）。
 
@@ -363,9 +365,11 @@ class KnowledgeImportPipeline:
 
         # ---- [2/5] chunk：纯内存切片（空正文 → []，不产占位片）----
         try:
-            chunks = self.chunker.split(
-                content, document_id=document_id, category=category, source=source
-            )
+            with span("chunk") as diagnostic:
+                chunks = self.chunker.split(
+                    content, document_id=document_id, category=category, source=source
+                )
+                diagnostic["count"] = len(chunks)
         except Exception as exc:  # noqa: BLE001 - 任何切片故障都要变成明确状态
             return _fail(report, STAGE_CHUNK, ERROR_CHUNK_EMPTY, exc)
         report["chunk_count"] = len(chunks)
@@ -547,6 +551,7 @@ class KnowledgeImportPipeline:
     # --------------------------------------------------------
     # 内部：分批编码
     # --------------------------------------------------------
+    @observed("embedding")
     async def _embed_planned(
         self, planned: List[Dict[str, Any]]
     ) -> Tuple[Dict[int, List[float]], Optional[Tuple[int, BaseException]]]:
@@ -588,6 +593,7 @@ class KnowledgeImportPipeline:
 
         return vectors, None
 
+    @observed("embedding_batch")
     async def _encode_batch(self, texts: List[str]) -> List[List[float]]:
         """调 ``embed_batch`` 并校验返回条数。
 
@@ -743,6 +749,7 @@ class KnowledgeImportPipeline:
 # ============================================================
 # 便捷入口
 # ============================================================
+@observed("import")
 async def import_document(
     db: AsyncSession,
     document: Any,

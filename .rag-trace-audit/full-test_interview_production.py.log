@@ -1,0 +1,194 @@
+====================================================================
+AI 模拟面试 · 生产化支撑层自检
+====================================================================
+
+[1] 配置（不配＝默认＝行为不变）
+  [PASS] 一个环境变量都不配 ⇒ 全部取默认值
+  [PASS] 空串等价于未配置（不是「配了个空值」）
+  [PASS] 显式配置生效（idle_timeout=45）
+  [PASS] 整数旋钮显式配置生效（max_tracked=7）
+  [PASS] ★ 非法值**报错不静默**（超时配成 abc ⇒ ValueError）
+  [PASS] ★ 上限为 0 ⇒ 报错（0 不是「无上限」，不猜）
+  [PASS] ★ 负数 ⇒ 报错
+  [PASS] ★ 作答限流默认 0（= 不限制）——不配即行为不变
+  [PASS]   └ 但 0 是**合法显式值**（区别于非法值）
+  [PASS]   └ 显式开启后生效（0.4）
+  [PASS] 配置对象可原样上报（to_dict 与字段一一对应）
+
+[2] 脱敏（API Key 安全管理）
+  [PASS] mask_secret 保留末 4 位（够核对「是哪一把」，不够还原）
+  [PASS] mask_secret 短值整体掩码（不泄漏长度以外的信息）
+  [PASS] mask_secret 空值 → 空串（不产出 'None'）
+  [PASS] redact_text 把行内 k=v 的值换成掩码
+  [PASS]   └ 无关文本**逐字不变**（不做过度脱敏）
+  [PASS]   └ Authorization 头也认
+  [PASS] redact_mapping 脱敏敏感键、保留其余键
+  [PASS]   └ 递归到嵌套映射
+  [PASS] is_sensitive_key 认 camelCase / kebab-case / 全大写
+  [PASS] ★ 真实日志器：两个凭据值都**不进**日志输出
+  [PASS]   └ 但末 4 位仍保留（可核对是哪一把、不可还原）
+  [PASS] log_event 的字段值同样脱敏（不是只有 %s 通道）
+  [PASS] ★ 取证：鉴权签名**确实在 URL query 里**（所以错误消息带 URL 就是泄漏）
+  [PASS] sanitize_endpoint 丢掉整个 query（只留 scheme+host+path）
+  [PASS]   └ 脱敏结果里不含 authorization / signature
+  [PASS] redact_url_in 把异常消息里**内嵌**的完整 URL 也换掉
+  [PASS]   └ 但仍保留可定位的 endpoint（排障信息不丢）
+  [PASS] ★ 408 / 429 被归入「可重试」（否则前端会以为这条路走不通）
+  [PASS] ★ 网络异常 → UnavailableError，且消息里**没有**鉴权签名
+  [PASS]   └ 但保留了 endpoint（能定位到哪个能力失败）
+  [PASS] ★ 429 → UnavailableError（可重试），不是 ResponseError
+  [PASS]   └ 原样转述上游 Retry-After（不猜测单位）
+  [PASS] 5xx → UnavailableError（既有口径未变）
+  [PASS] 其它 4xx → ResponseError（业务拒绝，重试无用）
+  [PASS] 2xx → 原样返回解析后的 JSON
+
+[3] 会话清理（TTL / 容量上限 / 清理回调）
+  [PASS] touch 后跟踪 3 条
+  [PASS] 未过期 ⇒ expired() 为空（**纯计算，不改状态**）
+  [PASS] last_seen 可读（排障用）
+  [PASS] 超过 TTL ⇒ expired() 列出（仍不改状态）
+  [PASS] ★ sweep 摘除过期会话并触发清理回调
+  [PASS]   └ 回调注册**幂等**（重复注册不会把回调调两次）
+  [PASS] touch 不负责执行上限（清理是机会式的，不是每次写都扫）
+  [PASS] ★ sweep 后收敛到上限（防无界增长）
+  [PASS]   └ 淘汰的是**最久未活动**的两条（1、2）
+  [PASS] forget 摘除记录但**不触发**清理回调（主动断开 ≠ 过期）
+  [PASS] ★ 单个清理回调抛异常**不阻断**其余回调（清理是尽力而为）
+  [PASS]   └ 且该条仍被摘除（不会卡在表里反复失败）
+
+[4] 并发闸门（每用户连接数 / 会话数）
+  [PASS] 前 2 条连接放行
+  [PASS] ★ 第 3 条被拒（**非阻塞、不排队**）
+  [PASS]   └ 活跃连接数如实统计
+  [PASS] 不同用户互不影响
+  [PASS] 释放后额度回收（不会泄漏）
+  [PASS] 重复释放不会把计数压成负数
+  [PASS] 会话额度：第 1 个放行
+  [PASS]   └ 同一会话重复登记**幂等**（重连不被自己的旧记录挤掉）
+  [PASS]   └ 第 2 个会话超限被拒
+  [PASS]   └ 释放后额度回收
+  [PASS] snapshot 形状恒定
+
+[5] 每会话互斥（两个标签页同时作答）
+  [PASS] 首次进入成功
+  [PASS] ★ 同一会话再次进入被拒（**非阻塞**，不排队）
+  [PASS] 退出后可再次进入
+  [PASS] 不同会话互不阻塞
+  [PASS] busy_count 如实统计
+  [PASS] 重复 exit 安全（幂等，不会把计数压成负数）
+
+[6] 限流（默认关闭；显式开启后生效）
+  [PASS] 首次放行
+  [PASS] 间隔内被拒
+  [PASS]   └ retry_after 给出剩余等待秒数
+  [PASS] 间隔到 ⇒ 放行
+  [PASS] 不同 key 互不影响
+  [PASS] sweep 清理久未使用的 key（防 key 空间无界增长）
+  [PASS] ★ 间隔 0 ⇒ 永不拦截（默认行为不变）
+
+[7] 指标（计数器 / 瞬时量）
+  [PASS] 计数器累加
+  [PASS] 瞬时量进 gauges（不混进 counters）
+  [PASS] 快照形状恒定（counters / gauges / uptime_seconds）
+  [PASS] uptime_seconds 是数字
+  [PASS] reset 清零（测试隔离）
+  [PASS] ★ 模块级单例存在（健康检查与实时通道看的是同一份）
+  [PASS] 指标名是稳定字符串（可被日志/采集端聚合）
+
+[8] 状态上报（describe_production_status / GET /api/health）
+  [PASS] ★ 上报键集**恒定**（12 键）
+  [PASS]   └ 未配置 ⇒ error 为 None（配置正常）
+  [PASS]   └ 默认值原样上报（与 DEFAULT_CONFIG 一致）
+  [PASS]   └ metrics 子块形状正确
+  [PASS] GET /api/health 返回 200
+  [PASS] ★ 新增 metrics 键
+  [PASS]   └ 与 health_report.production_status() **同源**（除实时 uptime 外逐键相等）
+  [PASS]   └ metrics 固定 12 键
+  [PASS]   └ ★ 旧键 'status' 仍在（向后兼容）
+  [PASS]   └ ★ 旧键 'service' 仍在（向后兼容）
+  [PASS]   └ ★ 旧键 'embedding' 仍在（向后兼容）
+  [PASS]   └ ★ 旧键 'vector' 仍在（向后兼容）
+  [PASS]   └ ★ 旧键 'threshold' 仍在（向后兼容）
+  [PASS]   └ ★ 旧键 'avatar' 仍在（向后兼容）
+  [PASS]   └ status / service 值**逐字未变**
+
+[9] 协议契约（既有事件/消息/关闭码逐字不变 + 新关闭码）
+  [PASS] 服务端事件集仍是 9 个且逐字不变
+  [PASS] 客户端消息集仍是 6 个且逐字不变
+  [PASS] ★ 既有三个关闭码**值未变**（顺序与取值都不许动）
+  [PASS] 新增关闭码：空闲超时 4408 / 并发超限 4409
+  [PASS] 新增稳定错误码 busy（供前端分支）
+  [PASS] ★ 前端镜像了 4408（跨语言契约必须逐字对齐）
+  [PASS] ★ 前端镜像了 4409
+  [PASS]   └ 前端镜像了 ERROR_BUSY
+  [PASS] ★ 4408 / 4409 都在「不重连」名单里（否则会无限重试刷屏）
+  [PASS]   └ 名单里仍含既有的 4401 / 4404（未被新代码挤掉）
+  [PASS] ★ 前端有心跳（否则服务端的空闲超时会误杀活连接）
+  [PASS]   └ 心跳定时器在关闭/重连时被清掉（不泄漏定时器）
+
+[10] 边界守卫（AST：分层单向 / 零第三方）
+  [PASS] ★ 生产化模块**不 import 任何项目内模块**（尤其编排层）
+  [PASS]   └ 顶层只用标准库
+  [PASS]   └ 未引入第三方依赖（httpx / requests / aiohttp）
+  [PASS] ★★ 编排层消费者仍是唯一闭集（新增模块未打破「可选层」性质）
+  [PASS] 实时通道已接线：注册会话淘汰回调
+  [PASS] 实时通道已接线：空闲超时用 asyncio.wait_for 包住 receive_json
+  [PASS] 实时通道已接线：并发闸门（连接数 + 会话数）
+  [PASS]   └ 且额度在 finally 释放（否则随连接次数单调泄漏）
+  [PASS] 实时通道已接线：每会话互斥
+  [PASS] 实时通道已接线：指标计数
+  [PASS] 实时通道已接线：结构化日志
+  [PASS] ★ modules/interview/api.py **仍未被改**（文字面试 HTTP 契约一行未动）
+  [PASS] ★ 未新增独立 ASR / TTS Provider 文件（复用虚拟人内置能力）
+  [PASS]   └ 生产化模块文件名本身也不含这些词
+
+[11] 真机行为取证（空闲超时 / 并发超限）
+  [PASS] 阶段 (a) 配置已生效（idle=0.4s）
+[ai] 运行模式=offline —— 不联网，AI 调用一律失败并走各自的降级路径（缺凭据：无）。要调用真实模型请配置凭据或显式设置 AI_RUN_MODE=production。
+[embedding][WARN] provider=hash-local dim=256 semantic=False —— 这是**离线占位**（词面哈希），检索出的「相似度」没有语义含义，RAG 知识注入会静默失效。生产部署请配置 EMBEDDING_* 后重启。
+[vector] backend=sql ann=False chunks=0（全表扫描）
+[threshold][WARN] 检索阈值可能**已过期**（换过模型或改过语料？）：
+             · Embedding 已变：阈值是对着 xinghuo-embedding 标的，当前是 hash-local。
+             · Embedding 维度已变：标定时 2560 维，当前 256 维。
+             · 检索参数 top_k 未配置，而标定时是 8。
+             · 检索参数 min_score 未配置，而标定时是 0.7685。
+             · 检索参数 min_score_ratio 未配置，而标定时是 0.9947。
+             重跑 tests/rag_production_query_calibration_spark_run.py 后，用 scripts/apply_threshold_calibration.py --yes 一键写回并登记溯源。
+[avatar] provider=mock —— 数字人通道走**离线 Mock**（不产生真实音视频）；avatar 模式面试照常跑完，交付内容与 text 逐字段一致。要接真实讯飞虚拟人请配置 AVATAR_PROVIDER=iflytek 与 AVATAR_IFLYTEK_* 后重启。
+[production] 实时通道：空闲超时 0.4s / 会话 TTL 21600.0s / 跟踪上限 2000 / 每用户连接上限 4 / 每用户会话上限 3 / 作答限流 未限制
+[production] （提示）作答限流未开启；需要防连点/脚本重放请设置 INTERVIEW_ANSWER_MIN_INTERVAL=0.4 后重启。
+[auth] 登录失败限流 = **进程内**：5 次 / 900s。★ 多 worker 时每个进程独立计数 ⇒ 实际上限 × 进程数；需要多 worker 请设 AUTH_LOGIN_STORE=db 后重启。
+[production] 撤销广播轮询器**已关闭**（INTERVIEW_WS_REVOCATION_WATCH=0）：踢下线 / 登出对已建立连接的生效延迟退化为周期性复核（60s 量级）。生产环境不建议关闭。
+  [PASS] (a) 连上后先推 hello + 快照（既有行为未变）
+  [PASS]   └ ★ 空闲超时前先推一条 error 说明（不是无声断开）
+  [PASS]   └ ★ 随后以关闭码 **4408** 关闭（服务端真的释放了连接）
+  [PASS] 阶段 (b) 配置已生效（idle=60s / 每用户连接上限=1）
+  [PASS] (b) 第 1 条连接正常建立（hello + 快照）
+  [PASS]   └ ★ 第 2 条连接被拒（error.busy）
+  [PASS]   └ ★ 关闭码 **4409**
+  [PASS]   └ ★ 既有连接不受影响（ping → pong 仍正常）
+  [WARN] 临时目录未能删除（不影响结果）：C:\Users\DELL-PC\AppData\Local\Temp\career_ai_prod_test_6hkt_1py -> [WinError 32] 另一个程序正在使用此文件，进程无法访问。: 'C:\\Users\\DELL-PC\\AppData\\Local\\Temp\\career_ai_prod_test_6hkt_1py\\prod_test.db'
+
+====================================================================
+结果: 通过 129 项，失败 0 项
+====================================================================
+session_evict_hook_failed error=RuntimeError: boom session_id=9
+ws_idle_timeout idle_seconds=0.4 session_id=1 user_id=1
+ws_rejected_busy limit=1 reason=too_many_connections session_id=2 user_id=1
+Exception closing connection <AdaptedConnection <aiosqlite.core.Connection object at 0x00000255500E79D0>>
+Traceback (most recent call last):
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\pool\base.py", line 375, in _close_connection
+    self._dialect.do_close(connection)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\engine\default.py", line 721, in do_close
+    dbapi_connection.close()
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\dialects\sqlite\aiosqlite.py", line 319, in close
+    self.await_(self._connection.close())
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\sqlalchemy\util\_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\aiosqlite\core.py", line 206, in close
+    await self._execute(self._conn.close)
+  File "C:\Users\DELL-PC\AppData\Local\Programs\Python\Python310\lib\site-packages\aiosqlite\core.py", line 160, in _execute
+    return await future
+asyncio.exceptions.CancelledError

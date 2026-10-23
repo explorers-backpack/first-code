@@ -1,0 +1,98 @@
+==========================================================================
+Embedding 运行状态标识（EmbeddingInfo）· 自检
+==========================================================================
+
+--------------------------------------------------------------------------
+[1] EmbeddingInfo 结构契约
+--------------------------------------------------------------------------
+  [PASS] 字段恰好是 (provider, dimension, semantic_enabled) 且顺序固定
+  [PASS] 是 NamedTuple（可当普通元组解构）
+  [PASS] 已导出到 __all__（公开 API）
+  [PASS] to_dict() 恒为三键且值一一对应
+  [PASS] to_dict() 是普通 dict（不是 Mapping 视图 / 不共享引用）
+  [PASS] 可 JSON 序列化（日志 / 调试直接用）
+  [PASS] 只读（不可变）：赋值抛 AttributeError
+  [PASS] SEMANTIC_ENABLED_ATTR 就是属性名（唯一口径，避免各处写字符串）
+
+--------------------------------------------------------------------------
+[2] 测试 1 · Hash 模式返回正确信息
+--------------------------------------------------------------------------
+  HashEmbeddingService() -> EmbeddingInfo(provider='hash-local', dimension=256, semantic_enabled=False)
+  [PASS] provider == 'hash-local'
+  [PASS] dimension == 256
+  [PASS] ★ semantic_enabled is False（离线占位，不是语义向量）
+  [PASS] semantic_enabled 是**真 bool**（不是 0 / 不是字符串）
+  [PASS] 与用户给的示例逐字段一致
+  [PASS] 自定义 dimension 如实上报（32）
+  [PASS]   └ 仍报非语义
+  MockEmbeddingService() -> EmbeddingInfo(provider='mock', dimension=8, semantic_enabled=False)
+  [PASS] 测试替身同样报非语义（provider='mock'）
+  [PASS] ★ 经工厂：一个 EMBEDDING_* 都不配 → 仍是 hash 模式
+
+--------------------------------------------------------------------------
+[3] 测试 2 · 真实模式配置后返回正确信息
+--------------------------------------------------------------------------
+  [PASS] 工厂按配置选出 EmbeddingProvider
+  EmbeddingProvider(config) -> EmbeddingInfo(provider='text-embedding-3-small', dimension=1024, semantic_enabled=True)
+  [PASS] provider == 模型名（即 embedding_model 列会记的值）
+  [PASS] dimension == 配置的 EMBEDDING_DIMENSION（1024）
+  [PASS] ★ semantic_enabled is True（真实模型产出语义向量）
+  [PASS] semantic_enabled 是**真 bool**
+  [PASS] 与用户给的示例形状一致（provider / dimension / semantic_enabled）
+  [PASS] ★ 全程零网络：构造 + describe 都没有发过请求
+  [PASS] 只配密钥（provider 留空）→ 自动真实模式，provider 为模型名
+  [PASS] 未声明维度时如实报 0（0 = 不声明维度，不是编一个数）
+  [PASS] ★ 状态标识里不含密钥（可安全进日志）
+  [PASS] 显式 EMBEDDING_PROVIDER=hash 时仍报非语义（配置优先于密钥）
+
+--------------------------------------------------------------------------
+[4] 组装器入口 knowledge_rag.describe_default_embedding()
+--------------------------------------------------------------------------
+  无 EMBEDDING_* -> EmbeddingInfo(provider='hash-local', dimension=256, semantic_enabled=False)
+  [PASS] 无任何 EMBEDDING_* → 默认是 hash 模式且非语义
+  [PASS]   └ 与 describe_embedding(default_embedder()) 同源（不会各说各话）
+  配了 EMBEDDING_* -> EmbeddingInfo(provider='text-embedding-3-small', dimension=1024, semantic_enabled=True)
+  [PASS] ★ 配好密钥后 → 真实模式且 semantic_enabled=True
+  [PASS]   └ 与 describe_embedding(default_embedder()) 同源
+  [PASS] 已导出到组装器 __all__
+  [PASS] 配置非法（openai 无密钥）时抛 EmbeddingProviderConfigError
+
+--------------------------------------------------------------------------
+[5] 边界取证（不修改 Embedding 接口 / 不修改 Retriever）
+--------------------------------------------------------------------------
+  [PASS] ★ EmbeddingService 的公开面仍是 {name, dimension, embed, embed_batch}
+  [PASS] ★ 基类**没有** semantic_enabled（新增能力放在实现上，接口未动）
+  [PASS] ★ 基类没有 describe_embedding（是模块级函数，不是方法）
+  [PASS] 抽象方法仍恰好是 {_embed_one}
+  [PASS] embed / embed_batch / _embed_one 的参数名与顺序未变
+  [PASS] embed / embed_batch 仍是协程函数（签名未异步化/去异步）
+  [PASS] 接口模块仍零第三方依赖（顶层依赖恰为标准库）
+  [PASS] ★ embedding_service 的消费者仍是已知闭集（没有新增消费者）
+  [PASS] ★ 组装器顶层仍不 import embedding_service（保持经工厂取实现）
+  [PASS] ★ 真实检索器没有引用本次新增的任何名字
+  [PASS]   └ 检索器的 retrieve 签名仍是 (self, job_info, topic, context)
+  [PASS]   └ 接口模块 knowledge_retriever 仍零第三方依赖（顶层恰为标准库）
+  [PASS] 守卫自检：子串检查能区分「有」与「无」
+
+--------------------------------------------------------------------------
+[6] 日志 / 调试可用性
+--------------------------------------------------------------------------
+  [PASS] ★ 零 IO：describe 没有编码任何文本（替身 calls 为空）
+  [PASS] repr 自带三字段（直接打进日志可读）
+  [PASS] ★ 真实模式下 describe 也没发请求（不联网即可报状态）
+  [PASS] 入参非法（非 EmbeddingService）抛 EmbeddingInputError
+  [PASS] 入参非法（None）抛 EmbeddingInputError
+  [PASS] 实现声明写错（semantic_enabled 不是 bool）→ 显式报错而非静默放过
+  [PASS] 实现声明写错（dimension 是 bool）→ 显式报错而非静默放过
+  [PASS] 实现声明写错（name 是纯空白）→ 显式报错而非静默放过
+  [PASS] ★ 未声明 semantic_enabled 的实现 → 保守报 False（宁少报不多报）
+
+==========================================================================
+状态示例
+==========================================================================
+  Hash  : {'provider': 'hash-local', 'dimension': 256, 'semantic_enabled': False}
+  Mock  : {'provider': 'mock', 'dimension': 8, 'semantic_enabled': False}
+  Real  : {'provider': 'text-embedding-3-small', 'dimension': 1024, 'semantic_enabled': True}
+==========================================================================
+结果: 通过 56 项，失败 0 项
+==========================================================================

@@ -1,0 +1,77 @@
+====================================================================
+AI 模拟面试 · 知识检索接口（RAG 扩展点）自检
+====================================================================
+
+[1] 值对象契约（KnowledgeChunk）
+  [PASS] 字段契约恰为 content / source / metadata
+  [PASS] 默认值：content / source 为空串、metadata 为空 dict
+  [PASS] to_dict() 恒为三键且顺序一致
+  [PASS]   └ 与需求给定结构一致 {'content':'','source':'','metadata':{}}
+  [PASS] metadata 用 default_factory（两实例不共享同一个 dict）
+  [PASS] frozen：属性不可重新绑定
+  [PASS] to_dict() 的 metadata 是浅拷贝（改它不影响原对象）
+  [PASS] from_dict 往返一致
+  [PASS]   └ 未知键被忽略（额外信息应放 metadata）
+  [PASS]   └ 缺失键取默认值
+  [PASS]   └ metadata=None 归一为 {}
+  [PASS] from_dict 拒绝非 Mapping 入参
+  [PASS] from_dict 拒绝 content 非 str
+  [PASS] from_dict 拒绝 source 非 str
+  [PASS] from_dict 拒绝 metadata 非 Mapping
+  [PASS] 异常继承 KnowledgeRetrieverError + ValueError
+
+[2] 无知识时返回 []（基类默认语义）
+  [PASS] 基类可直接实例化（默认语义 = 不提供任何知识）
+  [PASS] source_name 为 'none'
+  [PASS] 普通 dict 入参 → []
+  [PASS]   └ 返回类型是 list（不是 None）
+  [PASS] None 入参 → []
+  [PASS]   └ 返回类型是 list（不是 None）
+  [PASS] 空 dict 入参 → []
+  [PASS]   └ 返回类型是 list（不是 None）
+  [PASS] ORM 风格对象入参 → []
+  [PASS]   └ 返回类型是 list（不是 None）
+  [PASS] 接口签名恰为 (self, job_info, topic, context) —— 不含 db
+  [PASS] retrieve 是协程函数（真实检索需访问外部服务，签名提前异步化）
+
+[3] Mock 返回正常（MockKnowledgeRetriever）
+  [PASS] source_name 为 'mock'
+  [PASS] 默认返回固定片段（条数 == len(MOCK_CHUNKS)）
+  [PASS]   └ 元素都是 KnowledgeChunk
+  [PASS]   └ 内容与 MOCK_CHUNKS 逐条一致
+  [PASS]   └ 三键结构完整
+  [PASS] 每次调用返回新建对象（list 与元素都不共享）
+  [PASS]   └ 调用方改返回值不污染检索器内部状态
+  [PASS] 忽略入参：不同 job/topic 结果完全相同
+  [PASS] 记录调用入参（calls）
+  [PASS]   └ 记录的是原始入参
+  [PASS] chunks 属性返回副本
+  [PASS]   └ 改副本不影响内部配置
+  [PASS] 传 chunks=[] 可模拟无知识 → []
+  [PASS] 自定义 chunks：dict 与 KnowledgeChunk 混用都被归一
+  [PASS]   └ 内容正确
+  [PASS] source 可覆盖（便于测试区分来源）
+
+[4] 零依赖（无数据库 / 无向量库 / 不调 LLM）
+  [PASS] 只 import 标准库（无任何第三方包）
+  [PASS]   └ 顶层依赖恰为 __future__ / collections / dataclasses / typing
+  [PASS] 不 import 数据库 / 向量库 / LLM / 本项目基础设施
+  [PASS] 子进程（无 DATABASE_URL）可导入
+  [PASS]   └ 导入后无第三方 / 基础设施模块泄漏进 sys.modules
+
+[5] 接线点唯一（只有 interview_core 调检索；Agent 只接收知识）
+  [PASS] 面试流程侧**唯一**接线点是 interview_core（实现方不计；精确匹配接口模块）
+  [PASS] 真实检索器存在（实现本接口，正向依赖）
+  [PASS]   └ 它 import 本接口（实现方）
+  [PASS]   └ 但**不**反向 import 面试流程（interview_* / main）
+  [PASS] 组装器 knowledge_rag 存在（唯一一处知道用哪个 Embedding / 向量后端）
+  [PASS]   └ 它**不**直接 import 接口（只组装实现方），也不反向 import 面试流程
+  [PASS] InterviewAgent 未 import 本模块（知识由调用方传入，Agent 不检索）
+  [PASS]   └ 源码中也不出现 KnowledgeRetriever 标识符（AST 取证，非子串匹配）
+  [PASS] generate_question 已新增 knowledge_context（知识注入点）
+  [PASS]   └ knowledge_context 是 keyword-only（不会错位既有位置参数）
+  [PASS]   └ 仍无 retriever / chunks 参数（Agent 不持有检索器）
+
+====================================================================
+结果: 通过 60 项，失败 0 项
+====================================================================

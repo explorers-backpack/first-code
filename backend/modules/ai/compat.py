@@ -21,6 +21,7 @@
 :class:`~modules.ai.telemetry.CallScope`，新代码可以用类型化错误做降级，
 不必再猜字符串。
 """
+from common.rag_trace import observed, generation_error
 
 import asyncio
 from dataclasses import replace
@@ -80,6 +81,7 @@ class LegacySparkFacade:
             return asyncio.run(self.chat_async(message))
         raise RuntimeError("LegacySparkFacade.chat() 不能在事件循环内调用，请改用 await chat_async()")
 
+    @observed("generation")
     async def chat_async(self, message: str) -> str:
         """``str -> str``：成功返回模型文本，失败返回**旧式哨兵串**（不抛异常）。"""
         scope: Optional[CallScope] = current_scope()
@@ -96,6 +98,7 @@ class LegacySparkFacade:
             if isinstance(exc, (KeyboardInterrupt, SystemExit, asyncio.CancelledError)):
                 raise
             error = exc if isinstance(exc, AiError) else AiError("%s: %s" % (type(exc).__name__, exc))
+            generation_error(error.kind)
             if not error.request_id:
                 error.request_id = scope.request_id if scope else new_request_id()
             if isinstance(error, AiBoundaryError):

@@ -98,6 +98,7 @@ RAG 链路由三段拼成，每段都刻意「不认识别人」：
 """
 
 from __future__ import annotations
+from common.rag_trace import observed, span, context_ready
 
 import math
 import os
@@ -429,6 +430,7 @@ def build_vector_store(
     return SqlAlchemyVectorStore(db, model=model)
 
 
+@observed("retriever_setup")
 def build_vector_retriever(
     db: Any,
     *,

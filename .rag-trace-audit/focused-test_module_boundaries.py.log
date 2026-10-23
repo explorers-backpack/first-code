@@ -1,0 +1,208 @@
+========================================================================
+模块化单体边界守卫 · 自检（棘轮）
+========================================================================
+扫描 99 个业务模块
+
+[0] 本套件零项目 import（纯 AST，不触发数据库/网络）
+  [PASS] 未 import 任何项目模块（实际 0）
+
+[R1] 严格单向分层：低层不得依赖高层
+     层号 models/schemas/database=0 < utils/security/deps=1 < services/modules/common=2 < api=3；main 与业务模块门面是装配层（豁免）
+  [PASS] 新增反向依赖 = 0（白名单外，实际 0）
+  [PASS] ★ 棘轮：R1 白名单无过期条目（实际 0）
+
+[R2] api/* 不得被反向 import（main 装配层除外）
+  [PASS] 反向 import 路由 = 0（实际 0）
+
+[R3] service 层不得 import api.*（R2 的细化）
+  [PASS] service -> api = 0（实际 0）
+
+[R4] models / schemas 不得 import 任何上层
+  [PASS] models/schemas 依赖上层 = 0（实际 0）
+
+[R5] AI 适配层不得反向依赖路由
+  [PASS] AI 层 -> 路由 = 0（实际 0）
+     AI 能力的业务消费方：['common.health', 'main', 'modules.career.service']
+  [PASS] AI 层至少被 1 个业务模块使用（不是死代码）
+
+[R6] 循环依赖：硬环必须 0，软环只钉数量
+  [PASS] 硬环 = 0（实际 0）
+     软环 1 个（环上有函数内延迟导入，刻意的解环手法）：
+       services.embedding_provider <-> services.embedding_provider_spark
+  [PASS] 软环数不超过上限 1（实际 1）
+
+[R7] 路由层不写 SQL / 不 import SQLAlchemy（棘轮）
+     路由模块按整文件查；main.py 只查被 @app.<method> 装饰的**路由函数**（白名单才能精确到函数，迁一个删一条）。
+  [PASS] 新增 SQL 路由模块 = 0（实际 0）
+  [PASS] ★ 棘轮：R7 白名单无过期条目（实际 0）
+
+[R8] 领域层不 import FastAPI 的 HTTP 对象（棘轮）
+       [白名单] services.interview_context -> fastapi.HTTPException
+       [白名单] services.interview_core -> fastapi.HTTPException
+       [白名单] services.interview_service -> fastapi.HTTPException
+       [白名单] services.knowledge_document_service -> fastapi.HTTPException
+  [PASS] 新增领域层 HTTP 依赖 = 0（实际 0）
+  [PASS] ★ 棘轮：R8 白名单无过期条目（实际 0）
+       白名单理由 [services.interview_context -> HTTPException]：★★ FROZEN_SOURCES 指纹锁定（test_agent_full_input.py），改一行整个回归就红。清掉时机：需与指纹守卫同步解冻，属 P5 范围，不在本轮。
+       白名单理由 [services.interview_core -> HTTPException]：★★ FROZEN_SOURCES 指纹锁定，同上。这是四层里最不该有 HTTP 的一层，但解冻成本最高（另两个套件也锁了它）。
+       白名单理由 [services.interview_service -> HTTPException]：非冻结。参照 modules/auth 的做法：service 抛领域异常，api 层统一转换。清掉时机：P5 迁 interview 模块时一并处理。
+       白名单理由 [services.knowledge_document_service -> HTTPException]：非冻结。清掉时机：P6 迁 knowledge 模块时一并处理。
+
+[R9] modules.*.service 完全禁止 import fastapi
+     新模块没有历史包袱，所以比 R8 更严：连 HTTPException 都不许有。
+  [PASS] modules.*.service -> fastapi = 0（实际 0）
+
+[R10] modules.*.api 不得 import models（路由层不碰 ORM）
+  [PASS] modules.*.api -> models = 0（实际 0）
+
+[R11] 已迁移模块的结构完整性 + main.py 只做装配
+
+     modules/admin
+  [PASS] modules/admin/__init__.py 存在
+  [PASS] modules/admin/api.py 存在
+  [PASS] modules/admin/service.py 存在
+  [PASS] modules/admin/schemas.py 存在
+  [PASS] modules/admin/api.py 是路由层（有 APIRouter）
+  [PASS] modules/admin/service.py 不是路由层（无 APIRouter）
+  [PASS] modules/admin/api.py 真的调用 service
+  [PASS] modules/admin/__init__.py re-export 了 router
+  [PASS] main.py 不再包含 admin 实现 'def get_user_logs('
+  [PASS] main.py 不再包含 admin 实现 'def add_job('
+  [PASS] main.py 不再包含 admin 实现 'def kick_user_sessions('
+  [PASS] main.py 不再包含 admin 实现 'class SparkAPI'
+  [PASS] main.py 通过 app.include_router 挂载了 admin_router
+
+     modules/auth
+  [PASS] modules/auth/__init__.py 存在
+  [PASS] modules/auth/api.py 存在
+  [PASS] modules/auth/service.py 存在
+  [PASS] modules/auth/schemas.py 存在
+  [PASS] modules/auth/api.py 是路由层（有 APIRouter）
+  [PASS] modules/auth/service.py 不是路由层（无 APIRouter）
+  [PASS] modules/auth/api.py 真的调用 service
+  [PASS] modules/auth/__init__.py re-export 了 router
+  [PASS] main.py 不再包含 auth 实现 '_hash_password'
+  [PASS] main.py 不再包含 auth 实现 'def register('
+  [PASS] main.py 不再包含 auth 实现 'def login('
+  [PASS] main.py 不再包含 auth 实现 'throttle_check'
+  [PASS] main.py 不再包含 auth 实现 'throttle_record'
+  [PASS] main.py 不再包含 auth 实现 'throttle_reset'
+  [PASS] main.py 通过 app.include_router 挂载了 auth_router
+
+     modules/career
+  [PASS] modules/career/__init__.py 存在
+  [PASS] modules/career/api.py 存在
+  [PASS] modules/career/service.py 存在
+  [PASS] modules/career/schemas.py 存在
+  [PASS] modules/career/prompts.py 存在
+  [PASS] modules/career/ports.py 存在
+  [PASS] modules/career/api.py 是路由层（有 APIRouter）
+  [PASS] modules/career/service.py 不是路由层（无 APIRouter）
+  [PASS] modules/career/api.py 真的调用 service
+  [PASS] modules/career/__init__.py re-export 了 router
+  [PASS] main.py 不再包含 career 实现 'def get_all_jobs('
+  [PASS] main.py 不再包含 career 实现 'def filter_jobs_by_keywords('
+  [PASS] main.py 不再包含 career 实现 'def clean_jobs_to_text('
+  [PASS] main.py 不再包含 career 实现 'RAG_PROMPT = '
+  [PASS] main.py 不再包含 career 实现 'EMPTY_PROMPT = '
+  [PASS] main.py 不再包含 career 实现 'RESUME_ANALYSIS_PROMPT = '
+  [PASS] main.py 不再包含 career 实现 'def _decode_resume('
+  [PASS] main.py 不再包含 career 实现 'def analyze_resume('
+  [PASS] main.py 不再包含 career 实现 'def parse_resume('
+  [PASS] main.py 通过 app.include_router 挂载了 career_router
+
+     modules/ai（平迁自 services/ai）
+  [PASS] modules/ai 是包（有 __init__.py）
+  [PASS] services/ai 已迁走（旧位置不应存在）
+  [PASS] modules/ai/llm.py 存在
+  [PASS] modules/ai/factory.py 存在
+  [PASS] modules/ai/modes.py 存在
+  [PASS] modules/ai/policy.py 存在
+  [PASS] modules/ai/telemetry.py 存在
+  [PASS] modules/ai/errors.py 存在
+  [PASS] modules/ai/boundary.py 存在
+  [PASS] modules/ai/compat.py 存在
+  [PASS] main.py 不再包含 AI 层实现 'class LegacySparkFacade'
+  [PASS] main.py 不再包含 AI 层实现 'def build_legacy_spark_facade'
+  [PASS] main.py 不再包含 AI 层实现 'class LlmProvider'
+  [PASS] main.py 不再包含 AI 层实现 'def ai_call_scope'
+
+     common（共享基础设施）
+  [PASS] common/__init__.py 存在
+  [PASS] common/health.py 存在
+  [PASS] main.py 不再包含状态上报实现 'def embedding_status('
+  [PASS] main.py 不再包含状态上报实现 'def vector_status('
+  [PASS] main.py 不再包含状态上报实现 'def threshold_status('
+  [PASS] main.py 不再包含状态上报实现 'def avatar_status('
+  [PASS] main.py 不再包含状态上报实现 'def production_status('
+  [PASS] main.py 不再包含状态上报实现 'def _report_ai_status('
+  [PASS] main.py 不再包含状态上报实现 'def _report_production_status('
+  [PASS] main.py 不再包含状态上报实现 'def _count_knowledge_chunks('
+  [PASS] main.py 用别名导入 common.health（端点函数同名，直接 import 会被覆盖）
+  [PASS] modules/auth/api.py 把 AuthError 转成 HTTPException
+
+[R12] main.py 的兼容命名空间（有外部消费方，但本文件不用）
+     这些名字在 main.py 里没有使用点，linter 会建议删——但它们是对外契约。
+  [PASS] main.Base 仍可访问（消费方：测试通过 main.Base 建表）
+  [PASS] main.DATABASE_URL 仍可访问（消费方：与抽取前的模块命名空间保持一致（运维排障时会 print 它））
+  [PASS] main.User 仍可访问（消费方：scripts/create_admin.py 构造管理员行）
+  [PASS] main.async_session 仍可访问（消费方：scripts/create_admin.py + tests/test_admin_role.py 注入测试会话工厂）
+  [PASS] main.engine 仍可访问（消费方：scripts/create_admin.py 退出前 dispose）
+
+[12] 判据自检：守卫真的能红（防止恒真断言）
+     每条判据都喂**正例与反例**。只过正例的判据是坏的；两边都过的同样是坏的（恒真）。
+
+     R7（路由层 SQL）—— 反例必须放行，否则守卫会变成噪音：
+  [PASS] R7 判据 @router.delete 装饰器 -> 放行
+  [PASS] R7 判据 ws.send_text(...) -> 放行
+  [PASS] R7 判据 AsyncSession 类型注解 -> 放行
+  [PASS] R7 判据 IntegrityError 异常 -> 放行
+  [PASS] R7 判据 select(...) -> 命中
+  [PASS] R7 判据 db.execute(...) -> 命中
+  [PASS] R7 判据 db.scalars(...) -> 命中
+  [PASS] R7 判据 db.add(...) 会话写操作 -> 命中
+  [PASS] R7 判据 db.commit() 事务提交 -> 命中
+  [PASS] R7 判据 db.delete(...) 会话删除 -> 命中
+  [PASS] R7 判据 from sqlalchemy import select -> 命中
+  [PASS] R7 判据 sqlalchemy.select(...) -> 命中
+
+     R8（领域层 HTTP 对象）：
+  [PASS] R8 判据 from fastapi import HTTPException -> 命中
+  [PASS] R8 判据 from fastapi import APIRouter -> 命中
+  [PASS] R8 判据 from fastapi import Depends -> 命中
+  [PASS] R8 判据 import fastapi -> 命中
+  [PASS] R8 判据 from fastapi import status（常量，放行） -> 放行
+  [PASS] R8 判据 import logging -> 放行
+
+     R1（层号）与同包豁免：
+  [PASS] R1 层号 models = 0
+  [PASS] R1 层号 models.interview = 0
+  [PASS] R1 层号 utils.x = 1
+  [PASS] R1 层号 deps = 1
+  [PASS] R1 层号 services.x = 2
+  [PASS] R1 层号 api.x = 3
+  [PASS] R1 层号 modules.auth.api = 3
+  [PASS] R1 层号 modules.auth.service = 2
+  [PASS] R1 层号 modules.auth.schemas = 0
+  [PASS] R1 层号 modules.auth（包门面 = 装配层） = 9
+  [PASS] R1 层号 modules.ai（能力包 = L2） = 2
+  [PASS] R1 层号 modules.ai.llm = 2
+  [PASS] R1 层号 main（装配层） = 9
+  [PASS] R1 同包豁免：modules.auth.api -> modules.auth
+  [PASS] R1 跨包不豁免：modules.auth.api -> modules.career.api
+  [PASS] R1 非 modules 包不豁免：services.a -> services.b
+
+     import 收集（嵌套在 try/if 里的延迟导入）：
+  [PASS] 收集器能看见 try 块里的延迟导入
+  [PASS] 对照：只看顶层语句时看不见（证明上一条不是恒真）
+       （这条自检来自真实漏检：interview_agent/planner 的 `from main import spark_api` 在 try 里，早期判据漏了 3 条反向依赖）
+
+     R6（环检测）—— 硬环 / 软环必须分开：
+  [PASS] R6 判据：顶层互相 import 检出硬环
+  [PASS] R6 判据：函数内延迟导入**不算**硬环
+  [PASS] R6 判据：但它构成软环
+  [PASS] R6 判据：无环时返回空（不是永远返回非空）
+
+========================================================================
+结果: 全部通过
+========================================================================

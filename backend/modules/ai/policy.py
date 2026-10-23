@@ -223,7 +223,7 @@ async def call_llm(
                     attempts=attempts,
                     error_kind=error.kind,
                     retryable=error.retryable,
-                    message=error.message,
+                    # 不记录上游原文：可能回显 Prompt、凭据或敏感文档。
                 )
                 raise error
 

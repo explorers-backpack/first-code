@@ -1,0 +1,110 @@
+====================================================================
+后端 · 会话撤销 → 实时通道主动断开（踢下线）
+====================================================================
+
+[1] 撤销广播存储：追加 / 水位线 / 批量读 / 清理 / 匹配
+  [PASS] 空表 latest_id = 0（水位线起点）
+  [PASS] ★ 追加返回单调自增 id
+  [PASS] latest_id 跟上
+  [PASS] ★ fetch_since 是**开区间**（id > after）⇒ 不会重复投递
+  [PASS]   └ 行内容完整（user_id / auth_session_id / reason）
+  [PASS]   └ 返回的是普通 dict（不是会失效的 ORM Row）
+  [PASS] 从 0 读能拿到全部（重启补偿语义）
+  [PASS] ★ 按用户撤销（auth_session_id=None）命中该用户任意连接
+  [PASS] ★ 按会话撤销只命中**同一条**登录会话
+  [PASS] ★ 用户不同一律不命中（不误伤他人）
+  [PASS] ★ 连接侧无 auth_session_id 时，「按会话撤销」不误伤它
+  [PASS] ★ prune 只删过老的行（保留窗口内的）
+  [PASS]   └ 保留窗口内的行还在
+
+[2] ticket 绑定 auth_session_id（撤销能生效的前提）
+  [PASS] ★ 消费带回 (user_id, auth_session_id) 两段绑定
+  [PASS] ★ 不传 auth_session_id 时，兼容入口 consume 仍返回 user_id（旧契约不变）
+  [PASS]   └ 历史 ticket 的 auth_session_id 为 None（退化为弱复核）
+  [PASS]   └ 该列真的落库（不是只在内存里）
+[ai] 运行模式=offline —— 不联网，AI 调用一律失败并走各自的降级路径（缺凭据：无）。要调用真实模型请配置凭据或显式设置 AI_RUN_MODE=production。
+[embedding][WARN] provider=hash-local dim=256 semantic=False —— 这是**离线占位**（词面哈希），检索出的「相似度」没有语义含义，RAG 知识注入会静默失效。生产部署请配置 EMBEDDING_* 后重启。
+[vector] backend=sql ann=False chunks=0（全表扫描）
+[threshold][WARN] 检索阈值可能**已过期**（换过模型或改过语料？）：
+             · Embedding 已变：阈值是对着 xinghuo-embedding 标的，当前是 hash-local。
+             · Embedding 维度已变：标定时 2560 维，当前 256 维。
+             · 检索参数 top_k 未配置，而标定时是 8。
+             · 检索参数 min_score 未配置，而标定时是 0.7685。
+             · 检索参数 min_score_ratio 未配置，而标定时是 0.9947。
+             重跑 tests/rag_production_query_calibration_spark_run.py 后，用 scripts/apply_threshold_calibration.py --yes 一键写回并登记溯源。
+[avatar] provider=mock —— 数字人通道走**离线 Mock**（不产生真实音视频）；avatar 模式面试照常跑完，交付内容与 text 逐字段一致。要接真实讯飞虚拟人请配置 AVATAR_PROVIDER=iflytek 与 AVATAR_IFLYTEK_* 后重启。
+[production] 实时通道：空闲超时 300.0s / 会话 TTL 21600.0s / 跟踪上限 2000 / 每用户连接上限 4 / 每用户会话上限 3 / 作答限流 未限制
+[production] （提示）作答限流未开启；需要防连点/脚本重放请设置 INTERVIEW_ANSWER_MIN_INTERVAL=0.4 后重启。
+[auth] 登录失败限流 = **进程内**：5 次 / 900s。★ 多 worker 时每个进程独立计数 ⇒ 实际上限 × 进程数；需要多 worker 请设 AUTH_LOGIN_STORE=db 后重启。
+  [PASS] ★ 轮询器已在 lifespan 中启动
+
+[3] 同实例：管理员踢下线 → 已建立连接被主动断开（实测延迟）
+  [PASS] 连接建立（收到 hello）
+  [PASS]   └ 连接已登记到本进程的连接表
+  [PASS] ★ POST /api/admin/users/{id}/kick → 200
+  [PASS]   └ 撤销了 1 条登录会话
+  [PASS]   └ 广播已写入（broadcast=true）
+  [PASS] ★★ 连接被**主动断开**（不是等到空闲超时）
+  [PASS] ★★ 断开信号 = 4401 / unauthorized（前端对 4401 不重连 ⇒ 踢了就回不来）
+  [PASS] ★ 生效延迟 ≤ 2s（测试周期 0.2s；生产目标 ≤ 3s）
+  [PASS]   └ 断开后连接表已清理
+
+[4] 跨实例：撤销写入方 ≠ 连接所在实例
+  [PASS] ★★ 另一实例写入的撤销，本实例仍能断开（共享存储 + 轮询器）
+  [PASS]   └ 延迟同样在秒级
+
+[5] 撤销后高风险操作（finish）：执行前拦截，不靠 60s 复核
+  [PASS] ★★ finish 被拒（error/unauthorized），而不是照常出报告
+  [PASS]   └ 随后以 4401 关闭
+
+[6] 不重放：轮询器启动前的历史撤销不会误杀新连接
+  [PASS] ★ 新连接**没有**被历史撤销误杀（水位线从 max(id) 起步）
+
+[7] 被踢后重连：签发 401 / 兼容路径 4401
+  [PASS] 再次踢下线成功
+  [PASS] ★★ 被踢后签发 ticket → 401（会话已撤销，拿不到新票）
+  [PASS] ★ 被踢后 ?token= 重连 → 4401
+
+[8] 存储故障：撤销表不可用
+  [PASS] ★ 表缺失 ⇒ record 抛 RevocationStoreUnavailable（不是静默成功）
+  [PASS] ★★ 轮询器遇到存储故障不崩（任务仍在跑，failures 递增）
+  [PASS] ★ 广播不可用时，踢下线的**主效应**仍然生效（200）
+  [PASS]   └ 响应明确标注 broadcast=false（不假装踢干净了）
+  [PASS] ★ 轮询器确实跑过（polls > 0）
+  [PASS] ★ 断开计数被记录（closed > 0）
+
+[9] 接线守卫：轮询器 / 回调 / 依赖方向
+  [PASS] ★ 轮询器**不** import 实时通道（靠 register_handler 解耦）
+  [PASS] ★ 撤销存储**不** import 实时通道 / 编排层
+  [PASS] ★ 实时通道**不** import 轮询器（只 import 共享存储）
+  [PASS]   └ 但它确实 import 了共享存储（撤销匹配口径的唯一来源）
+  [PASS] ★ 轮询器只用标准库 + database + 撤销存储（不碰业务 service）
+  [PASS]   └ 且 services 下**只**用了 ws_revocation（不越界到业务层）
+  [PASS] ★ lifespan 里注册回调并启停轮询器
+  [PASS] ★ 连接表只在实时通道层（跨进程通知不靠它）
+  [PASS] ★ 高风险操作（answer/finish）执行前复核
+  [PASS] ★ 复核用 auth_session_id 查 user_session（不是只查 User 存在）
+  [PASS] ★ 管理员踢下线端点存在且要求 admin 依赖
+  [PASS] ★ ws_ticket.auth_session_id 已登记到 schema_sync（既有表加列必须补）
+
+[10] 实测延迟 vs 设计目标
+  同实例（管理员踢下线 → 连接断开）：0.328s
+  跨实例（另一进程写入 → 本实例断开）：0.344s
+  设计目标：≤ 2s（轮询周期 2.0s 生产 / 0.2s 测试 + 一次查询）
+  改造前基线（tests/_probe_revoke_latency.py 实测）：
+    · ticket 路径：>20s 预算内**完全不生效**（上界=空闲超时 300s，有心跳则永不失效）
+    · token  路径：61.7s（60s 复核节流 + 依赖下一条消息）
+  [PASS] ★ 两个方向都测到了真实数字（不是「未测到」）
+  [PASS] 临时 SQLite 目录已清理
+
+====================================================================
+结果: 通过 55 项，失败 0 项
+====================================================================
+ws_closed_by_revocation reason=session_revoked user_id=1
+ws_closed_by_revocation reason=session_revoked user_id=1
+ws_auth_revoked_on_high_risk msg_type=finish session_id=1 user_id=1
+ws_unauthorized session_id=1
+ws_revocation_record_failed user_id=1 error=OperationalError
+ws_revocation_poll_failed failures=1 error=RevocationStoreUnavailable
+ws_revocation_record_failed user_id=1 error=OperationalError
+ws_revocation_record_on_kick_failed user_id=1 error=RevocationStoreUnavailable

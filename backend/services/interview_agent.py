@@ -71,6 +71,7 @@
 """
 
 from __future__ import annotations
+from common.rag_trace import observed, span, context_ready
 
 import re
 from typing import Any, Dict, List, Mapping, Optional, Sequence, Tuple
@@ -608,6 +609,7 @@ def format_knowledge_context(value: Any) -> List[str]:
     return _cap_knowledge_lines(lines)
 
 
+@observed("context")
 def render_question_prompt(
     variables: Mapping[str, Any],
     knowledge_context: Any = None,
@@ -631,6 +633,7 @@ def render_question_prompt(
     总量上限）；它只改**渲染出来的文本**，返回结构与变量集都不变。
     """
     lines = format_knowledge_context(knowledge_context)
+    context_ready(lines)
     if not lines:
         return PROMPT_QUESTION, render_prompt(PROMPT_QUESTION, variables, group=PROMPT_GROUP)
 

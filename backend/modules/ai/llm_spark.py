@@ -19,6 +19,7 @@
 换供应商 = 换一个 transport（或换一个 Provider），**面试业务核心代码零改动**。
 """
 
+from common.rag_trace import context_submitted
 import time
 from typing import Any, Awaitable, Callable, Dict, Optional
 
@@ -102,6 +103,7 @@ class SparkLlmProvider(LlmProvider):
             )
 
         try:
+            context_submitted(prompt)
             raw = await self._transport(prompt)
         except Exception as exc:  # noqa: BLE001 - 统一收敛，不让厂商异常外泄
             raise classify_transport_error(exc, provider=self._name) from exc

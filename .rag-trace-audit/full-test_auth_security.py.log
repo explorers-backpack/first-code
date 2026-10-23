@@ -1,0 +1,85 @@
+====================================================================
+认证安全硬化 · 自检
+====================================================================
+
+[1] token 生成：高熵、每次不同、长度充足
+  [PASS] 两次 token 不同
+  [PASS] token 长度 >= 40
+
+[2] bcrypt 哈希：同密码不同盐
+  [PASS] 两次哈希不同
+  [PASS] 带 bcrypt$ 前缀
+
+[3] verify_password：新格式通过、旧格式通过且需升级、空串失败
+  [PASS] bcrypt 校验通过
+  [PASS] bcrypt 不需要升级
+  [PASS] sha256 校验通过
+  [PASS] sha256 需要升级
+  [PASS] 空 stored 失败
+
+[4] session_is_valid：撤销/过期/NULL 语义
+  [PASS] revoked_at 非空 → 无效
+  [PASS] expires_at 已过期 → 无效
+  [PASS] expires_at 未过期 → 有效
+  [PASS] expires_at NULL 但 created_at 近期 → 有效
+  [PASS] expires_at + created_at 都 NULL → 无效（fail-closed）
+
+[5] load_valid_session：bad token / 过期 / 撤销
+  [PASS] 不存在的 token → None
+
+[6] create_user_session：正确设置 expires_at
+  [PASS] expires_at 已设置
+  [PASS] expires_at > created_at
+
+[7] 注册：密码存为 bcrypt
+  [PASS] HTTP 200
+  [PASS] 返回 token
+  [PASS] DB 密码是 bcrypt
+
+[8] 登录：旧 sha256 账号透明升级为 bcrypt
+  [PASS] 旧账号登录 200
+  [PASS] 登录后密码已升级为 bcrypt
+
+[9] 登录：错误密码 401，未知邮箱 401
+  [PASS] 错误密码 → 401
+  [PASS] 未知邮箱 → 401
+
+[10] logout：撤销后 token 失效
+  [PASS] logout 200
+  [PASS] 撤销后再用原 token → 401
+
+[11] /api/auth/me：返回当前用户
+  [PASS] me 200
+  [PASS] me 返回 email
+
+[12] 登录限流：5 次失败后第 6 次 429
+  [PASS] 第 1 次失败登录 401
+  [PASS] 第 2 次失败登录 401
+  [PASS] 第 3 次失败登录 401
+  [PASS] 第 4 次失败登录 401
+  [PASS] 第 5 次失败登录 401
+  [PASS] 第 6 次失败登录 429
+  [PASS] 429 带 Retry-After
+
+[13] 422 校验失败：不回显提交值（密码不落响应体）
+  [PASS] 短密码 → 422
+  [PASS] ★ 响应体不含提交的密码
+  [PASS] detail 是错误数组
+  [PASS] ★ 错误项不含 input 字段
+  [PASS] 保留 loc/msg（前端可继续展示）
+
+[14] 访问日志脱敏：URL query 里的凭证被打码
+  [PASS] ★ ticket 值被掩码
+  [PASS]   └ 保留末 4 位便于核对
+  [PASS] ★ 长期 token 值被掩码
+  [PASS]   └ args 结构未被破坏（AccessFormatter 正常解包）
+  [PASS]   └ 已挂到 <root> 日志器上（否则访问日志照样漏）
+  [PASS]   └ 已挂到 uvicorn 日志器上（否则访问日志照样漏）
+  [PASS]   └ 已挂到 uvicorn.access 日志器上（否则访问日志照样漏）
+  [PASS]   └ 已挂到 uvicorn.error 日志器上（否则访问日志照样漏）
+  [PASS] ★ 异常日志里内嵌的 ticket 也被打码（不只访问日志）
+  [PASS] ★ 以 args 形式传入的 URL 同样被打码（uvicorn 就是这种写法）
+
+====================================================================
+结果: 通过 50 项，失败 0 项
+====================================================================

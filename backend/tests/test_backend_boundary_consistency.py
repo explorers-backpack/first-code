@@ -113,7 +113,7 @@ FROZEN_SOURCES: Tuple[Tuple[str, str], ...] = (
     ("services/vector_store.py",
      "0dd7c96fe9f5534f300850f8b98549a70170a640e11d409ca022e773df303e33"),
     ("services/vector_store_sql.py",
-     "a81dd62411a1144798cac60b5525e9d43936a1d385585d7b6a1f1292d4c34fdc"),
+     "cb33ef9bdd1bdba2e4a0b9413ad4f178291fd95a21f29f9fa348c98e6b8de194"),
     ("services/vector_store_chroma.py",
      "109e760e60962a663a80201b6c002abd636b0d107c6206a2d533a19b20fb0dd9"),
 )

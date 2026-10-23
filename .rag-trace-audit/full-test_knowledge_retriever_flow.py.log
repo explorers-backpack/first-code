@@ -1,0 +1,126 @@
+==========================================================================
+KnowledgeRetriever 基础检索流程 · 自检
+测试数据：backend\scripts\rag_query_set.json
+链路：query → Embedding → VectorStore → VectorKnowledgeRetriever → KnowledgeChunk
+==========================================================================
+
+--------------------------------------------------------------------------
+[1] 链路契约（Retriever / VectorStore 接口未改）
+--------------------------------------------------------------------------
+  [PASS] VectorKnowledgeRetriever 继承 KnowledgeRetriever（可无感替换接口）
+  [PASS] VectorKnowledgeRetriever.retrieve 签名仍是 (self, job_info, topic, context)
+  [PASS] retrieve 仍是协程函数（await 可直接调用）
+  [PASS] VectorStore.search 签名仍是 ('self', 'query_vector', 'top_k', 'model', 'document_id', 'category', 'min_score')
+  [PASS] VectorStore.search 的关键字参数全是 keyword-only
+  [PASS] VectorStore 的抽象方法仍是 add / search / count
+  [PASS] EmbeddingService 的抽象方法仍是 {_embed_one}
+  [PASS] KnowledgeChunk 仍是 frozen dataclass，字段恒为 (content, source, metadata)
+  [PASS] KNOWLEDGE_CHUNK_FIELDS 常量与 CHUNK_KEYS 一致
+  [PASS] ★ 两个受保护接口模块都不引用本测试文件
+
+--------------------------------------------------------------------------
+[2] 测试数据准备（rag_query_set.json 的 corpus 入库）
+--------------------------------------------------------------------------
+  [PASS] corpus 16 篇全部入库成功（status=ok，每篇 1 片）
+  [PASS] knowledge_document 行数 == corpus 篇数
+  [PASS] knowledge_chunk 行数 == corpus 篇数（每篇恰好 1 片）
+  [PASS] 每片都已向量化（embedding_dim 非空）
+  [PASS] 每片的 embedding_model 都等于 embedder.name（'hash-local'）
+  [PASS] 每片的 embedding_dim 都等于 embedder.dimension（256）
+  embedder = hash-local / dimension=256（离线占位，**非语义**——本套件不评价准确率）
+
+--------------------------------------------------------------------------
+[3] 链路逐跳取证（每条 query 记录 ①~⑤ 五跳的实际入参/返回）
+--------------------------------------------------------------------------
+  [PASS] ① build_query 把 topic 原样作为查询文本（不拼接岗位/上下文）
+  [PASS] ① 检索器把每次构造的 query 记进 self.queries（可观测）
+  [PASS] ② 每条 query 恰好调用 EmbeddingService.embed 一次
+  [PASS] ② embed 的入参就是 query 原文（未被改写/截断）
+  [PASS] ② 返回向量维度 == embedder.dimension（256）
+  [PASS] ② 向量元素全是 float 且非全零（不是空壳向量）
+  [PASS] ③ 每条 query 恰好调用 VectorStore.search 一次
+  [PASS] ③ search 收到的向量就是 ② 产出的那个向量（逐元素相等）
+  [PASS] ③ search 的 top_k / min_score 与构造检索器时传的一致（参数透传）
+  [PASS] ③ search 的 model 默认取 embedder.name（'hash-local'，不同模型向量不可比）
+  [PASS] ③ search 的 category / document_id 默认不收紧（None = 全库）
+  [PASS] ④ 返回的是 list，元素全是 KnowledgeChunk（不是 VectorMatch）
+  [PASS] ④ 过滤掉了空正文（返回结果里没有空白 content）
+  [PASS] ④ 按正文去重：同一 query 的结果里没有重复正文
+
+--------------------------------------------------------------------------
+[4] 返回结构（用户点名的 5 条：可检索 / 结构 / content / metadata / score）
+--------------------------------------------------------------------------
+  [PASS] 1. 每条 query 都返回了结果（检索链路连通，非空）
+  [PASS] 1. 每条 query 的结果条数 <= top_k（截断生效）
+  [PASS] 2. KnowledgeChunk.to_dict() 恰好三键，且顺序为 (content, source, metadata)
+  [PASS] 2. content / source 是 str，metadata 是 dict（三键类型正确）
+  [PASS] 2. KnowledgeChunk 是 frozen（下游改不动，检索结果可安全共享）
+  [PASS] 3. content 存在且非空白（每条 chunk 都有正文）
+  [PASS] 3. source 存在且非空（可溯源到知识来源）
+  [PASS] 3. content 与库中该切片的正文**逐字节相等**（原样保留，未改写）
+  [PASS] 3. 每条 chunk 的 chunk_id 都能在库里找到对应切片
+  [PASS] 4. metadata 存在且非空
+  [PASS] 4. metadata 含必需键 ('score', 'chunk_id', 'document_id', 'category', 'embedding_model')
+  [PASS] 4. source 已从 metadata **提升**为顶层字段（metadata 里不再重复）
+  [PASS] 4. metadata['document_id'] 与库中该切片的 document_id 一致
+  [PASS] 4. metadata['embedding_model'] 与库中该切片的 embedding_model 一致
+  [PASS] 5. metadata 含分数键 'score'
+  [PASS] 5. score 是 float（不是字符串/None）
+  [PASS] 5. score 落在余弦值域 [-1.0, 1.0]
+  [PASS] 5. score 与 VectorStore 返回的同位置 VectorMatch.score 完全一致（未被改写）
+  [PASS] 5. chunk_to_result 摊平视图的 score 与 metadata 一致（{content, source, score}）
+  [PASS] 5. 结果按 score 单调不增（排序口径生效）
+
+  返回 chunk 总数：34（16 条 query，平均 2.12 条/query）
+
+--------------------------------------------------------------------------
+[5] 边界（空 query / 过滤 / 去重 / 维度不符 / 不评价语义）
+--------------------------------------------------------------------------
+  [PASS] 空 query → 返回 []（不抛异常）
+  [PASS] 空 query **不触发** Embedding / VectorStore（短路在第一步）
+  [PASS] min_score=1.01（余弦上限 1.0）→ 返回 []（阈值过滤生效）
+  [PASS] 同一正文命中两次 → 去重后只保留 1 条
+  [PASS] 向量维度不符 → RetrieverConfigError（改配置/重算向量，重试无用）
+  [PASS] ★ 本套件刻意不读取「期望类别 / 期望关键词」字段（只验链路，不评价语义）
+  [PASS] ★ 本套件确实读到了数据文件里的 query / top_k / min_score（不是空跑）
+  [PASS] 守卫自检：子串检查能区分「有」与「无」
+
+==========================================================================
+调用流程（实际观测值）
+==========================================================================
+  query 文本
+      │  ① build_query(job_info, topic, context)        纯函数，决定「查什么」
+      ▼
+    EmbeddingService.embed(query)                       query 文本 → query 向量
+      │  ②
+      ▼
+    VectorStore.search(vector, top_k, model, min_score) query 向量 → 相似切片
+      │  ③
+      ▼
+    VectorKnowledgeRetriever.retrieve(...)              过滤空正文 → 去重 → 计分
+      │  ④
+      ▼
+    List[KnowledgeChunk]{content, source, metadata}      ⑤
+
+  ── 以第 1 条 query 为例 ──
+  输入        : topic='HashMap 的扩容机制，链表什么时候会转成红黑树'
+  ① build_query → 'HashMap 的扩容机制，链表什么时候会转成红黑树'
+  ② embed      → dim=256 前3位=[0.0000, 0.0000, 0.0000] 非零分量=30   [embedder=hash-local]
+  ③ search     → top_k=3 model='hash-local' min_score=0.19 category=None document_id=None
+                 命中 1 条，scores=[0.3899]
+  ④ 归一       → 1 条 KnowledgeChunk（空正文已丢、重复正文已去）
+  ⑤ chunk      → content(338 字) source='handbook://java/hashmap' metadata={score=0.3899, chunk_id=1, document_id=1, category='technical', embedding_model='hash-local'}
+
+  ── 全量 16 条 query 的链路计数 ──
+  embed  调用次数 : 16（= query 条数 16，无重复调用）
+  search 调用次数 : 16（= query 条数 16）
+  返回 chunk 总数 : 34
+
+==========================================================================
+测试结果
+==========================================================================
+  测试数据      : rag_query_set.json（corpus 16 篇 / query 16 条）
+  Embedding     : hash-local / 256 维（离线占位，**仅验证链路连通性，不代表语义检索效果**）
+  链路          : query → Embedding → VectorStore → Retriever → KnowledgeChunk  全部连通
+  断言          : 通过 58 项，失败 0 项
+==========================================================================

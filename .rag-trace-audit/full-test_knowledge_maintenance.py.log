@@ -1,0 +1,107 @@
+
+[1] chroma 索引删除原语 delete()（只动派生索引）
+  [PASS] 前置：索引 2 条
+  [PASS] 前置：权威行 2 条
+  [PASS] 前置：拿到 1 个 A 切片 id
+  [PASS] delete 返回真实移除条数 1
+  [PASS] 索引剩 1 条
+  [PASS] ★ 权威行**一条没动**（delete 只动派生索引）
+  [PASS] 被删的是 A 的切片（B 仍能被检索到）
+  [PASS] 重复删除幂等（返回 0）
+  [PASS] 空列表返回 0（不报错）
+  [PASS] 存在/不存在混合 ⇒ 只数存在的（1）
+  [PASS] 索引清空为 0
+  [PASS] delete(None) 抛 VectorStoreInputError
+  [PASS] delete(单个 int) 抛错
+  [PASS] delete(字符串) 抛错
+  [PASS] delete(True) 抛错（bool 是 int 子类，必须显式拒）
+  [PASS] delete(["12"]) 抛错（元素不得是字符串）
+  [PASS] delete([True]) 抛错
+  [PASS] delete(["a"]) 抛错
+
+[2] chroma 索引清空原语 reset()（只动派生索引）
+  [PASS] 空索引 reset 返回 0
+  [PASS] 前置：索引 2 条
+  [PASS] reset 返回清掉的条数 2
+  [PASS] 索引清空为 0
+  [PASS] ★ 权威行**一条没动**（reset 只动派生索引）
+  [PASS] 重复 reset 幂等（返回 0）
+  [PASS] reset 后维度缓存失效（可写入新维度）
+
+[3] delete_document：索引同步如实回报
+  [PASS] 真实 chroma：index_removed == 2
+  [PASS] 真实 chroma：index_error 为 None
+  [PASS] 索引同步为 0
+  [PASS] 权威行同步为 0
+  [PASS] ★ 用后端回报值（1）而不是入参长度（2）
+  [PASS] 钩子确实收到了两个 id
+  [PASS] 无删除原语 + 索引分离 ⇒ index_error 如实说明
+  [PASS] index_removed 保持 None（没同步就不谎报）
+  [PASS] sql 后端：index_removed 为 None
+  [PASS] sql 后端：index_error 为 None
+  [PASS] sql 后端：删行即同步（权威行 0）
+  [PASS] 不传 store ⇒ index_removed/index_error 都是 None
+  [PASS] SEPARATE_INDEX_BACKENDS 恰为 {chroma}
+
+[4] rebuild_index：purge 真清 vs upsert 清不掉残留
+  [PASS] 前置：索引 2 / 权威行 2
+  [PASS] 制造残留：权威行 1 / 索引仍 2
+  [PASS] purge=False：scanned/rebuilt == 1
+  [PASS] purge=False：purged_chunks 为 None、purge_note 为空
+  [PASS] ★ upsert 重建后索引仍是 2（残留清不掉 ⇒ 需要 purge）
+  [PASS] purge=True：purged_chunks == 2
+  [PASS] purge=True：purge_note 非空（说明做了什么）
+  [PASS] ★ purge 重建后索引 == 权威行 == 1
+  [PASS] purge 不动权威行
+  [PASS] purge 重建无 errors
+  [PASS] purge + document_id ⇒ 跳过清空（互斥）
+  [PASS] 互斥说明与常量一致
+  [PASS] ★ 互斥时索引未被清空（别的文档索引没被误删）
+  [PASS] sql 后端 purge ⇒ purged_chunks 为 None
+  [PASS] sql 后端 purge ⇒ 说明与 PURGE_REFUSED_HINT 一致
+  [PASS] ★ sql 后端 purge 被拒绝：权威行一条没少
+  [PASS] sql 后端仍完成 upsert 重建（rebuilt > 0）
+  [PASS] 清空失败 ⇒ purged_chunks 为 None
+  [PASS] 清空失败 ⇒ 进 errors
+  [PASS] 清空失败 ⇒ purge_note 说明已跳过
+  [PASS] purge 默认 False（不传时不产生 purge 字段副作用）
+
+[5] 报告契约：键集合与顺序恒定
+  [PASS] delete_document 键集合 == DELETE_RESULT_FIELDS
+  [PASS] delete_document 键**顺序**也一致
+  [PASS] rebuild_index 键集合 == REBUILD_RESULT_FIELDS
+  [PASS] rebuild_index 键**顺序**也一致
+  [PASS] DELETE_RESULT_FIELDS 恰 5 键
+  [PASS] REBUILD_RESULT_FIELDS 恰 7 键
+  [PASS] ★ 失败报告形状相同（清空失败也返回同一组键）
+
+[6] 接口守卫：两个原语刻意不是接口方法
+  [PASS] ★ VectorStore.__abstractmethods__ 仍是 {add, search, count}
+  [PASS] delete 不在接口上
+  [PASS] reset 不在接口上
+  [PASS] ★ ChromaVectorStore 提供 delete
+  [PASS] ★ ChromaVectorStore 提供 reset
+  [PASS] 两个原语都是 async（与 add/search/count 同风格）
+  [PASS] sql / memory 后端**没有**这两个原语（索引即权威行，不需要）
+  [PASS] ★ 维护模块**不 import** 任何具体后端（只用鸭子类型的 getattr 发现原语）
+  [PASS] 维护模块**不 import** interview 三件套（写侧与面试链路解耦）
+  [PASS] 维护模块的索引分离集合恰为 {chroma}
+
+[7] 端到端：真实 Pipeline 入库 → 删文档 → purge 重建
+  [PASS] 前置：入库 ok
+  [PASS] 前置：产生了切片
+  [PASS] 前置：索引 == 权威行 == 切片数
+  [PASS] 删除：deleted_chunks == 切片数
+  [PASS] 删除：index_removed == 切片数（索引真的同步了）
+  [PASS] 删除：index_error 为 None
+  [PASS] 删除后：索引 0 / 权威行 0
+  [PASS] 删空后 purge 重建：scanned == 0
+  [PASS] ★ 删空后 purge 重建：索引仍为 0（无残留）
+  [PASS] 再入库 ok
+  [PASS] reset 后索引 0（权威行仍在）
+  [PASS] ★ purge 后重建把索引恢复成权威行条数
+  [PASS] 恢复后无 errors
+
+======================================================================
+结果: 通过 89 项，失败 0 项
+======================================================================

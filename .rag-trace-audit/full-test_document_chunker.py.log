@@ -1,0 +1,101 @@
+======================================================================
+AI 面试知识库 · 文档切片（DocumentChunker）自检
+======================================================================
+
+[1] 模块可导入 + 出参契约常量
+  [PASS] services.document_chunker 可导入
+  [PASS] DocumentChunker 暴露 split / split_document
+  [PASS] ★ CHUNK_FIELDS = (content, metadata)
+  [PASS] ★ metadata 必含字段 = 需求点名的三键
+  [PASS]   └ chunk_index 登记为「追加」字段（不是需求点名）
+  [PASS] 默认参数合法（0 < overlap < size）
+  [PASS] 标点常量可用于判断切点
+
+[2] 短文本保持完整（要求 2）
+  [PASS] ★ 短文本 → 恰好 1 片
+  [PASS]   └ 内容与原文逐字一致（未被切分）
+  [PASS]   └ chunk_index = 0
+  [PASS] 长度恰好 == chunk_size → 仍是 1 片（边界含等号）
+  [PASS] 长度 == chunk_size + 1 → 切成 2 片
+  [PASS] 空正文返回 []（空串）——不产出占位片
+  [PASS] 空正文返回 []（纯空白）——不产出占位片
+  [PASS] 空正文返回 []（None）——不产出占位片
+  [PASS] CRLF 归一为 LF 且去掉整篇首尾空白
+  [PASS] 非字符串入参也能处理（转成字符串）
+
+[3] 长文本切片（要求 1）
+  [PASS] 长文本被切成多片
+  [PASS] ★ 每片长度 <= chunk_size
+  [PASS]   └ 片数在合理区间（未碎成一地、也未退化为整篇）
+  [PASS] 每片都能在原文中精确定位（切片是原文连续子串）
+  [PASS]   └ 首片从原文开头起
+  [PASS]   └ 末片覆盖到原文结尾
+  [PASS] ★ 无空洞：相邻片相接或重叠（空隙只能是空白）
+  [PASS]   └ 位置单调不回退
+  [PASS] 无边界长文本切出 8 片
+  [PASS] ★ 每片 == 原文对应区间的精确子串
+  [PASS]   └ 末片不足一窗（1200 - 7*160 = 80）
+  [PASS] chunk_overlap=0 → 不重叠的整齐平铺（6 片）
+  [PASS]   └ 每片恰好 200 字
+
+[4] 保留上下文（重叠 + 自然边界）
+  [PASS] ★ 相邻片重叠长度恰为 chunk_overlap
+  [PASS]   └ 重叠 > 0：跨边界的那句话至少完整出现在一片里
+  [PASS]   └ 按位置算的重叠也恰为 40
+  [PASS] ★ 切点全落在自然边界（未切断句子）
+  [PASS]   └ 至少一片以句末标点收尾（用到句子边界）
+  [PASS]   └ 末片以原文的句号收尾
+  [PASS] ★★ 每句话都完整出现在某一片切片中（逐句取证）
+  [PASS] ★ 无任何边界的超长句 → 硬切兜底，仍不越界
+  [PASS]   └ 硬切后依然完整覆盖原文、无空洞
+
+[5] metadata 正确（要求 3）
+  [PASS] ★ 每个切片恰好两键 (content, metadata)
+  [PASS] ★ metadata 含需求点名的三键
+  [PASS]   └ metadata 键集合 == 必含 + 追加（不多不少）
+  [PASS] ★ document_id 写入正确
+  [PASS] ★ category 写入正确
+  [PASS] ★ source 写入正确
+  [PASS] ★ chunk_index 0 起连续递增
+  [PASS] 未提供 document_id 时为 None（允许先切片后落库）
+  [PASS]   └ category / source 缺省为 ""（不是 None）
+  [PASS] 标签类值会被去首尾空白
+
+[6] 配置校验与终止性
+  [PASS] 拒绝非法参数：chunk_size=0
+  [PASS]   └ 异常同时是 DocumentChunkerError 与 ValueError
+  [PASS] 拒绝非法参数：chunk_size=-1
+  [PASS] 拒绝非法参数：chunk_size=True（bool 不算正整数）
+  [PASS] 拒绝非法参数：chunk_size="500"（非整数）
+  [PASS] 拒绝非法参数：chunk_overlap=-1
+  [PASS] 拒绝非法参数：chunk_overlap == chunk_size
+  [PASS] 拒绝非法参数：chunk_overlap > chunk_size
+  [PASS] chunk_overlap=0 合法（允许不重叠）
+  [PASS] 参数是 keyword-only（位置传参被拒绝，防止两个数字写反）
+  [PASS] overlap 极大时仍终止且每片 <= chunk_size
+  [PASS]   └ 覆盖完整、无空洞
+
+[7] split_document：KnowledgeDocument → 切片
+  [PASS] ★ 真实 ORM 行可切片
+  [PASS] ★ metadata.document_id == 文档真实自增 id
+  [PASS] ★ metadata.category / source 取自文档
+  [PASS]   └ 与显式传参的切片结果完全一致
+  [PASS] dict 形式的文档同样可用
+  [PASS] 对象形式的文档同样可用
+  [PASS] 缺字段的对象不炸（content 缺失 → []）
+
+[8] 零依赖 + 未接线（AST）
+  [PASS] ★ 只 import 标准库（顶层依赖恰为 4 个）
+  [PASS] ★ 不 import models / DB / FastAPI / Retriever / Interview
+  [PASS] ★ 不 import Embedding / 向量库 / 大模型 SDK
+  [PASS] ★ 接线点收口为入库 Pipeline 唯一一处（切片器不自己落库）
+  [PASS]   └ knowledge_document_service 未被改动（导入仍不自动切片）
+
+[9] 确定性（同输入同输出）
+  [PASS] 两次调用结果完全相同（无随机 / 无时间依赖）
+  [PASS]   └ 不合成新字符：每片都是原文的连续子串
+  [PASS]   └ 各片长度合计 >= 原文长度（重叠只会更多、不会丢内容）
+
+======================================================================
+结果: 通过 76 项，失败 0 项
+======================================================================

@@ -110,9 +110,9 @@ from services.vector_store_sql import SqlAlchemyVectorStore  # noqa: E402
 #: 本轮仅更新 Agent/Planner 的默认 LLM 端口接线指纹，业务函数与 Prompt 未改。
 FROZEN_SOURCES: Tuple[Tuple[str, str], ...] = (
     ("services/interview_agent.py",
-     "84ada04f32984c752f02f123839c4afc0b0841d1ed1ce562230fa87cc1c0fdd0"),
+     "87d73ae98060d88e334cf357e9ee36d75a860ac335fc8b7c8759da26374d5145"),
     ("services/interview_core.py",
-     "2bd6f6aab04bdd3c8eaf9e03c64f37d99a8e52dd1047d711779616845ff8e5e8"),
+     "299436f145e1ae7ad9b946ebbf476358f8b5874589579e2d2c3acaeefd348a2e"),
     ("services/interview_planner.py",
      "c8c9494f7474827e0882a60d0322963a23728dc66a70d074dcc4f31bf5c8688c"),
     # ★ 本次并发加固改过一次：``create_context`` 的 TOCTOU 收敛
