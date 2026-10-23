@@ -5,7 +5,7 @@
 # 本仓库此前**没有任何 CI 配置**（无 .github/、无 .gitlab-ci.yml）。
 # 这里补上的重点是「真实 MySQL 不再只是本地手工验证」：
 #
-#   backend-regression    78 套 SQLite 自检 + worker_guard 安全网断言
+#   backend-regression    全部 test_*.py SQLite 自检 + worker_guard 安全网断言
 #   frontend-regression   前端自检（WS ticket fail-closed / 重连退避）
 #   mysql-integration     ★ MySQL 8 service container + 5 个真实并发运行器
 #
@@ -150,15 +150,13 @@ jobs:
           MYSQL_DATABASE: career_ci
         ports:
           - 3306:3306
-        # 健康检查用容器内的环境变量，避免把口令再写一遍；
-        # ``$$`` 是 GitHub 的转义，落进容器时是 ``$MYSQL_ROOT_PASSWORD``。
+        # Docker 将命令交给容器内 shell，使用单个 $ 展开容器环境变量。
+        # options 只接受 docker create 参数；测试库字符集由 setup_test_mysql.py 设置。
         options: >-
-          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD"
+          --health-cmd="MYSQL_PWD=$MYSQL_ROOT_PASSWORD mysqladmin ping -h 127.0.0.1 -uroot --silent"
           --health-interval=5s
           --health-timeout=5s
           --health-retries=30
-          --character-set-server=utf8mb4
-          --collation-server=utf8mb4_unicode_ci
 
     steps:
       - uses: actions/checkout@v4
@@ -234,7 +232,7 @@ jobs:
 
       - name: 清理遗留 probe 库（失败时也执行）
         if: always()
-        working-directory: backend
+        # 容器初始化可能在 checkout 前失败，清理脚本不依赖检出目录。
         run: |
           python - <<'PY'
           import os, re, sys

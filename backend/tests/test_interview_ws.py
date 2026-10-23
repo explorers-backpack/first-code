@@ -175,9 +175,12 @@ def run() -> bool:  # noqa: C901 - 自检脚本，顺序即文档
     _check("关闭码用 4xxx（避开标准码，语义明确）",
            (ws.WS_CLOSE_UNAUTHORIZED, ws.WS_CLOSE_FORBIDDEN, ws.WS_CLOSE_NOT_FOUND)
            == (4401, 4403, 4404))
+    # 新版 FastAPI 延迟包含 router；通过公开反查 API 验证实际挂载路径，
+    # 避免依赖 app.routes 必须是扁平列表这一内部实现。
+    registered_path = str(main.app.url_path_for("interview_socket", session_id=123))
     _check("★ 路由已挂到 app 上（否则前端连不上）",
-           any(getattr(r, "path", "") == ws.WS_PATH for r in main.app.routes),
-           str([getattr(r, "path", "") for r in main.app.routes if "interview" in getattr(r, "path", "")]))
+           registered_path == ws.WS_PATH.replace("{session_id}", "123"),
+           registered_path)
 
     # ★ 前端镜像常量必须与后端逐字一致（防漂移：这是跨语言契约）
     fe_socket = (_BACKEND.parent / "frontend" / "src" / "api" / "interviewSocket.js")

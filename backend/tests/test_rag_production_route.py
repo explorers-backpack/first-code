@@ -138,10 +138,8 @@ class BuilderSpy:
 
 
 def _route_exists() -> bool:
-    for route in main.app.routes:
-        if getattr(route, "path", "") == ROUTE_PATH:
-            return "POST" in (getattr(route, "methods", set()) or set())
-    return False
+    # OpenAPI 反映最终包含的路由；新版 FastAPI 不保证 app.routes 已扁平展开。
+    return "post" in main.app.openapi().get("paths", {}).get(ROUTE_PATH, {})
 
 
 def _kwargs_of_call(source: str, func_name: str) -> Optional[Dict[str, Any]]:

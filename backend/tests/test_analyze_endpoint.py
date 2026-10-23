@@ -27,10 +27,15 @@
 
 import asyncio
 import io
+import os
 import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+
+# career.service 在导入时加载数据库配置；本套件仍以替身执行，不连接数据库。
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+import regression_env  # noqa: E402,F401
 
 from fastapi import HTTPException, UploadFile  # noqa: E402
 

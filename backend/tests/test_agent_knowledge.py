@@ -24,10 +24,15 @@ import ast
 import asyncio
 import inspect
 import json
+import os
 import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
+
+# interview_agent 经 models 加载 database；CI 没有开发机的 .env。
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+import regression_env  # noqa: E402,F401
 
 from prompts import render_prompt, template_variables  # noqa: E402
 from services import interview_agent  # noqa: E402

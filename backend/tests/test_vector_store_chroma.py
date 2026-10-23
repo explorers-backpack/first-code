@@ -301,7 +301,7 @@ async def run() -> bool:
                     await suite(session)
             finally:
                 await engine.dispose()
-        _suite_metadata_codec()             # 纯函数，不需要库
+        await _suite_metadata_codec()       # 不需要库，但必须执行协程中的断言
         for suite in multi_session_suites:
             engine = await _new_engine()
             try:

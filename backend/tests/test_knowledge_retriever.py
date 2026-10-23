@@ -28,6 +28,10 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parents[1]))
 
+# interview_agent 经 models 加载 database；只补齐导入配置，不连接数据库。
+os.environ.setdefault("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+import regression_env  # noqa: E402,F401
+
 from services import interview_agent  # noqa: E402
 from services.knowledge_retriever import (  # noqa: E402
     KNOWLEDGE_CHUNK_FIELDS,

@@ -1,5 +1,6 @@
 # ---- 运行时：FastAPI + 异步 SQLAlchemy ----
 fastapi>=0.115.0
+python-multipart>=0.0.18     # FastAPI File/Form 上传路由注册与请求解析
 uvicorn[standard]>=0.30.0
 pydantic>=2.9.0
 sqlalchemy>=2.0.0
