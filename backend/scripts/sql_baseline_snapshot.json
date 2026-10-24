@@ -45,10 +45,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 1,
-            "score": 0.3898578784595568,
+            "score": 0.38985788,
             "embedding_model": "hash-local"
           },
-          "score": 0.3898578784595568
+          "score": 0.38985788
         },
         {
           "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
@@ -59,10 +59,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 3,
-            "score": 0.10198341204735069,
+            "score": 0.10198341,
             "embedding_model": "hash-local"
           },
-          "score": 0.10198341204735069
+          "score": 0.10198341
         },
         {
           "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
@@ -73,10 +73,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 7,
-            "score": 0.07753407204140506,
+            "score": 0.07753407,
             "embedding_model": "hash-local"
           },
-          "score": 0.07753407204140506
+          "score": 0.07753407
         },
         {
           "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
@@ -87,10 +87,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 14,
-            "score": 0.06255113291419874,
+            "score": 0.06255113,
             "embedding_model": "hash-local"
           },
-          "score": 0.06255113291419874
+          "score": 0.06255113
         },
         {
           "query": "HashMap 的扩容机制，链表什么时候会转成红黑树",
@@ -101,10 +101,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 15,
-            "score": 0.05453234541448247,
+            "score": 0.05453235,
             "embedding_model": "hash-local"
           },
-          "score": 0.05453234541448247
+          "score": 0.05453235
         }
       ]
     },
@@ -122,10 +122,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 2,
-            "score": 0.4786245852387709,
+            "score": 0.47862459,
             "embedding_model": "hash-local"
           },
-          "score": 0.4786245852387709
+          "score": 0.47862459
         },
         {
           "query": "Java 线程池的核心参数和拒绝策略",
@@ -136,10 +136,10 @@
             "category": "job",
             "chunk_index": 0,
             "chunk_id": 12,
-            "score": 0.12550074222957622,
+            "score": 0.12550074,
             "embedding_model": "hash-local"
           },
-          "score": 0.12550074222957622
+          "score": 0.12550074
         },
         {
           "query": "Java 线程池的核心参数和拒绝策略",
@@ -150,10 +150,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 6,
-            "score": 0.12043663197215837,
+            "score": 0.12043663,
             "embedding_model": "hash-local"
           },
-          "score": 0.12043663197215837
+          "score": 0.12043663
         },
         {
           "query": "Java 线程池的核心参数和拒绝策略",
@@ -164,10 +164,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 1,
-            "score": 0.10234676514280033,
+            "score": 0.10234677,
             "embedding_model": "hash-local"
           },
-          "score": 0.10234676514280033
+          "score": 0.10234677
         },
         {
           "query": "Java 线程池的核心参数和拒绝策略",
@@ -178,10 +178,10 @@
             "category": "job",
             "chunk_index": 0,
             "chunk_id": 13,
-            "score": 0.09005476995526394,
+            "score": 0.09005477,
             "embedding_model": "hash-local"
           },
-          "score": 0.09005476995526394
+          "score": 0.09005477
         }
       ]
     },
@@ -199,10 +199,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 3,
-            "score": 0.2458159765968893,
+            "score": 0.24581598,
             "embedding_model": "hash-local"
           },
-          "score": 0.2458159765968893
+          "score": 0.24581598
         },
         {
           "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
@@ -213,10 +213,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 10,
-            "score": 0.15913098741604195,
+            "score": 0.15913099,
             "embedding_model": "hash-local"
           },
-          "score": 0.15913098741604195
+          "score": 0.15913099
         },
         {
           "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
@@ -227,10 +227,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 14,
-            "score": 0.14145628802893456,
+            "score": 0.14145629,
             "embedding_model": "hash-local"
           },
-          "score": 0.14145628802893456
+          "score": 0.14145629
         },
         {
           "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
@@ -241,10 +241,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 16,
-            "score": 0.11590011139293852,
+            "score": 0.11590011,
             "embedding_model": "hash-local"
           },
-          "score": 0.11590011139293852
+          "score": 0.11590011
         },
         {
           "query": "Redis 缓存穿透、击穿、雪崩分别怎么解决",
@@ -255,10 +255,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 15,
-            "score": 0.09882384840881367,
+            "score": 0.09882385,
             "embedding_model": "hash-local"
           },
-          "score": 0.09882384840881367
+          "score": 0.09882385
         }
       ]
     },
@@ -276,10 +276,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 4,
-            "score": 0.2525381361380526,
+            "score": 0.25253814,
             "embedding_model": "hash-local"
           },
-          "score": 0.2525381361380526
+          "score": 0.25253814
         },
         {
           "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
@@ -290,10 +290,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 6,
-            "score": 0.14581926965295566,
+            "score": 0.14581927,
             "embedding_model": "hash-local"
           },
-          "score": 0.14581926965295566
+          "score": 0.14581927
         },
         {
           "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
@@ -304,10 +304,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 1,
-            "score": 0.11958961484030967,
+            "score": 0.11958961,
             "embedding_model": "hash-local"
           },
-          "score": 0.11958961484030967
+          "score": 0.11958961
         },
         {
           "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
@@ -318,10 +318,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 7,
-            "score": 0.09248043889897663,
+            "score": 0.09248044,
             "embedding_model": "hash-local"
           },
-          "score": 0.09248043889897663
+          "score": 0.09248044
         },
         {
           "query": "Redis 的 RDB 和 AOF 持久化有什么区别",
@@ -332,10 +332,10 @@
             "category": "job",
             "chunk_index": 0,
             "chunk_id": 13,
-            "score": 0.09207338730881488,
+            "score": 0.09207339,
             "embedding_model": "hash-local"
           },
-          "score": 0.09207338730881488
+          "score": 0.09207339
         }
       ]
     },
@@ -353,10 +353,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 5,
-            "score": 0.18843715532962013,
+            "score": 0.18843716,
             "embedding_model": "hash-local"
           },
-          "score": 0.18843715532962013
+          "score": 0.18843716
         },
         {
           "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
@@ -367,10 +367,10 @@
             "category": "job",
             "chunk_index": 0,
             "chunk_id": 12,
-            "score": 0.09446315179780784,
+            "score": 0.09446315,
             "embedding_model": "hash-local"
           },
-          "score": 0.09446315179780784
+          "score": 0.09446315
         },
         {
           "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
@@ -381,10 +381,10 @@
             "category": "job",
             "chunk_index": 0,
             "chunk_id": 13,
-            "score": 0.09199165326047419,
+            "score": 0.09199165,
             "embedding_model": "hash-local"
           },
-          "score": 0.09199165326047419
+          "score": 0.09199165
         },
         {
           "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
@@ -395,10 +395,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 10,
-            "score": 0.0684436003119127,
+            "score": 0.0684436,
             "embedding_model": "hash-local"
           },
-          "score": 0.0684436003119127
+          "score": 0.0684436
         },
         {
           "query": "MySQL 索引优化，怎么看 EXPLAIN 执行计划",
@@ -409,10 +409,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 6,
-            "score": 0.06475103337403433,
+            "score": 0.06475103,
             "embedding_model": "hash-local"
           },
-          "score": 0.06475103337403433
+          "score": 0.06475103
         }
       ]
     },
@@ -430,10 +430,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 6,
-            "score": 0.4056812866430596,
+            "score": 0.40568129,
             "embedding_model": "hash-local"
           },
-          "score": 0.4056812866430596
+          "score": 0.40568129
         },
         {
           "query": "MySQL 的可重复读隔离级别和间隙锁",
@@ -444,10 +444,10 @@
             "category": "job",
             "chunk_index": 0,
             "chunk_id": 12,
-            "score": 0.17173785778784112,
+            "score": 0.17173786,
             "embedding_model": "hash-local"
           },
-          "score": 0.17173785778784112
+          "score": 0.17173786
         },
         {
           "query": "MySQL 的可重复读隔离级别和间隙锁",
@@ -458,10 +458,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 9,
-            "score": 0.13327849749579598,
+            "score": 0.1332785,
             "embedding_model": "hash-local"
           },
-          "score": 0.13327849749579598
+          "score": 0.1332785
         },
         {
           "query": "MySQL 的可重复读隔离级别和间隙锁",
@@ -472,10 +472,10 @@
             "category": "job",
             "chunk_index": 0,
             "chunk_id": 13,
-            "score": 0.10806572394631674,
+            "score": 0.10806572,
             "embedding_model": "hash-local"
           },
-          "score": 0.10806572394631674
+          "score": 0.10806572
         },
         {
           "query": "MySQL 的可重复读隔离级别和间隙锁",
@@ -486,10 +486,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 10,
-            "score": 0.0753778361444409,
+            "score": 0.07537784,
             "embedding_model": "hash-local"
           },
-          "score": 0.0753778361444409
+          "score": 0.07537784
         }
       ]
     },
@@ -507,10 +507,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 7,
-            "score": 0.29324641512099353,
+            "score": 0.29324642,
             "embedding_model": "hash-local"
           },
-          "score": 0.29324641512099353
+          "score": 0.29324642
         },
         {
           "query": "JVM 垃圾回收算法和常见收集器",
@@ -521,10 +521,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 9,
-            "score": 0.12093595856020053,
+            "score": 0.12093596,
             "embedding_model": "hash-local"
           },
-          "score": 0.12093595856020053
+          "score": 0.12093596
         },
         {
           "query": "JVM 垃圾回收算法和常见收集器",
@@ -535,10 +535,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 6,
-            "score": 0.09135139987044212,
+            "score": 0.0913514,
             "embedding_model": "hash-local"
           },
-          "score": 0.09135139987044212
+          "score": 0.0913514
         },
         {
           "query": "JVM 垃圾回收算法和常见收集器",
@@ -549,10 +549,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 8,
-            "score": 0.06782818363629779,
+            "score": 0.06782818,
             "embedding_model": "hash-local"
           },
-          "score": 0.06782818363629779
+          "score": 0.06782818
         }
       ]
     },
@@ -570,10 +570,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 8,
-            "score": 0.3482698178549329,
+            "score": 0.34826982,
             "embedding_model": "hash-local"
           },
-          "score": 0.3482698178549329
+          "score": 0.34826982
         },
         {
           "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
@@ -584,10 +584,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 14,
-            "score": 0.2319458086422002,
+            "score": 0.23194581,
             "embedding_model": "hash-local"
           },
-          "score": 0.2319458086422002
+          "score": 0.23194581
         },
         {
           "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
@@ -598,10 +598,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 10,
-            "score": 0.1695044603103275,
+            "score": 0.16950446,
             "embedding_model": "hash-local"
           },
-          "score": 0.1695044603103275
+          "score": 0.16950446
         },
         {
           "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
@@ -612,10 +612,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 11,
-            "score": 0.16483267673842686,
+            "score": 0.16483268,
             "embedding_model": "hash-local"
           },
-          "score": 0.16483267673842686
+          "score": 0.16483268
         },
         {
           "query": "Spring 事务传播行为 REQUIRES_NEW 和 NESTED",
@@ -626,10 +626,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 5,
-            "score": 0.16333635810871328,
+            "score": 0.16333636,
             "embedding_model": "hash-local"
           },
-          "score": 0.16333635810871328
+          "score": 0.16333636
         }
       ]
     },
@@ -647,10 +647,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 9,
-            "score": 0.34352977188917566,
+            "score": 0.34352977,
             "embedding_model": "hash-local"
           },
-          "score": 0.34352977188917566
+          "score": 0.34352977
         },
         {
           "query": "Kafka 怎么保证消息不重复消费、幂等生产",
@@ -661,10 +661,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 2,
-            "score": 0.11681818473544502,
+            "score": 0.11681818,
             "embedding_model": "hash-local"
           },
-          "score": 0.11681818473544502
+          "score": 0.11681818
         },
         {
           "query": "Kafka 怎么保证消息不重复消费、幂等生产",
@@ -675,10 +675,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 15,
-            "score": 0.09519014050432062,
+            "score": 0.09519014,
             "embedding_model": "hash-local"
           },
-          "score": 0.09519014050432062
+          "score": 0.09519014
         },
         {
           "query": "Kafka 怎么保证消息不重复消费、幂等生产",
@@ -689,10 +689,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 16,
-            "score": 0.08786364769756365,
+            "score": 0.08786365,
             "embedding_model": "hash-local"
           },
-          "score": 0.08786364769756365
+          "score": 0.08786365
         },
         {
           "query": "Kafka 怎么保证消息不重复消费、幂等生产",
@@ -703,10 +703,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 10,
-            "score": 0.06857254813237415,
+            "score": 0.06857255,
             "embedding_model": "hash-local"
           },
-          "score": 0.06857254813237415
+          "score": 0.06857255
         }
       ]
     },
@@ -724,10 +724,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 11,
-            "score": 0.23568791411226836,
+            "score": 0.23568791,
             "embedding_model": "hash-local"
           },
-          "score": 0.23568791411226836
+          "score": 0.23568791
         },
         {
           "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
@@ -738,10 +738,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 8,
-            "score": 0.13665914371885046,
+            "score": 0.13665914,
             "embedding_model": "hash-local"
           },
-          "score": 0.13665914371885046
+          "score": 0.13665914
         },
         {
           "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
@@ -752,10 +752,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 6,
-            "score": 0.10039273363859967,
+            "score": 0.10039273,
             "embedding_model": "hash-local"
           },
-          "score": 0.10039273363859967
+          "score": 0.10039273
         },
         {
           "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
@@ -766,10 +766,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 2,
-            "score": 0.07703661358927046,
+            "score": 0.07703661,
             "embedding_model": "hash-local"
           },
-          "score": 0.07703661358927046
+          "score": 0.07703661
         },
         {
           "query": "HTTPS 的 TLS 握手过程，客户端如何校验证书链",
@@ -780,10 +780,10 @@
             "category": "job",
             "chunk_index": 0,
             "chunk_id": 12,
-            "score": 0.05230701979864824,
+            "score": 0.05230702,
             "embedding_model": "hash-local"
           },
-          "score": 0.05230701979864824
+          "score": 0.05230702
         }
       ]
     },
@@ -801,10 +801,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 10,
-            "score": 0.42699324622671986,
+            "score": 0.42699325,
             "embedding_model": "hash-local"
           },
-          "score": 0.42699324622671986
+          "score": 0.42699325
         },
         {
           "query": "HTTP 的强缓存和协商缓存有什么区别",
@@ -815,10 +815,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 3,
-            "score": 0.30899874755199314,
+            "score": 0.30899875,
             "embedding_model": "hash-local"
           },
-          "score": 0.30899874755199314
+          "score": 0.30899875
         },
         {
           "query": "HTTP 的强缓存和协商缓存有什么区别",
@@ -829,10 +829,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 14,
-            "score": 0.2671027396298781,
+            "score": 0.26710274,
             "embedding_model": "hash-local"
           },
-          "score": 0.2671027396298781
+          "score": 0.26710274
         },
         {
           "query": "HTTP 的强缓存和协商缓存有什么区别",
@@ -843,10 +843,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 4,
-            "score": 0.14021363680319482,
+            "score": 0.14021364,
             "embedding_model": "hash-local"
           },
-          "score": 0.14021363680319482
+          "score": 0.14021364
         },
         {
           "query": "HTTP 的强缓存和协商缓存有什么区别",
@@ -857,10 +857,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 16,
-            "score": 0.13821894809301777,
+            "score": 0.13821895,
             "embedding_model": "hash-local"
           },
-          "score": 0.13821894809301777
+          "score": 0.13821895
         }
       ]
     },
@@ -878,10 +878,10 @@
             "category": "job",
             "chunk_index": 0,
             "chunk_id": 12,
-            "score": 0.3260604928938463,
+            "score": 0.32606049,
             "embedding_model": "hash-local"
           },
-          "score": 0.3260604928938463
+          "score": 0.32606049
         },
         {
           "query": "Java 后端工程师的岗位职责和任职要求",
@@ -892,10 +892,10 @@
             "category": "job",
             "chunk_index": 0,
             "chunk_id": 13,
-            "score": 0.23396915553966652,
+            "score": 0.23396916,
             "embedding_model": "hash-local"
           },
-          "score": 0.23396915553966652
+          "score": 0.23396916
         },
         {
           "query": "Java 后端工程师的岗位职责和任职要求",
@@ -906,10 +906,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 16,
-            "score": 0.10037244076773096,
+            "score": 0.10037244,
             "embedding_model": "hash-local"
           },
-          "score": 0.10037244076773096
+          "score": 0.10037244
         },
         {
           "query": "Java 后端工程师的岗位职责和任职要求",
@@ -920,10 +920,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 3,
-            "score": 0.09781105315169675,
+            "score": 0.09781105,
             "embedding_model": "hash-local"
           },
-          "score": 0.09781105315169675
+          "score": 0.09781105
         },
         {
           "query": "Java 后端工程师的岗位职责和任职要求",
@@ -934,10 +934,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 8,
-            "score": 0.09170924775834718,
+            "score": 0.09170925,
             "embedding_model": "hash-local"
           },
-          "score": 0.09170924775834718
+          "score": 0.09170925
         }
       ]
     },
@@ -955,10 +955,10 @@
             "category": "job",
             "chunk_index": 0,
             "chunk_id": 13,
-            "score": 0.3191274459456938,
+            "score": 0.31912745,
             "embedding_model": "hash-local"
           },
-          "score": 0.3191274459456938
+          "score": 0.31912745
         },
         {
           "query": "大数据开发工程师需要熟悉哪些计算引擎",
@@ -969,10 +969,10 @@
             "category": "job",
             "chunk_index": 0,
             "chunk_id": 12,
-            "score": 0.21811287829456505,
+            "score": 0.21811288,
             "embedding_model": "hash-local"
           },
-          "score": 0.21811287829456505
+          "score": 0.21811288
         },
         {
           "query": "大数据开发工程师需要熟悉哪些计算引擎",
@@ -983,10 +983,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 5,
-            "score": 0.16837874094498143,
+            "score": 0.16837874,
             "embedding_model": "hash-local"
           },
-          "score": 0.16837874094498143
+          "score": 0.16837874
         },
         {
           "query": "大数据开发工程师需要熟悉哪些计算引擎",
@@ -997,10 +997,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 3,
-            "score": 0.10701462561817372,
+            "score": 0.10701463,
             "embedding_model": "hash-local"
           },
-          "score": 0.10701462561817372
+          "score": 0.10701463
         },
         {
           "query": "大数据开发工程师需要熟悉哪些计算引擎",
@@ -1011,10 +1011,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 4,
-            "score": 0.10397504898200728,
+            "score": 0.10397505,
             "embedding_model": "hash-local"
           },
-          "score": 0.10397504898200728
+          "score": 0.10397505
         }
       ]
     },
@@ -1032,10 +1032,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 14,
-            "score": 0.28596729388445097,
+            "score": 0.28596729,
             "embedding_model": "hash-local"
           },
-          "score": 0.28596729388445097
+          "score": 0.28596729
         },
         {
           "query": "订单中台的缓存击穿是怎么治理的",
@@ -1046,10 +1046,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 3,
-            "score": 0.278017949292091,
+            "score": 0.27801795,
             "embedding_model": "hash-local"
           },
-          "score": 0.278017949292091
+          "score": 0.27801795
         },
         {
           "query": "订单中台的缓存击穿是怎么治理的",
@@ -1060,10 +1060,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 10,
-            "score": 0.19809847238241424,
+            "score": 0.19809847,
             "embedding_model": "hash-local"
           },
-          "score": 0.19809847238241424
+          "score": 0.19809847
         },
         {
           "query": "订单中台的缓存击穿是怎么治理的",
@@ -1074,10 +1074,10 @@
             "category": "job",
             "chunk_index": 0,
             "chunk_id": 13,
-            "score": 0.16931045539672382,
+            "score": 0.16931046,
             "embedding_model": "hash-local"
           },
-          "score": 0.16931045539672382
+          "score": 0.16931046
         },
         {
           "query": "订单中台的缓存击穿是怎么治理的",
@@ -1088,10 +1088,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 1,
-            "score": 0.13655643306164006,
+            "score": 0.13655643,
             "embedding_model": "hash-local"
           },
-          "score": 0.13655643306164006
+          "score": 0.13655643
         }
       ]
     },
@@ -1109,10 +1109,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 15,
-            "score": 0.20217792265417858,
+            "score": 0.20217792,
             "embedding_model": "hash-local"
           },
-          "score": 0.20217792265417858
+          "score": 0.20217792
         },
         {
           "query": "支付网关怎么做到幂等和日终对账",
@@ -1123,10 +1123,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 10,
-            "score": 0.13177297660794246,
+            "score": 0.13177298,
             "embedding_model": "hash-local"
           },
-          "score": 0.13177297660794246
+          "score": 0.13177298
         },
         {
           "query": "支付网关怎么做到幂等和日终对账",
@@ -1137,10 +1137,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 14,
-            "score": 0.1171369350254158,
+            "score": 0.11713694,
             "embedding_model": "hash-local"
           },
-          "score": 0.1171369350254158
+          "score": 0.11713694
         },
         {
           "query": "支付网关怎么做到幂等和日终对账",
@@ -1151,10 +1151,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 16,
-            "score": 0.10663823359494566,
+            "score": 0.10663823,
             "embedding_model": "hash-local"
           },
-          "score": 0.10663823359494566
+          "score": 0.10663823
         },
         {
           "query": "支付网关怎么做到幂等和日终对账",
@@ -1165,10 +1165,10 @@
             "category": "technical",
             "chunk_index": 0,
             "chunk_id": 2,
-            "score": 0.09666800257398865,
+            "score": 0.096668,
             "embedding_model": "hash-local"
           },
-          "score": 0.09666800257398865
+          "score": 0.096668
         }
       ]
     },
@@ -1186,10 +1186,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 16,
-            "score": 0.11839287208668638,
+            "score": 0.11839287,
             "embedding_model": "hash-local"
           },
-          "score": 0.11839287208668638
+          "score": 0.11839287
         },
         {
           "query": "秒杀系统怎么做限流和降级",
@@ -1200,10 +1200,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 14,
-            "score": 0.10168427515684002,
+            "score": 0.10168428,
             "embedding_model": "hash-local"
           },
-          "score": 0.10168427515684002
+          "score": 0.10168428
         },
         {
           "query": "秒杀系统怎么做限流和降级",
@@ -1214,10 +1214,10 @@
             "category": "project",
             "chunk_index": 0,
             "chunk_id": 15,
-            "score": 0.05938196213132835,
+            "score": 0.05938196,
             "embedding_model": "hash-local"
           },
-          "score": 0.05938196213132835
+          "score": 0.05938196
         }
       ]
     }
@@ -1225,7 +1225,7 @@
   "totals": {
     "queries": 16,
     "results": 77,
-    "max_score": 0.4786245852387709,
-    "min_score": 0.05230701979864824
+    "max_score": 0.47862459,
+    "min_score": 0.05230702
   }
 }

@@ -151,6 +151,11 @@ CATEGORIES = ("job", "technical", "company", "project")
 
 #: **允许的 float32 量化误差上界**（HNSW 按 float32 存取 ⇒ ~1e-8 量级漂移）
 FLOAT32_TOL = 1e-6
+# ANN 分数已有 FLOAT32_TOL 的误差契约；固定快照精度，避免 Linux/Windows
+# 或底层 ANN 浮点表示的末位差异让可信基线误报变化。
+SNAPSHOT_SCORE_DECIMALS = 8
+# 量化漂移本身要保留到纳米量级，不能按分数展示精度舍入成 0。
+SNAPSHOT_DRIFT_DECIMALS = 12
 
 #: 本套件「不要修改」的生产模块（供守卫断言引用）
 PROTECTED_MODULES: Tuple[str, ...] = (
@@ -738,10 +743,28 @@ def check_sorting_rule(env: Any, collected: Dict[str, Any]) -> None:
 # ============================================================
 # [5] 快照生成与格式自检
 # ============================================================
+def _canonicalize_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    """规范化快照分数，保持记录结构和键顺序不变。"""
+    result = dict(record)
+    score = round(float(result["score"]), SNAPSHOT_SCORE_DECIMALS)
+    result["score"] = score
+    metadata = dict(result["metadata"])
+    metadata["score"] = score
+    result["metadata"] = metadata
+    return result
+
+
 def build_snapshot(env: Any, collected: Dict[str, Any]) -> Dict[str, Any]:
     """按既定格式组装快照对象。"""
     rows = collected["rows"]
-    all_records = [r for row in rows for r in row["records"]]
+    snapshot_rows = [
+        {
+            **row,
+            "records": [_canonicalize_record(r) for r in row["records"]],
+        }
+        for row in rows
+    ]
+    all_records = [r for row in snapshot_rows for r in row["records"]]
     return {
         "name": SNAPSHOT_NAME,
         "version": SNAPSHOT_VERSION,
@@ -781,14 +804,16 @@ def build_snapshot(env: Any, collected: Dict[str, Any]) -> Dict[str, Any]:
                 "returned": len(row["records"]),
                 "results": row["records"],
             }
-            for row in rows
+            for row in snapshot_rows
         ],
         "totals": {
             "queries": len(rows),
             "results": len(all_records),
             "max_score": max((r["score"] for r in all_records), default=0.0),
             "min_score": min((r["score"] for r in all_records), default=0.0),
-            "max_float32_score_drift": collected["max_float32_drift"],
+            "max_float32_score_drift": round(
+                float(collected["max_float32_drift"]), SNAPSHOT_DRIFT_DECIMALS
+            ),
         },
     }
 

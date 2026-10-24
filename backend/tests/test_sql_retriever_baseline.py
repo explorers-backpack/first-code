@@ -117,6 +117,10 @@ SNAPSHOT_NAME = "sql_retriever_baseline"
 SNAPSHOT_VERSION = 1
 BACKEND_LABEL = "sql"
 
+# SQL 的余弦计算使用 Python 浮点；不同平台/SQLite JSON 往返可能在末位
+# 产生 ULP 级差异。快照用于回归结构与排序，不应把这种表示差异当成业务变化。
+SNAPSHOT_SCORE_DECIMALS = 8
+
 #: ``SqlAlchemyVectorStore.name``——用于异常信息与自检
 SQL_STORE_ATTR = "sqlalchemy"
 
@@ -543,9 +547,27 @@ def check_select_matches_rules() -> None:
 # ============================================================
 # [5] 快照生成与格式自检
 # ============================================================
+def _canonicalize_record(record: Dict[str, Any]) -> Dict[str, Any]:
+    """规范化快照分数，保持记录结构和键顺序不变。"""
+    result = dict(record)
+    score = round(float(result["score"]), SNAPSHOT_SCORE_DECIMALS)
+    result["score"] = score
+    metadata = dict(result["metadata"])
+    metadata["score"] = score
+    result["metadata"] = metadata
+    return result
+
+
 def build_snapshot(env: Any, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     """按既定格式组装快照对象。"""
-    all_records = [r for row in rows for r in row["records"]]
+    snapshot_rows = [
+        {
+            **row,
+            "records": [_canonicalize_record(r) for r in row["records"]],
+        }
+        for row in rows
+    ]
+    all_records = [r for row in snapshot_rows for r in row["records"]]
     return {
         "name": SNAPSHOT_NAME,
         "version": SNAPSHOT_VERSION,
@@ -577,7 +599,7 @@ def build_snapshot(env: Any, rows: List[Dict[str, Any]]) -> Dict[str, Any]:
                 "returned": len(row["records"]),
                 "results": row["records"],
             }
-            for row in rows
+            for row in snapshot_rows
         ],
         "totals": {
             "queries": len(rows),
