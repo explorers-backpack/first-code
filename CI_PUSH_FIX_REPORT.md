@@ -4,7 +4,7 @@
 
 远程 Actions 运行 `39963997801` 已收到提交：Git push 已成功，失败发生在后续 CI。截图中前端自检通过，后端 SQLite 回归和真实 MySQL 集成失败。此次仅修复依赖、测试隔离、测试执行及 CI 配置，不改业务接口或架构。
 
-**结论：PASS WITH RISKS。** 本机最终一轮新依赖检查为后端 81 个套件通过、0 失败；前端 104 项通过、0 失败，构建与后端启动冒烟成功。真实 MySQL 与远端 Linux CI 未验证，且前一次检查出现过原因未明的 Chroma 偶发错误，不能据此声明全范围回归通过。
+**结论：PASS WITH RISKS。** 本机最终一轮新依赖检查为后端 81 个套件通过、0 失败；前端 104 项通过、0 失败，构建与后端启动冒烟成功。真实 MySQL 与远端 Linux CI 未验证，且前一次检查出现过原因未明的 Chroma 偶发错误，不能据此声明全范围回归通过。后续用户提供的新日志指出远端失败步骤为 worker_guard 安全网；该步骤已改为按明确文件路径加载目标模块并打印实际模块路径和 worker 值，本机复核通过，但远端仍需推送后验证。
 
 ## 1. 问题审计与处理
 
@@ -18,6 +18,7 @@
 | `.gitignore`、`docs/AI面试问题评估基准.md` | 基准测试依赖现有本地文档，但整个 `docs/` 原被忽略；仅 Git 跟踪文件的检出副本缺失该文档 | 仅放行这一份既有基准文档，其他文档继续忽略 | 文档内容未改；后续提交时必须同时包含此文件 |
 | `backend/tests/test_vector_store_chroma.py` | 用户日志显示 `_suite_metadata_codec` 协程未等待，原来的退出码 0 未覆盖其断言 | 补齐 `await` | 此套件由实际执行 123 项增至 136 项，新增执行的 13 项均通过；未跳过或删除测试 |
 | `backend/tests/test_interview_ws.py`、`test_rag_production_route.py` | 新解析到的 FastAPI 0.161.1 使用延迟包含 router，依赖 `app.routes` 扁平列表的断言失败，实际 HTTP / WS 调用正常 | 分别用公开 `url_path_for` 与最终 OpenAPI 路径检查注册情况 | 原有实际请求、权限和响应断言保留；不改应用路由或外部契约 |
+| `.github/workflows/ci.yml`，worker_guard 安全网步骤 | 用户后来提供的 Actions 摘要显示该步骤退出 1，但未包含其展开日志或 Traceback；原命令通过 `from utils import worker_guard` 导入整个工具包 | 改为从 `utils/worker_guard.py` 的明确路径加载，仅执行该守卫，并打印模块路径与 `WEB_CONCURRENCY` | 本机 `WEB_CONCURRENCY=2` 复核按预期捕获拒绝并退出 0；这减少包初始化/同名导入的不确定性，但在没有远端 Traceback 前不能确认其就是根因 |
 
 用户最新补充日志中的 `test_vector_knowledge_retriever.py` 为 110 项通过、0 失败，`test_vector_store.py` 为 116 项通过、0 失败。该片段没有提供 `test_chroma_retriever_baseline.py` 的失败 Traceback，不能据此断言原 Linux CI 中该套件的根因。
 
@@ -94,13 +95,14 @@ Runner 为子进程设置 `AI_RUN_MODE=offline`、`PYTHON_DOTENV_DISABLED=1` 并
 1. **真实 MySQL 集成未执行**：本机 Docker 引擎未启动（找不到 `docker_engine` 管道），不能把 workflow 静态修复视为 5 个数据库运行器通过。未运行 `engine_pool_mysql_run.py`、`ws_ticket_mysql_concurrency_run.py`、`interview_mysql_concurrency_run.py`、`ws_revocation_mysql_run.py`、`login_throttle_mysql_run.py`，及其真实 MySQL 建库、权限、迁移与并发检查。没有启动或修改业务数据库。
 2. **Linux GitHub Actions 尚未重跑**：本次未 commit、未 push；公开错误注释可读，完整 Actions 日志下载要求登录。用户提供的 multipart Traceback 已复现并修复，但原 25 个失败套件的完整日志并不齐全，不能承诺 25 个失败的原因全部相同。需要后续提交本次文件并在 GitHub 上执行 CI，才能确认远端结果。
 3. **Chroma 稳定性仍有风险**：本机 venv 持久化启动限制未解决；前一轮新依赖全量中出现 `Error finding id`，随后的单独、连续 5 次及最后一轮完整执行均通过，尚无充分证据判断为业务缺陷、第三方实现或本机运行环境。没有加重试、捕获后吞错、跳过测试或改用假实现。
-4. **真实外部服务未验证**：Spark、ASR、Embedding、数字人等离线替身和错误处理的测试不等于真实上游集成通过。此次没有使用真实凭据或消耗生产配额。
-5. requirements 现有宽版本范围仍会解析到不同版本，未擅自引入锁文件或更换依赖管理方式；Windows 验证也不能替代 Linux CI。
+4. **worker_guard 远端原因待确认**：用户提供的是失败步骤标题和退出码，没有步骤展开内容。改成显式路径加载后本机复核通过；是否解决 GitHub runner 上的实际故障，要等此变更推送后查看新运行日志。
+5. **真实外部服务未验证**：Spark、ASR、Embedding、数字人等离线替身和错误处理的测试不等于真实上游集成通过。此次没有使用真实凭据或消耗生产配额。
+6. requirements 现有宽版本范围仍会解析到不同版本，未擅自引入锁文件或更换依赖管理方式；Windows 验证也不能替代 Linux CI。
 
 ## 5. 变更边界与 Git 状态
 
 - 修复前工作区干净，没有覆盖用户未提交修改。
-- 跟踪文件 diff：9 个文件，31 行新增、16 行删除；另有本报告和原本被忽略的必需基准文档，共 2 个待纳入文件。其他 docs 未放行；临时环境与日志保持忽略。
+- 原始修复提交涉及 9 个跟踪文件（31 行新增、16 行删除）及本报告、必需基准文档。本次后续另修改 `.github/workflows/ci.yml` 的 worker_guard 诊断步骤与本报告；当前确切状态以 Git 工作区为准。其他 docs 未放行；临时环境与日志保持忽略。
 - 未改业务模块、API 地址、认证权限规则、数据库模型、Spark / AI / RAG 业务实现；兼容导入保持原状，未删除旧模块。此次失败根因没有要求删除或替换旧导入路径。
 - 未删除测试、未降低断言、未修改真实业务数据，未新增第三方工具链，未进行 Git commit / push。无与本次 CI 修复无关的源代码变更。
-- 最终结论为 **PASS WITH RISKS**：已确认的 CI 依赖和配置问题完成最小修复，本机末轮检查通过；远端 Linux、真实 MySQL 和 Chroma 偶发错误的风险仍需后续验证。到此停止，不自动执行后续架构重构。
+- 最终结论为 **PASS WITH RISKS**：已确认的 CI 依赖和配置问题完成最小修复，本机末轮检查通过；worker_guard 改动也已本机复核。远端 Linux、真实 MySQL、worker_guard 远端故障原因和 Chroma 偶发错误仍需后续验证。到此停止，不自动执行后续架构重构。

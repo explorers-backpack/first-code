@@ -91,11 +91,20 @@ jobs:
         working-directory: backend
         run: |
           python - <<'PY'
-          import os, sys
+          import importlib.util
+          import os
+          from pathlib import Path
+          import sys
+
           os.environ["DATABASE_URL"] = "sqlite+aiosqlite:///:memory:"
           os.environ["WEB_CONCURRENCY"] = "2"
-          sys.path.insert(0, ".")
-          from utils import worker_guard
+          module_path = Path("utils/worker_guard.py").resolve()
+          spec = importlib.util.spec_from_file_location("ci_worker_guard", module_path)
+          if spec is None or spec.loader is None:
+              raise RuntimeError(f"无法加载 worker_guard：{module_path}")
+          worker_guard = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(worker_guard)
+          print(f"[INFO] worker_guard={module_path}; WEB_CONCURRENCY={os.environ['WEB_CONCURRENCY']}")
           try:
               worker_guard.assert_single_worker()
           except RuntimeError as exc:
